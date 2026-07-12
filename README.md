@@ -11,3 +11,51 @@ Apache Spark Catalyst-inspired rule-based pipeline.
     .\mvnw.cmd clean verify  # Windows
 
 Requires JDK 17+. Maven is provided by the committed wrapper.
+
+After `package` / `verify`, the runnable fat jar is `target/sqltranslate.jar`.
+`verify` also smoke-tests `java -jar target/sqltranslate.jar --help`.
+
+## CLI
+
+    java -jar target/sqltranslate.jar --from <dialect> --to <dialect> [options] [SQL]
+
+Dialects: `tsql`, `mysql`, `postgresql` (case-insensitive).
+
+| Option | Meaning |
+|--------|---------|
+| `--from` / `-f` | Source dialect (required) |
+| `--to` / `-t` | Target dialect (required) |
+| `--in FILE` | Read SQL from file (UTF-8) |
+| `--out FILE` | Write SQL to file (UTF-8); stdout stays empty |
+| `--strict` | Warnings become errors (exit 4; no SQL written) |
+| `--report` | Print warnings to stderr |
+| (positional SQL) | Inline SQL; omit with `--in` or pipe stdin |
+
+**Streams:** translated SQL → stdout (or `--out`); errors and `--report` → stderr.
+All streams are UTF-8. Warnings are silent unless `--report` or `--strict`.
+
+**Stdin:** pipe or redirect is fine. On an interactive TTY with no `--in` and no
+positional SQL, the CLI exits 3 immediately (does not hang waiting for EOF).
+
+### Examples (six directions)
+
+    java -jar target/sqltranslate.jar --from tsql --to postgresql --in query.sql
+    java -jar target/sqltranslate.jar --from tsql --to mysql "SELECT N'x' + name FROM t;"
+    java -jar target/sqltranslate.jar --from mysql --to postgresql --in query.sql
+    java -jar target/sqltranslate.jar --from mysql --to tsql "SELECT NOW() FROM t LIMIT 1;"
+    java -jar target/sqltranslate.jar --from postgresql --to mysql --in query.sql
+    java -jar target/sqltranslate.jar --from postgresql --to tsql "SELECT id FROM t WHERE active;"
+
+    cat query.sql | java -jar target/sqltranslate.jar --from postgresql --to mysql
+    java -jar target/sqltranslate.jar --from mysql --to tsql --in q.sql --out out.sql --report
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Parse / syntax error (`error: parse:`) |
+| 2 | Unsupported feature (`error: unsupported:`) |
+| 3 | Usage or I/O error (`error: usage:` / `error: io:`) |
+| 4 | `--strict` with warnings (`error: strict:`) |
+| 5 | Internal translator failure (`error: internal:`) |
