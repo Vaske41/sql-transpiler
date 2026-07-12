@@ -92,4 +92,13 @@ class TSqlPrinterTest {
         assertThatThrownBy(() -> new TSqlPrinter().print(pg))
                 .isInstanceOf(IllegalStateException.class);
     }
+
+    @Test
+    void notOverComparisonSurvivesPostRulesBooleanRewrite() {
+        // Showcase exhibit shape: NOT deleted becomes NOT deleted <> 0 after rules.
+        assertThat(CodegenTestSupport.printTranslated(
+                "SELECT id FROM flags WHERE NOT deleted;",
+                Dialect.POSTGRESQL, Dialect.TSQL).sql())
+                .isEqualTo("SELECT id FROM flags WHERE NOT deleted <> 0;\n");
+    }
 }

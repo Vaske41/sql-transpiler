@@ -23,9 +23,7 @@ class TranslationRoundTripCorpusTest {
 
     @TestFactory
     Stream<DynamicTest> everyRenderedOutputReparsesAndRepeats() {
-        CaseFiles corpus = CaseFiles.under("/cases",
-                p -> p.getFileName().toString().startsWith("input.")
-                        && !p.toString().replace('\\', '/').contains("/unsupported/"));
+        CaseFiles corpus = CaseFiles.under("/cases", CodegenTestSupport::isCorpusInput);
         return corpus.files().stream().flatMap(file ->
                 Stream.of(Dialect.values())
                         .filter(target -> !EXPECTED_REFUSALS.contains(

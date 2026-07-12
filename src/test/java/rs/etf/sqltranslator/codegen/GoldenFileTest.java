@@ -35,9 +35,7 @@ class GoldenFileTest {
 
     @TestFactory
     Stream<DynamicTest> goldenTranslations() {
-        CaseFiles corpus = CaseFiles.under("/cases",
-                p -> p.getFileName().toString().startsWith("input.")
-                        && !p.toString().replace('\\', '/').contains("/unsupported/"));
+        CaseFiles corpus = CaseFiles.under("/cases", CodegenTestSupport::isCorpusInput);
         return corpus.files().stream().flatMap(file -> {
             String display = corpus.displayName(file);
             Dialect source = dialectOf(file.getFileName().toString());
@@ -57,7 +55,7 @@ class GoldenFileTest {
                 source, target).sql();
 
         if (UPDATE) {
-            Files.writeString(golden, actual, StandardCharsets.UTF_8);
+            Files.writeString(golden, normalize(actual), StandardCharsets.UTF_8);
             return;
         }
         if (!Files.exists(golden)) {
@@ -72,9 +70,7 @@ class GoldenFileTest {
      *  has to map to a live (input, direction) pair. */
     @Test
     void everyGoldenBelongsToALiveDirection() throws Exception {
-        CaseFiles corpus = CaseFiles.under("/cases",
-                p -> p.getFileName().toString().startsWith("input.")
-                        && !p.toString().replace('\\', '/').contains("/unsupported/"));
+        CaseFiles corpus = CaseFiles.under("/cases", CodegenTestSupport::isCorpusInput);
         Set<String> live = new HashSet<>();
         for (Path file : corpus.files()) {
             String display = corpus.displayName(file);
@@ -97,6 +93,26 @@ class GoldenFileTest {
                     .as("stale goldens with no live (input, direction) — delete them")
                     .isEmpty();
         }
+    }
+
+    /**
+     * Mechanical honesty gate: catalog-dependent / NULLS goldens must still contain
+     * the rewrite markers sample review claims — bootstrap alone is not enough.
+     */
+    @Test
+    void knownRewriteGoldensContainExpectedMarkers() throws Exception {
+        String nullsDropped = normalize(Files.readString(CASES.resolve(
+                "limits/order-nulls/expected.postgresql.mysql.sql")));
+        assertThat(nullsDropped).doesNotContain("NULLS");
+        assertThat(nullsDropped).contains("ORDER BY");
+
+        String convertCast = normalize(Files.readString(CASES.resolve(
+                "casts/convert-tsql/expected.tsql.postgresql.sql")));
+        assertThat(convertCast).contains("CAST(").doesNotContain("CONVERT(");
+
+        String identity = normalize(Files.readString(CASES.resolve(
+                "create-table-types/create-autoincrement/expected.postgresql.tsql.sql")));
+        assertThat(identity).contains("IDENTITY(1,1)").doesNotContain("GENERATED");
     }
 
     private static String normalize(String text) {

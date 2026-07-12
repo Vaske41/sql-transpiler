@@ -107,4 +107,22 @@ class PostgreSqlExpressionTest {
         assertThat(print("SELECT CASE WHEN a > 1 THEN 'x' ELSE 'y' END;"))
                 .isEqualTo("CASE WHEN a > 1 THEN 'x' ELSE 'y' END");
     }
+
+    @Test
+    void notBindsTighterThanComparisonAndOr() {
+        assertThat(print("SELECT NOT a = b;")).isEqualTo("NOT a = b");
+        assertThat(print("SELECT NOT (a AND b);")).isEqualTo("NOT (a AND b)");
+        assertThat(print("SELECT NOT a AND b;")).isEqualTo("NOT a AND b");
+    }
+
+    @Test
+    void isNullAndBetweenKeepPredicateGrouping() {
+        assertThat(printWhere("SELECT x FROM t WHERE NOT a IS NULL;"))
+                .isEqualTo("NOT a IS NULL");
+        assertThat(printWhere("SELECT x FROM t WHERE NOT a BETWEEN 1 AND 5;"))
+                .isEqualTo("NOT a BETWEEN 1 AND 5");
+        // Comparison binds tighter than AND — minimal parens drop the redundant group.
+        assertThat(printWhere("SELECT x FROM t WHERE (a = b) AND c IS NULL;"))
+                .isEqualTo("a = b AND c IS NULL");
+    }
 }

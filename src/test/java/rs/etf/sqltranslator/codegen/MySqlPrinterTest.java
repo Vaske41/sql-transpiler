@@ -29,6 +29,18 @@ class MySqlPrinterTest {
     }
 
     @Test
+    void stringsEscapeTrailingBackslash() {
+        assertThat(print("SELECT 'trail\\\\';"))
+                .isEqualTo("SELECT 'trail\\\\';\n");
+    }
+
+    @Test
+    void timestampTypeNormalizesToDatetime() {
+        assertThat(print("CREATE TABLE t (ts TIMESTAMP);"))
+                .isEqualTo("CREATE TABLE t (ts DATETIME);\n");
+    }
+
+    @Test
     void booleanLiteralAndBooleanTypeAreMySqlIdioms() {
         assertThat(print("SELECT TRUE;")).isEqualTo("SELECT TRUE;\n");
         assertThat(print("CREATE TABLE t (f BOOLEAN);"))
