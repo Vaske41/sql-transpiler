@@ -1,0 +1,1 @@
+SELECT DISTINCT TOP 3 name FROM users ORDER BY name;

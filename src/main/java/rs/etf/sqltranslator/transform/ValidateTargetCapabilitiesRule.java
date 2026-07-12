@@ -95,6 +95,12 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
         }
 
         private void validateLimit(Query query, RowLimit limit) {
+            if (ctx.target() == Dialect.TSQL && !query.unionArms().isEmpty()
+                    && query.orderBy().isEmpty()) {
+                throw new UnsupportedFeatureException(
+                        "row limit over UNION requires ORDER BY on SQL Server",
+                        limit.pos());
+            }
             if (limit.offset().isEmpty()) {
                 return;
             }
