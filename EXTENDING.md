@@ -180,3 +180,16 @@ claims for same-dialect paths.
 
 `PreserveNullsOrderingRule` injects `NULLS FIRST`/`LAST` for MySQL/T-SQL→PG without
 a warning (semantics preserved, not lost).
+
+## Adding printer behavior (Phase 5)
+
+1. Statement/expression *shapes* belong in `AbstractSqlPrinter`; dialect
+   *spellings* belong in the printer hooks (`quoteIdentifier`,
+   `renderStringLiteral`, `concatOperator`, `renderDataType`,
+   `renderAutoIncrement`, `addColumnClause`, `selectModifiers`,
+   `renderRowLimit`). Escaping lives in exactly one method per printer.
+2. If the rule engine guarantees a node kind never reaches a printer, guard it
+   with `IllegalStateException` naming the contract — never print a guess.
+3. Golden workflow: change printer → `./mvnw -DupdateGolden=true
+   -Dtest=GoldenFileTest test` → review the git diff of the regenerated
+   goldens (the diff IS the review) → commit code and goldens together.

@@ -1,0 +1,1 @@
+CREATE TABLE measurements (id INTEGER NOT NULL, reading DOUBLE PRECISION, scale_factor DOUBLE PRECISION NOT NULL);

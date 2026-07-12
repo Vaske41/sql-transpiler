@@ -1,0 +1,2 @@
+SELECT id, name FROM users ORDER BY name NULLS FIRST LIMIT 10;
+SELECT id FROM logs LIMIT 5;

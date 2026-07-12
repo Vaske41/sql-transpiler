@@ -1,0 +1,1 @@
+CREATE TABLE orders (id INTEGER NOT NULL, user_id INTEGER NOT NULL REFERENCES users (id), code VARCHAR(20) UNIQUE, PRIMARY KEY (id), CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users (id), CONSTRAINT uq_code UNIQUE (code));
