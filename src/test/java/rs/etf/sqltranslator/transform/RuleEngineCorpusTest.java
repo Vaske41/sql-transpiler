@@ -2,6 +2,7 @@ package rs.etf.sqltranslator.transform;
 
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.TestFactory;
+import rs.etf.sqltranslator.codegen.CodegenTestSupport;
 import rs.etf.sqltranslator.ast.AstDumper;
 import rs.etf.sqltranslator.ast.Script;
 import rs.etf.sqltranslator.core.Dialect;
@@ -24,16 +25,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class RuleEngineCorpusTest {
 
-    private static final Set<String> EXPECTED_REFUSALS = Set.of(
-            "joins/full-join/input.tsql.sql|MYSQL",
-            "joins/full-join/input.postgresql.sql|MYSQL",
-            "limits/limit-offset/input.mysql.sql|TSQL");
+    private static final Set<String> EXPECTED_REFUSALS =
+            CodegenTestSupport.EXPECTED_REFUSALS;
 
     @TestFactory
     Stream<DynamicTest> everyCaseTranslatesDeterministicallyInAllDirections() {
-        CaseFiles corpus = CaseFiles.under("/cases",
-                p -> p.getFileName().toString().startsWith("input.")
-                        && !p.toString().replace('\\', '/').contains("/unsupported/"));
+        CaseFiles corpus = CaseFiles.under("/cases", CodegenTestSupport::isCorpusInput);
         return corpus.files().stream().flatMap(file ->
                 Stream.of(Dialect.values()).map(target -> DynamicTest.dynamicTest(
                         corpus.displayName(file) + " -> " + target,

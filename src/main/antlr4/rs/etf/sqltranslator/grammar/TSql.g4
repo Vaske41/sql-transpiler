@@ -73,7 +73,7 @@ queryExpression
     ;
 
 querySpecification
-    : SELECT topClause? setQuantifier? selectItem (',' selectItem)*
+    : SELECT setQuantifier? topClause? selectItem (',' selectItem)*
       (FROM tableSource)?
       whereClause?
       groupByClause?

@@ -73,4 +73,13 @@ class ValidateTargetCapabilitiesRuleTest {
                 Dialect.MYSQL, Dialect.POSTGRESQL);
         assertThat(r.report().warnings()).noneMatch(w -> w.code().equals("LOOSE_GROUP_BY"));
     }
+
+    @Test
+    void limitOverUnionWithoutOrderByToTSqlIsRefused() {
+        assertThatThrownBy(() -> runRule(rule,
+                "SELECT id FROM t1 UNION ALL SELECT id FROM t2 LIMIT 5;",
+                Dialect.POSTGRESQL, Dialect.TSQL))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("UNION requires ORDER BY");
+    }
 }

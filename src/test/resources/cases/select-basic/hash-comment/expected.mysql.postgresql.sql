@@ -1,0 +1,2 @@
+SELECT 1;
+SELECT id FROM users;

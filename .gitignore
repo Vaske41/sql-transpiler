@@ -2,6 +2,9 @@
 /plans/
 docs/
 
+# Git worktrees
+.worktrees/
+
 # Maven
 target/
 
