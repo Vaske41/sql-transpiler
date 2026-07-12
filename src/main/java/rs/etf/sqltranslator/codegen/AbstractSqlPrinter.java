@@ -368,24 +368,207 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         throw new IllegalStateException("TypeLength renders via renderTypeArgs");
     }
 
-    // --- statement/query shapes: implemented in Tasks 3-4 ---
+    // --- script and query shape ---
 
-    @Override public Void visitScript(Script node) { throw todo(); }
-    @Override public Void visitSelectStatement(SelectStatement node) { throw todo(); }
-    @Override public Void visitQuery(Query node) { throw todo(); }
-    @Override public Void visitUnionArm(UnionArm node) { throw todo(); }
-    @Override public Void visitQuerySpecification(QuerySpecification node) { throw todo(); }
-    @Override public Void visitRowLimit(RowLimit node) { throw todo(); }
-    @Override public Void visitOrderItem(OrderItem node) { throw todo(); }
-    @Override public Void visitSelectStar(SelectStar node) { throw todo(); }
-    @Override public Void visitSelectExpr(SelectExpr node) { throw todo(); }
-    @Override public Void visitTableSource(TableSource node) { throw todo(); }
-    @Override public Void visitTableRef(TableRef node) { throw todo(); }
-    @Override public Void visitJoin(Join node) { throw todo(); }
-    @Override public Void visitInsertStatement(InsertStatement node) { throw todo(); }
-    @Override public Void visitUpdateStatement(UpdateStatement node) { throw todo(); }
-    @Override public Void visitAssignment(Assignment node) { throw todo(); }
-    @Override public Void visitDeleteStatement(DeleteStatement node) { throw todo(); }
+    @Override
+    public Void visitScript(Script node) {
+        for (Statement statement : node.statements()) {
+            statement.accept(this);
+            out.raw(";\n");
+        }
+        return null;
+    }
+
+    @Override
+    public Void visitSelectStatement(SelectStatement node) {
+        node.query().accept(this);
+        return null;
+    }
+
+    @Override
+    public Void visitQuery(Query node) {
+        renderSpec(node.first(), node);
+        for (UnionArm arm : node.unionArms()) {
+            arm.accept(this);
+        }
+        if (!node.orderBy().isEmpty()) {
+            out.token("ORDER BY");
+            csv(node.orderBy());
+        }
+        renderRowLimit(node);
+        return null;
+    }
+
+    @Override
+    public Void visitUnionArm(UnionArm node) {
+        out.token("UNION");
+        if (node.all()) {
+            out.token("ALL");
+        }
+        renderSpec(node.spec(), null);
+        return null;
+    }
+
+    @Override
+    public Void visitQuerySpecification(QuerySpecification node) {
+        renderSpec(node, null);
+        return null;
+    }
+
+    /** One SELECT block. {@code owner} is non-null only for a query's first spec. */
+    protected void renderSpec(QuerySpecification spec, Query owner) {
+        out.token("SELECT");
+        spec.quantifier().ifPresent(q -> out.token(q.name()));
+        selectModifiers(spec, owner);
+        csv(spec.items());
+        spec.from().ifPresent(from -> {
+            out.token("FROM");
+            from.accept(this);
+        });
+        spec.where().ifPresent(where -> {
+            out.token("WHERE");
+            where.accept(this);
+        });
+        if (!spec.groupBy().isEmpty()) {
+            out.token("GROUP BY");
+            csv(spec.groupBy());
+        }
+        spec.having().ifPresent(having -> {
+            out.token("HAVING");
+            having.accept(this);
+        });
+    }
+
+    /** Hook between SELECT [DISTINCT] and the item list. T-SQL emits TOP here. */
+    protected void selectModifiers(QuerySpecification spec, Query owner) {
+    }
+
+    /** Trailing row limit. Base shape: LIMIT n [OFFSET m] / bare OFFSET (PG). */
+    protected void renderRowLimit(Query query) {
+        query.limit().ifPresent(limit -> {
+            limit.count().ifPresent(count -> {
+                out.token("LIMIT");
+                count.accept(this);
+            });
+            limit.offset().ifPresent(offset -> {
+                out.token("OFFSET");
+                offset.accept(this);
+            });
+        });
+    }
+
+    @Override
+    public Void visitRowLimit(RowLimit node) {
+        throw new IllegalStateException("row limits render via renderRowLimit");
+    }
+
+    @Override
+    public Void visitOrderItem(OrderItem node) {
+        node.expr().accept(this);
+        if (node.direction() == SortDirection.DESC) {
+            out.token("DESC");
+        }
+        node.nulls().ifPresent(nulls -> out.token("NULLS").token(nulls.name()));
+        return null;
+    }
+
+    @Override
+    public Void visitSelectStar(SelectStar node) {
+        out.token(node.qualifier().map(q -> dotted(q) + ".*").orElse("*"));
+        return null;
+    }
+
+    @Override
+    public Void visitSelectExpr(SelectExpr node) {
+        node.expr().accept(this);
+        node.alias().ifPresent(alias -> out.token("AS").token(identifier(alias)));
+        return null;
+    }
+
+    @Override
+    public Void visitTableSource(TableSource node) {
+        node.first().accept(this);
+        for (Join join : node.joins()) {
+            join.accept(this);
+        }
+        return null;
+    }
+
+    @Override
+    public Void visitTableRef(TableRef node) {
+        out.token(dotted(node.table()));
+        node.alias().ifPresent(alias -> out.token("AS").token(identifier(alias)));
+        return null;
+    }
+
+    @Override
+    public Void visitJoin(Join node) {
+        out.token(switch (node.kind()) {
+            case INNER -> "INNER JOIN";
+            case LEFT -> "LEFT JOIN";
+            case RIGHT -> "RIGHT JOIN";
+            case FULL -> "FULL JOIN";
+            case CROSS -> "CROSS JOIN";
+        });
+        node.table().accept(this);
+        node.on().ifPresent(on -> {
+            out.token("ON");
+            on.accept(this);
+        });
+        return null;
+    }
+
+    // --- DML ---
+
+    @Override
+    public Void visitInsertStatement(InsertStatement node) {
+        out.token("INSERT INTO").token(dotted(node.table()));
+        if (!node.columns().isEmpty()) {
+            out.token("(");
+            csv(node.columns());
+            out.raw(")");
+        }
+        out.token("VALUES");
+        for (int i = 0; i < node.rows().size(); i++) {
+            if (i > 0) {
+                out.raw(",");
+            }
+            out.token("(");
+            csv(node.rows().get(i));
+            out.raw(")");
+        }
+        return null;
+    }
+
+    @Override
+    public Void visitUpdateStatement(UpdateStatement node) {
+        out.token("UPDATE").token(dotted(node.table())).token("SET");
+        csv(node.assignments());
+        node.where().ifPresent(where -> {
+            out.token("WHERE");
+            where.accept(this);
+        });
+        return null;
+    }
+
+    @Override
+    public Void visitAssignment(Assignment node) {
+        out.token(identifier(node.column())).token("=");
+        node.value().accept(this);
+        return null;
+    }
+
+    @Override
+    public Void visitDeleteStatement(DeleteStatement node) {
+        out.token("DELETE FROM").token(dotted(node.table()));
+        node.where().ifPresent(where -> {
+            out.token("WHERE");
+            where.accept(this);
+        });
+        return null;
+    }
+
+    // --- DDL: implemented in Task 4 ---
     @Override public Void visitCreateTableStatement(CreateTableStatement node) { throw todo(); }
     @Override public Void visitColumnDefinition(ColumnDefinition node) { throw todo(); }
     @Override public Void visitForeignKeyRef(ForeignKeyRef node) { throw todo(); }
