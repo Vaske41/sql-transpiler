@@ -32,4 +32,11 @@ class SqlWriterTest {
                 .token("-").token("c").raw(")").result();
         assertThat(sql).isEqualTo("a - (b - c)");
     }
+
+    @Test
+    void fuseSuppressesTheNextSeparation() {
+        // unary minus: -5 and -(a)
+        assertThat(new SqlWriter().token("SELECT").token("-").fuse().token("5").result())
+                .isEqualTo("SELECT -5");
+    }
 }

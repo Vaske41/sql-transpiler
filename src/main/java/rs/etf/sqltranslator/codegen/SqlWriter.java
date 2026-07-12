@@ -9,14 +9,22 @@ package rs.etf.sqltranslator.codegen;
 public final class SqlWriter {
 
     private final StringBuilder sb = new StringBuilder();
+    private boolean fuse;
+
+    /** Suppress the separating space before the next token (unary sign fusion). */
+    public SqlWriter fuse() {
+        fuse = true;
+        return this;
+    }
 
     public SqlWriter token(String text) {
-        if (sb.length() > 0) {
+        if (!fuse && sb.length() > 0) {
             char last = sb.charAt(sb.length() - 1);
             if (last != '(' && last != ' ' && last != '\n') {
                 sb.append(' ');
             }
         }
+        fuse = false;
         sb.append(text);
         return this;
     }
