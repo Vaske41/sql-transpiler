@@ -568,19 +568,118 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         return null;
     }
 
-    // --- DDL: implemented in Task 4 ---
-    @Override public Void visitCreateTableStatement(CreateTableStatement node) { throw todo(); }
-    @Override public Void visitColumnDefinition(ColumnDefinition node) { throw todo(); }
-    @Override public Void visitForeignKeyRef(ForeignKeyRef node) { throw todo(); }
-    @Override public Void visitPrimaryKeyConstraint(PrimaryKeyConstraint node) { throw todo(); }
-    @Override public Void visitUniqueConstraint(UniqueConstraint node) { throw todo(); }
-    @Override public Void visitForeignKeyConstraint(ForeignKeyConstraint node) { throw todo(); }
-    @Override public Void visitDropTableStatement(DropTableStatement node) { throw todo(); }
-    @Override public Void visitAlterTableStatement(AlterTableStatement node) { throw todo(); }
-    @Override public Void visitAddColumn(AddColumn node) { throw todo(); }
-    @Override public Void visitDropColumn(DropColumn node) { throw todo(); }
+    // --- DDL ---
 
-    private static UnsupportedOperationException todo() {
-        return new UnsupportedOperationException("implemented in Task 3/4");
+    @Override
+    public Void visitCreateTableStatement(CreateTableStatement node) {
+        out.token("CREATE TABLE").token(dotted(node.table())).token("(");
+        csv(node.columns());
+        if (!node.constraints().isEmpty()) {
+            out.raw(",");
+            csv(node.constraints());
+        }
+        out.raw(")");
+        return null;
+    }
+
+    @Override
+    public Void visitColumnDefinition(ColumnDefinition node) {
+        out.token(identifier(node.name()));
+        renderDataType(node.type());
+        if (node.autoIncrement()) {
+            renderAutoIncrement();
+        }
+        node.nullable().ifPresent(nullable -> out.token(nullable ? "NULL" : "NOT NULL"));
+        node.defaultValue().ifPresent(value -> {
+            out.token("DEFAULT");
+            value.accept(this);
+        });
+        if (node.primaryKey()) {
+            out.token("PRIMARY KEY");
+        }
+        if (node.unique()) {
+            out.token("UNIQUE");
+        }
+        node.references().ifPresent(ref -> ref.accept(this));
+        return null;
+    }
+
+    @Override
+    public Void visitForeignKeyRef(ForeignKeyRef node) {
+        out.token("REFERENCES").token(dotted(node.table()));
+        node.column().ifPresent(column ->
+                out.token("(").token(identifier(column)).raw(")"));
+        return null;
+    }
+
+    @Override
+    public Void visitPrimaryKeyConstraint(PrimaryKeyConstraint node) {
+        constraintName(node.name());
+        out.token("PRIMARY KEY").token("(");
+        csv(node.columns());
+        out.raw(")");
+        return null;
+    }
+
+    @Override
+    public Void visitUniqueConstraint(UniqueConstraint node) {
+        constraintName(node.name());
+        out.token("UNIQUE").token("(");
+        csv(node.columns());
+        out.raw(")");
+        return null;
+    }
+
+    @Override
+    public Void visitForeignKeyConstraint(ForeignKeyConstraint node) {
+        constraintName(node.name());
+        out.token("FOREIGN KEY").token("(");
+        csv(node.columns());
+        out.raw(")").token("REFERENCES").token(dotted(node.refTable()));
+        if (!node.refColumns().isEmpty()) {
+            out.token("(");
+            csv(node.refColumns());
+            out.raw(")");
+        }
+        return null;
+    }
+
+    private void constraintName(java.util.Optional<Identifier> name) {
+        name.ifPresent(n -> out.token("CONSTRAINT").token(identifier(n)));
+    }
+
+    @Override
+    public Void visitDropTableStatement(DropTableStatement node) {
+        out.token("DROP TABLE");
+        if (node.ifExists()) {
+            out.token("IF EXISTS");
+        }
+        out.token(dotted(node.table()));
+        return null;
+    }
+
+    @Override
+    public Void visitAlterTableStatement(AlterTableStatement node) {
+        out.token("ALTER TABLE").token(dotted(node.table()));
+        node.action().accept(this);
+        return null;
+    }
+
+    @Override
+    public Void visitAddColumn(AddColumn node) {
+        out.token(addColumnClause());
+        node.column().accept(this);
+        return null;
+    }
+
+    @Override
+    public Void visitDropColumn(DropColumn node) {
+        out.token("DROP COLUMN").token(identifier(node.column()));
+        return null;
+    }
+
+    /** T-SQL rejects the COLUMN keyword in ALTER TABLE ... ADD. */
+    protected String addColumnClause() {
+        return "ADD COLUMN";
     }
 }
