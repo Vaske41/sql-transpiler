@@ -1,5 +1,6 @@
 package rs.etf.sqltranslator.cli;
 
+import rs.etf.sqltranslator.core.Dialect;
 import rs.etf.sqltranslator.core.ParseException;
 import rs.etf.sqltranslator.core.TranslationOutput;
 import rs.etf.sqltranslator.core.Translator;
@@ -15,16 +16,30 @@ import java.util.List;
 /** Pure CLI policy: resolve input, translate, write sinks, map failures to exit codes. */
 public final class CliRunner {
 
+    @FunctionalInterface
+    interface TranslateFunction {
+        TranslationOutput translate(String sql, Dialect source, Dialect target);
+    }
+
     private CliRunner() {
     }
 
     public static int run(CliRequest request, Readable stdin, Appendable stdout, Appendable stderr) {
+        return run(request, stdin, stdout, stderr, Translator::translate);
+    }
+
+    /**
+     * Package-visible seam so tests can inject a pipeline failure without relying on
+     * a golden SQL shape that still trips a printer after the rule engine rewrites it.
+     */
+    static int run(CliRequest request, Readable stdin, Appendable stdout, Appendable stderr,
+                   TranslateFunction translate) {
         try {
             String sql = readSql(request, stdin);
             if (sql.isBlank()) {
                 return fail(stderr, CliExitCode.USAGE, "usage", "empty SQL input");
             }
-            TranslationOutput result = Translator.translate(sql, request.source(), request.target());
+            TranslationOutput result = translate.translate(sql, request.source(), request.target());
             List<Warning> warnings = result.report().warnings();
             if (request.strict() && !warnings.isEmpty()) {
                 writeReport(warnings, stderr);
@@ -36,15 +51,16 @@ public final class CliRunner {
             }
             writeSql(result.sql(), request, stdout);
             return CliExitCode.SUCCESS;
+        } catch (CliUsageException e) {
+            return fail(stderr, CliExitCode.USAGE, "usage", e.getMessage());
         } catch (ParseException e) {
             return fail(stderr, CliExitCode.PARSE_ERROR, "parse", e.getMessage());
         } catch (UnsupportedFeatureException e) {
             return fail(stderr, CliExitCode.UNSUPPORTED, "unsupported", e.getMessage());
-        } catch (IllegalArgumentException e) {
-            return fail(stderr, CliExitCode.USAGE, "usage", e.getMessage());
         } catch (IOException e) {
             return fail(stderr, CliExitCode.USAGE, "io", e.getMessage());
         } catch (RuntimeException e) {
+            // Pipeline IllegalArgumentException / IllegalStateException → internal (not usage).
             String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             return fail(stderr, CliExitCode.INTERNAL, "internal", msg);
         }
@@ -54,11 +70,11 @@ public final class CliRunner {
         boolean hasFile = request.inputFile() != null;
         boolean hasInline = request.inlineSql() != null;
         if (hasFile && hasInline) {
-            throw new IllegalArgumentException(
+            throw new CliUsageException(
                     "Provide either --in FILE or inline SQL, not both");
         }
         if (!hasFile && !hasInline && request.stdinIsTty()) {
-            throw new IllegalArgumentException(
+            throw new CliUsageException(
                     "missing SQL input (provide --in, positional SQL, or pipe stdin)");
         }
         if (hasFile) {
@@ -99,14 +115,14 @@ public final class CliRunner {
                     .append(w.position().toString())
                     .append(": ")
                     .append(w.message())
-                    .append(System.lineSeparator());
+                    .append('\n');
         }
     }
 
     private static int fail(Appendable stderr, int code, String kind, String message) {
         try {
             stderr.append("error: ").append(kind).append(": ")
-                    .append(message).append(System.lineSeparator());
+                    .append(message).append('\n');
         } catch (IOException ignored) {
             // still return the exit code
         }

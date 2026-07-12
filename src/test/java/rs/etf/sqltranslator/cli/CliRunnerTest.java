@@ -116,7 +116,8 @@ class CliRunnerTest {
         int code = CliRunner.run(req, new StringReader(""), out, err);
         assertThat(code).isEqualTo(CliExitCode.SUCCESS);
         assertThat(out.toString()).isNotBlank();
-        assertThat(err.toString()).contains("warning NULLS_ORDERING_DROPPED");
+        assertThat(err.toString()).containsPattern(
+                "warning NULLS_ORDERING_DROPPED at \\d+:\\d+: .+");
     }
 
     @Test
@@ -130,6 +131,37 @@ class CliRunnerTest {
         int code = CliRunner.run(req, new StringReader(""), out, err);
         assertThat(code).isEqualTo(CliExitCode.SUCCESS);
         assertThat(err.toString()).isEmpty();
+    }
+
+    @Test
+    void pipelineIllegalArgumentExceptionIsInternalNotUsage() {
+        StringWriter out = new StringWriter();
+        StringWriter err = new StringWriter();
+        int code = CliRunner.run(
+                inline(Dialect.MYSQL, Dialect.POSTGRESQL, "SELECT 1;"),
+                new StringReader(""), out, err,
+                (sql, source, target) -> {
+                    throw new IllegalArgumentException("no position on expression: x");
+                });
+        assertThat(code).isEqualTo(CliExitCode.INTERNAL);
+        assertThat(out.toString()).isEmpty();
+        assertThat(err.toString()).isEqualTo(
+                "error: internal: no position on expression: x\n");
+    }
+
+    @Test
+    void pipelineIllegalStateExceptionIsInternal() {
+        StringWriter out = new StringWriter();
+        StringWriter err = new StringWriter();
+        int code = CliRunner.run(
+                inline(Dialect.MYSQL, Dialect.POSTGRESQL, "SELECT 1;"),
+                new StringReader(""), out, err,
+                (sql, source, target) -> {
+                    throw new IllegalStateException("contract broken");
+                });
+        assertThat(code).isEqualTo(CliExitCode.INTERNAL);
+        assertThat(err.toString()).startsWith("error: internal: ");
+        assertThat(err.toString()).contains("contract broken");
     }
 
     @Test
