@@ -1,0 +1,7 @@
+DROP TABLE IF EXISTS users;
+CREATE TABLE users (
+  id INT NOT NULL PRIMARY KEY,
+  active BOOLEAN NOT NULL DEFAULT TRUE
+);
+INSERT INTO users (id, active) VALUES (1, TRUE), (2, FALSE);
+SELECT id FROM users WHERE active ORDER BY id;
