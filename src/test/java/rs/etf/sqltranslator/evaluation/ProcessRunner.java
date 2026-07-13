@@ -1,6 +1,7 @@
 package rs.etf.sqltranslator.evaluation;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
@@ -26,10 +27,23 @@ final class ProcessRunner {
     }
 
     static Result run(List<String> command) throws IOException, InterruptedException {
+        return run(command, null);
+    }
+
+    /**
+     * @param stdinUtf8 optional stdin bytes (closed after write); {@code null} closes stdin empty
+     */
+    static Result run(List<String> command, byte[] stdinUtf8)
+            throws IOException, InterruptedException {
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectError(ProcessBuilder.Redirect.PIPE);
         long start = System.nanoTime();
         Process process = pb.start();
+        try (OutputStream stdin = process.getOutputStream()) {
+            if (stdinUtf8 != null && stdinUtf8.length > 0) {
+                stdin.write(stdinUtf8);
+            }
+        }
         byte[] stdout = process.getInputStream().readAllBytes();
         byte[] stderr = process.getErrorStream().readAllBytes();
         int exit = process.waitFor();

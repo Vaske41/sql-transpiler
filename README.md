@@ -76,3 +76,19 @@ positional SQL, the CLI exits 3 immediately (does not hang waiting for EOF).
 | 3 | Usage or I/O error (`error: usage:` / `error: io:`) |
 | 4 | `--strict` with warnings (`error: strict:`) |
 | 5 | Internal translator failure (`error: internal:`) |
+
+## Evaluation baselines (Phase 7)
+
+Offline benchmark adapters live under `src/test/java/.../evaluation/` (not shaded into
+the product jar).
+
+### SQLGlot helper
+
+Pinned dependency:
+
+    pip install -r evaluation/bin/requirements.txt
+
+Helper: `evaluation/bin/sqlglot_transpile.py` (`--read` / `--write` with
+`tsql` | `mysql` | `postgresql`; stdin SQL → stdout SQL). When the script contains
+`CREATE TABLE`, a minimal schema is extracted and passed into SQLGlot so DDL-backed
+cases stay fair versus sqltranslate.
