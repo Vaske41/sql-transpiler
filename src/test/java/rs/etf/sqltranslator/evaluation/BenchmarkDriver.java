@@ -35,6 +35,8 @@ final class BenchmarkDriver {
     private final List<String> caseAllowlist;
     private final boolean llmSingleStatementOnly;
     private final int localLatencyRuns;
+    /** {@code 0} = unlimited; otherwise cap after allowlist / corpus selection. */
+    private final int caseLimit;
 
     BenchmarkDriver(
             List<TranslatorAdapter> adapters,
@@ -42,11 +44,22 @@ final class BenchmarkDriver {
             List<String> caseAllowlist,
             boolean llmSingleStatementOnly,
             int localLatencyRuns) {
+        this(adapters, csvOut, caseAllowlist, llmSingleStatementOnly, localLatencyRuns, 0);
+    }
+
+    BenchmarkDriver(
+            List<TranslatorAdapter> adapters,
+            Path csvOut,
+            List<String> caseAllowlist,
+            boolean llmSingleStatementOnly,
+            int localLatencyRuns,
+            int caseLimit) {
         this.adapters = List.copyOf(Objects.requireNonNull(adapters, "adapters"));
         this.csvOut = Objects.requireNonNull(csvOut, "csvOut");
         this.caseAllowlist = caseAllowlist == null ? List.of() : List.copyOf(caseAllowlist);
         this.llmSingleStatementOnly = llmSingleStatementOnly;
         this.localLatencyRuns = Math.max(1, localLatencyRuns);
+        this.caseLimit = Math.max(0, caseLimit);
     }
 
     static BenchmarkDriver offlineLimited(Path jar, Path csvOut) throws Exception {
@@ -69,6 +82,20 @@ final class BenchmarkDriver {
         return new BenchmarkDriver(adapters, csvOut, List.of(), true, LOCAL_LATENCY_RUNS);
     }
 
+    /**
+     * Live Composer fixture regen only ({@code forceOffline=false}). Gemini stays offline via
+     * {@link #fixtureLlmAdapters()}; this path does not include Gemini.
+     */
+    static BenchmarkDriver liveComposerRegen(Path csvOut, int caseLimit) {
+        return new BenchmarkDriver(
+                liveComposerAdapters(),
+                csvOut,
+                List.of(),
+                true,
+                1,
+                caseLimit);
+    }
+
     private static List<TranslatorAdapter> offlineAdapters(Path jar) throws Exception {
         List<TranslatorAdapter> adapters = new ArrayList<>();
         adapters.add(new SqlTranslateJarAdapter(jar));
@@ -76,6 +103,7 @@ final class BenchmarkDriver {
         return adapters;
     }
 
+    /** Offline drivers: Gemini + Composer both {@code forceOffline=true}. */
     private static List<TranslatorAdapter> fixtureLlmAdapters() throws Exception {
         return List.of(
                 new GeminiAdapter(
@@ -84,6 +112,11 @@ final class BenchmarkDriver {
                         java.net.http.HttpClient.newHttpClient(),
                         true),
                 new ComposerAdapter(new FixtureStore(), true));
+    }
+
+    /** Used only by {@link EvaluationMain} {@code --live-composer}. */
+    static List<TranslatorAdapter> liveComposerAdapters() {
+        return List.of(new ComposerAdapter(new FixtureStore(), false));
     }
 
     List<ScoreRow> run() throws Exception {
@@ -123,24 +156,30 @@ final class BenchmarkDriver {
     }
 
     private List<Path> selectInputs(CaseFiles corpus) {
+        List<Path> selected;
         if (caseAllowlist.isEmpty()) {
-            return corpus.files();
-        }
-        List<Path> ordered = new ArrayList<>();
-        for (String display : caseAllowlist) {
-            for (Path file : corpus.files()) {
-                if (display.equals(corpus.displayName(file))) {
-                    ordered.add(file);
-                    break;
+            selected = new ArrayList<>(corpus.files());
+        } else {
+            List<Path> ordered = new ArrayList<>();
+            for (String display : caseAllowlist) {
+                for (Path file : corpus.files()) {
+                    if (display.equals(corpus.displayName(file))) {
+                        ordered.add(file);
+                        break;
+                    }
                 }
             }
+            if (ordered.size() != caseAllowlist.size()) {
+                throw new IllegalStateException(
+                        "Offline allowlist cases missing from corpus: wanted="
+                                + caseAllowlist.size() + " found=" + ordered.size());
+            }
+            selected = ordered;
         }
-        if (ordered.size() != caseAllowlist.size()) {
-            throw new IllegalStateException(
-                    "Offline allowlist cases missing from corpus: wanted="
-                            + caseAllowlist.size() + " found=" + ordered.size());
+        if (caseLimit > 0 && selected.size() > caseLimit) {
+            return List.copyOf(selected.subList(0, caseLimit));
         }
-        return ordered;
+        return selected;
     }
 
     private ScoreRow scoreOne(

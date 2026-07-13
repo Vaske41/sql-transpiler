@@ -75,4 +75,27 @@ class ComposerAdapterTest {
         assertThat(out.outcome()).isEqualTo(OutcomeKind.SUCCESS);
         assertThat(out.sql().trim()).isEqualTo("SELECT 3;");
     }
+
+    @Test
+    void processRunnerTimeoutDestroysAndNotesTimeout() throws Exception {
+        String python = SqlGlotAdapter.resolvePython().orElse("python");
+        long start = System.currentTimeMillis();
+        ProcessRunner.Result result = ProcessRunner.run(
+                java.util.List.of(python, "-c", "import time; time.sleep(30)"),
+                null,
+                1);
+        long elapsed = System.currentTimeMillis() - start;
+
+        assertThat(result.exitCode()).isEqualTo(-1);
+        assertThat(result.stderrUtf8().toLowerCase()).contains("timeout");
+        assertThat(elapsed).isLessThan(15_000L);
+    }
+
+    @Test
+    void pinnedCursorSdkMatchesRequirements() throws Exception {
+        String requirements = Files.readString(Path.of("evaluation", "bin", "requirements.txt"));
+        assertThat(ComposerAdapter.CURSOR_SDK_VERSION).isEqualTo("0.1.9");
+        assertThat(requirements).contains("cursor-sdk==" + ComposerAdapter.CURSOR_SDK_VERSION);
+        assertThat(ComposerAdapter.TIMEOUT_SECONDS).isEqualTo(300L);
+    }
 }

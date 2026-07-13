@@ -54,6 +54,29 @@ class FixtureStoreTest {
     }
 
     @Test
+    void writeMergesExtrasIntoMetaJson() throws Exception {
+        FixtureStore store = new FixtureStore(temp);
+        store.write(
+                SystemId.COMPOSER,
+                "select-basic/select-literal",
+                Dialect.MYSQL,
+                Dialect.POSTGRESQL,
+                "SELECT 1;\n",
+                ComposerAdapter.MODEL,
+                PromptTemplate.VERSION,
+                "2026-07-14T00:00:00Z",
+                42L,
+                java.util.Map.of("cursorSdk", "0.1.9"));
+
+        String meta = store.readMeta(
+                        SystemId.COMPOSER, "select-basic/select-literal", Dialect.MYSQL, Dialect.POSTGRESQL)
+                .orElseThrow();
+        assertThat(meta).contains("\"model\": \"composer-2.5\"");
+        assertThat(meta).contains("\"cursorSdk\": \"0.1.9\"");
+        assertThat(meta).contains("\"latencyMs\": 42");
+    }
+
+    @Test
     void caseKeyFromCasesPath() {
         Path casePath = Path.of("src", "test", "resources", "cases", "select-basic", "select-literal");
         assertThat(FixtureStore.caseKeyFrom(casePath)).isEqualTo("select-basic/select-literal");

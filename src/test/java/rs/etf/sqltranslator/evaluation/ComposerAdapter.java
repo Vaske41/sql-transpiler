@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -17,6 +18,9 @@ import java.util.Optional;
 final class ComposerAdapter implements TranslatorAdapter {
 
     static final String MODEL = "composer-2.5";
+    /** Pinned version matching {@code evaluation/bin/requirements.txt}. */
+    static final String CURSOR_SDK_VERSION = "0.1.9";
+    static final long TIMEOUT_SECONDS = 300L;
     static final Path HELPER = Path.of("evaluation", "bin", "composer_transpile.py");
     static final Path PROMPT_PATH = Path.of("evaluation", "prompts", "v1.txt");
     private static final String API_KEY_ENV = "CURSOR_API_KEY";
@@ -100,7 +104,8 @@ final class ComposerAdapter implements TranslatorAdapter {
                         "--from", cliName(request.source()),
                         "--to", cliName(request.target()),
                         "--prompt", promptAbs),
-                sqlBytes);
+                sqlBytes,
+                TIMEOUT_SECONDS);
         if (run.exitCode() != 0) {
             return new TranslateOutcome(
                     SystemId.COMPOSER,
@@ -121,7 +126,8 @@ final class ComposerAdapter implements TranslatorAdapter {
                 MODEL,
                 PromptTemplate.VERSION,
                 Instant.now().toString(),
-                run.latencyMs());
+                run.latencyMs(),
+                Map.of("cursorSdk", CURSOR_SDK_VERSION));
         return new TranslateOutcome(
                 SystemId.COMPOSER,
                 OutcomeKind.SUCCESS,
