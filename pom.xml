@@ -138,6 +138,7 @@
           <includes>
             <include>**/SqlTranslateJarIT.java</include>
             <include>**/JarDeterminismIT.java</include>
+            <include>**/BenchmarkDriverOfflineIT.java</include>
           </includes>
         </configuration>
         <executions>
