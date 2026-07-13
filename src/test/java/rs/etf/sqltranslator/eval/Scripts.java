@@ -2,6 +2,7 @@ package rs.etf.sqltranslator.eval;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Semicolon-based script helpers. Authoring rule: no {@code ;} inside literals/comments.
@@ -25,6 +26,10 @@ final class Scripts {
         if (!startsWithSelect(last)) {
             throw new IllegalArgumentException("last statement must be a SELECT, got: " + preview(last));
         }
+        if (!containsOrderBy(last)) {
+            throw new IllegalArgumentException(
+                    "final SELECT must include ORDER BY (ordered result compare), got: " + preview(last));
+        }
         List<String> setup = List.copyOf(statements.subList(0, statements.size() - 1));
         return new SplitScript(setup, last);
     }
@@ -43,6 +48,8 @@ final class Scripts {
         return out;
     }
 
+    private static final Pattern ORDER_BY = Pattern.compile("(?is).*\\bORDER\\s+BY\\b.*");
+
     private static boolean startsWithSelect(String statement) {
         String s = statement.stripLeading();
         int len = s.length();
@@ -51,6 +58,10 @@ final class Scripts {
         }
         return s.regionMatches(true, 0, "SELECT", 0, 6)
                 && (len == 6 || Character.isWhitespace(s.charAt(6)) || s.charAt(6) == '(');
+    }
+
+    private static boolean containsOrderBy(String statement) {
+        return ORDER_BY.matcher(statement).matches();
     }
 
     private static String preview(String s) {

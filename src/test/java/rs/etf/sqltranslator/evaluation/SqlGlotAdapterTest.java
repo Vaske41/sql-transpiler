@@ -16,6 +16,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SqlGlotAdapterTest {
 
     @Test
+    void unsupportedEmptyStdoutIsRefusedNotSuccess() {
+        Path unsupported = Path.of("cases", "unsupported", "some-feature", "mysql.sql");
+        assertThat(SqlGlotAdapter.classify(0, unsupported, "")).isEqualTo(OutcomeKind.REFUSED);
+        assertThat(SqlGlotAdapter.classify(0, unsupported, "   \n")).isEqualTo(OutcomeKind.REFUSED);
+        assertThat(SqlGlotAdapter.classify(0, unsupported, "SELECT 1"))
+                .isEqualTo(OutcomeKind.WRONG_INVENTION);
+        assertThat(SqlGlotAdapter.classify(1, unsupported, "")).isEqualTo(OutcomeKind.REFUSED);
+    }
+
+    @Test
     @EnabledIf("rs.etf.sqltranslator.evaluation.SqlGlotAdapter#available")
     void selectOneMysqlToPostgresql() throws Exception {
         Path input = Files.createTempFile("sqlglot-select1-", ".sql");

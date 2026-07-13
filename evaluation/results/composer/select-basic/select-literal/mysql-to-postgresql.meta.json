@@ -2,5 +2,6 @@
   "model": "composer-2.5",
   "promptVersion": "v1",
   "utc": "2026-07-14T00:00:00Z",
-  "latencyMs": 0
+  "latencyMs": 0,
+  "cursorSdk": "0.1.9"
 }

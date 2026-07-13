@@ -47,5 +47,13 @@ class BenchmarkDriverOfflineIT {
                         && r.target().equals("postgresql"))
                 .map(ScoreRow::outcome))
                 .containsExactly(OutcomeKind.SUCCESS.name());
+
+        assertThat(rows.stream()
+                .filter(r -> r.system().equals("composer")
+                        && r.caseId().contains("select-literal")
+                        && r.source().equals("mysql")
+                        && r.target().equals("postgresql"))
+                .map(ScoreRow::outcome))
+                .containsExactly(OutcomeKind.SUCCESS.name());
     }
 }

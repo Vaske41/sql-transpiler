@@ -49,7 +49,7 @@ final class OutcomeScorer {
         if (system == SystemId.GEMINI || system == SystemId.COMPOSER) {
             return scoreLlm(casePath, raw);
         }
-        // Jar / SQLGlot already apply REFUSED_OK / WRONG_INVENTION
+        // Jar applies REFUSED_OK (exit 2) / WRONG_INVENTION; SQLGlot never emits REFUSED_OK
         return raw.outcome();
     }
 

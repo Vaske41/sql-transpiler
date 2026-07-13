@@ -58,8 +58,10 @@ final class SqlGlotAdapter implements TranslatorAdapter {
     static OutcomeKind classify(int exit, Path casePath, String sql) {
         boolean unsupported = casePath.toString().replace('\\', '/').contains("/unsupported/");
         if (exit == 0) {
-            if (unsupported && sql != null && !sql.isBlank()) {
-                return OutcomeKind.WRONG_INVENTION;
+            if (unsupported) {
+                // Empty invent/refusal must not score SUCCESS (pollutes refusal metrics).
+                boolean blank = sql == null || sql.isBlank();
+                return blank ? OutcomeKind.REFUSED : OutcomeKind.WRONG_INVENTION;
             }
             return OutcomeKind.SUCCESS;
         }
