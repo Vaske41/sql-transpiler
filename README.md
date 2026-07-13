@@ -15,6 +15,23 @@ Requires JDK 17+. Maven is provided by the committed wrapper.
 After `package` / `verify`, the runnable fat jar is `target/sqltranslate.jar`.
 `verify` also smoke-tests `java -jar target/sqltranslate.jar --help`.
 
+Default `verify` / `test` excludes Docker-backed groups (`integration`,
+`sqlserver-integration`) so the gate stays Docker-free.
+
+### Integration profiles (local opt-in)
+
+MySQL ↔ PostgreSQL semantic equivalence (requires Docker):
+
+    ./mvnw -Pintegration test
+    .\mvnw.cmd -Pintegration test
+
+SQL Server scaffold smoke (`SELECT 1`; requires Docker). **Not run in CI** day one:
+
+    ./mvnw -Psqlserver-integration test
+    .\mvnw.cmd -Psqlserver-integration test
+
+Without Docker, the profile may skip via JUnit assumptions — that is OK.
+
 ## CLI
 
     java -jar target/sqltranslate.jar --from <dialect> --to <dialect> [options] [SQL]
