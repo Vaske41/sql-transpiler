@@ -5,5 +5,5 @@ enum SystemId {
     SQLTRANSLATE,
     SQLGLOT,
     GEMINI,
-    CLAUDE
+    COMPOSER
 }

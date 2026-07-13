@@ -32,23 +32,23 @@ class FixtureStoreTest {
     void writeAndReadRoundTrip() throws Exception {
         FixtureStore store = new FixtureStore(temp);
         store.write(
-                SystemId.CLAUDE,
+                SystemId.COMPOSER,
                 "select-basic/select-literal",
                 Dialect.MYSQL,
                 Dialect.POSTGRESQL,
                 "SELECT 1;\n",
-                ClaudeAdapter.MODEL,
+                ComposerAdapter.MODEL,
                 PromptTemplate.VERSION,
-                "2026-07-13T00:00:00Z",
+                "2026-07-14T00:00:00Z",
                 42L);
 
         assertThat(store.readSql(
-                        SystemId.CLAUDE, "select-basic/select-literal", Dialect.MYSQL, Dialect.POSTGRESQL))
+                        SystemId.COMPOSER, "select-basic/select-literal", Dialect.MYSQL, Dialect.POSTGRESQL))
                 .contains("SELECT 1;\n");
         String meta = store.readMeta(
-                        SystemId.CLAUDE, "select-basic/select-literal", Dialect.MYSQL, Dialect.POSTGRESQL)
+                        SystemId.COMPOSER, "select-basic/select-literal", Dialect.MYSQL, Dialect.POSTGRESQL)
                 .orElseThrow();
-        assertThat(meta).contains("\"model\": \"claude-sonnet-4-6\"");
+        assertThat(meta).contains("\"model\": \"composer-2.5\"");
         assertThat(meta).contains("\"promptVersion\": \"v1\"");
         assertThat(meta).contains("\"latencyMs\": 42");
     }

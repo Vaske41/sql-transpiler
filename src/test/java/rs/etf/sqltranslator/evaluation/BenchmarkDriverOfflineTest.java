@@ -21,8 +21,8 @@ class BenchmarkDriverOfflineTest {
                 .isEqualTo(OutcomeKind.WRONG_INVENTION);
 
         TranslateOutcome empty = new TranslateOutcome(
-                SystemId.CLAUDE, OutcomeKind.SUCCESS, 0, "", "", 1L, "SUCCESS");
-        assertThat(OutcomeScorer.score(SystemId.CLAUDE, unsupported, empty))
+                SystemId.COMPOSER, OutcomeKind.SUCCESS, 0, "", "", 1L, "SUCCESS");
+        assertThat(OutcomeScorer.score(SystemId.COMPOSER, unsupported, empty))
                 .isEqualTo(OutcomeKind.REFUSED);
 
         Path normal = Path.of("src", "test", "resources", "cases", "select-basic", "select-literal");

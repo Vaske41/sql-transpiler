@@ -83,11 +83,7 @@ final class BenchmarkDriver {
                         PromptTemplate.load(),
                         java.net.http.HttpClient.newHttpClient(),
                         true),
-                new ClaudeAdapter(
-                        new FixtureStore(),
-                        PromptTemplate.load(),
-                        java.net.http.HttpClient.newHttpClient(),
-                        true));
+                new ComposerAdapter(new FixtureStore(), true));
     }
 
     List<ScoreRow> run() throws Exception {
@@ -211,7 +207,7 @@ final class BenchmarkDriver {
     }
 
     private static boolean isLlm(SystemId system) {
-        return system == SystemId.GEMINI || system == SystemId.CLAUDE;
+        return system == SystemId.GEMINI || system == SystemId.COMPOSER;
     }
 
     private static long median(List<Long> values) {

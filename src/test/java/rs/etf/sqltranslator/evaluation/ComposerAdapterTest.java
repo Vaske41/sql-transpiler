@@ -4,14 +4,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import rs.etf.sqltranslator.core.Dialect;
 
-import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class ClaudeAdapterTest {
+class ComposerAdapterTest {
 
     @TempDir
     Path temp;
@@ -19,9 +18,8 @@ class ClaudeAdapterTest {
     @Test
     void missingFixtureYieldsNoFixture() throws Exception {
         FixtureStore store = new FixtureStore(temp);
-        PromptTemplate prompt = new PromptTemplate(
-                "Translate the following {src} SQL to {tgt}. Output only SQL.\n\n{sql}\n");
-        ClaudeAdapter adapter = new ClaudeAdapter(store, prompt, HttpClient.newHttpClient(), true);
+        ComposerAdapter adapter = new ComposerAdapter(
+                store, ComposerAdapter.HELPER, ComposerAdapter.PROMPT_PATH, "python", true);
 
         Path casePath = temp.resolve("cases").resolve("missing").resolve("case");
         Files.createDirectories(casePath);
@@ -33,16 +31,12 @@ class ClaudeAdapterTest {
 
         assertThat(out.outcome()).isEqualTo(OutcomeKind.NO_FIXTURE);
         assertThat(out.status()).isEqualTo("NO_FIXTURE");
-        assertThat(out.system()).isEqualTo(SystemId.CLAUDE);
+        assertThat(out.system()).isEqualTo(SystemId.COMPOSER);
     }
 
     @Test
     void fixtureHitReturnsSuccessWithoutNetwork() throws Exception {
-        ClaudeAdapter adapter = new ClaudeAdapter(
-                new FixtureStore(),
-                PromptTemplate.load(),
-                HttpClient.newHttpClient(),
-                true);
+        ComposerAdapter adapter = new ComposerAdapter(new FixtureStore(), true);
 
         Path casePath = Path.of("src", "test", "resources", "cases", "select-basic", "select-literal");
         Path input = casePath.resolve("input.mysql.sql");
@@ -52,29 +46,29 @@ class ClaudeAdapterTest {
 
         assertThat(out.outcome()).isEqualTo(OutcomeKind.SUCCESS);
         assertThat(out.sql().trim()).isEqualTo("SELECT 1;");
-        assertThat(out.system()).isEqualTo(SystemId.CLAUDE);
+        assertThat(out.system()).isEqualTo(SystemId.COMPOSER);
     }
 
     @Test
     void stripsMarkdownFencesFromFixture() throws Exception {
         FixtureStore store = new FixtureStore(temp);
         store.write(
-                SystemId.CLAUDE,
+                SystemId.COMPOSER,
                 "fenced/case",
                 Dialect.MYSQL,
                 Dialect.POSTGRESQL,
                 "```\nSELECT 3;\n```\n",
-                ClaudeAdapter.MODEL,
+                ComposerAdapter.MODEL,
                 PromptTemplate.VERSION,
-                "2026-07-13T00:00:00Z",
+                "2026-07-14T00:00:00Z",
                 1L);
 
         Path casePath = Path.of("src", "test", "resources", "cases", "fenced", "case");
         Path input = Files.createTempFile(temp, "in-", ".sql");
         Files.writeString(input, "SELECT 3;\n", StandardCharsets.UTF_8);
 
-        ClaudeAdapter adapter = new ClaudeAdapter(
-                store, PromptTemplate.load(), HttpClient.newHttpClient(), true);
+        ComposerAdapter adapter = new ComposerAdapter(
+                store, ComposerAdapter.HELPER, ComposerAdapter.PROMPT_PATH, "python", true);
         TranslateOutcome out = adapter.translate(new TranslateRequest(
                 Dialect.MYSQL, Dialect.POSTGRESQL, casePath, input));
 

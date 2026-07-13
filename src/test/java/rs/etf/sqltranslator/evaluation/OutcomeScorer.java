@@ -46,7 +46,7 @@ final class OutcomeScorer {
         Objects.requireNonNull(casePath, "casePath");
         Objects.requireNonNull(raw, "raw");
 
-        if (system == SystemId.GEMINI || system == SystemId.CLAUDE) {
+        if (system == SystemId.GEMINI || system == SystemId.COMPOSER) {
             return scoreLlm(casePath, raw);
         }
         // Jar / SQLGlot already apply REFUSED_OK / WRONG_INVENTION
