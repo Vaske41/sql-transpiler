@@ -316,29 +316,29 @@ Target: **~40 cases ⇒ ~200+ generated test executions.** Add cases as bugs are
   stdout → `target/evaluation/determinism/`. **Not** a full-corpus jar claim; disclose subset
   size in the thesis (optional full-corpus opt-in later for an appendix).
 
-### 7c. Benchmark methodology vs. SQLGlot, Gemini 2.5 Flash, Claude Sonnet 4.6
-Baselines (day-one): **sqltranslate** fat jar, **SQLGlot** (pinned), **Gemini** (`gemini-2.5-flash`), **Claude** (`claude-sonnet-4-6`). Fixed evaluation corpus = the golden-file inputs (public, versioned in-repo). For each system × case × direction, record:
+### 7c. Benchmark methodology vs. SQLGlot, Gemini 2.5 Flash, Composer 2.5
+Baselines: **sqltranslate** fat jar, **SQLGlot** (pinned), **Gemini** (`gemini-2.5-flash`, chat completion), **Composer 2.5** (Cursor Agent SDK — not ≡ Gemini). Fixed evaluation corpus = the golden-file inputs (public, versioned in-repo). For each system × case × direction, record:
 
 | Metric | How measured |
 |---|---|
 | **Parse/translate success** | tool produced output without error |
 | **Syntactic validity** | output parses on a real target engine: `EXPLAIN`/prepare via Testcontainers for MySQL/PG (minimum scope); T-SQL best-effort (SQL Server container if available, else reported as unverified — *not* via this project's own parsers, which would be circular) |
 | **Semantic equivalence** | executed result-set comparison on the Testcontainers subset (MySQL/PG minimum scope) |
-| **Determinism** | 3 runs per case; % identical outputs (LLMs at temperature 0 still may vary — a key thesis point) |
-| **Latency** | wall-clock per statement (note: LLM latency is network-bound; report separately) |
+| **Determinism** | 3 runs per case; % identical outputs (Gemini at temperature 0 still may vary; Composer is an agent loop with no temp=0 analogue — a key thesis point) |
+| **Latency** | wall-clock per statement (Gemini / Composer latency reported separately; never ranked vs local tools) |
 
-Harness: a Java (or thin Python) driver that shells out to `sqltranslate` and `sqlglot`, and calls LLM APIs with a **fixed, versioned prompt** ("Translate the following {src} SQL to {tgt}. Output only SQL."). Store every raw output in `evaluation/results/` for reproducibility. Score with a small comparator script → CSV → thesis tables/charts.
+Harness: a Java (or thin Python) driver that shells out to `sqltranslate` and `sqlglot`, calls Gemini via HTTP, and invokes Composer via `evaluation/bin/composer_transpile.py` (Cursor SDK) with a **fixed, versioned prompt** (`evaluation/prompts/v1.txt`). Store every raw output in `evaluation/results/` for reproducibility. Score with a small comparator script → CSV → thesis tables/charts.
 
-Fairness notes to state in the thesis: identical corpus for all systems; LLM model versions and prompt pinned and reported; this tool's *known limitations* corpus included so failure modes are shown honestly for all systems; **SQLGlot receives equivalent schema context** (it accepts schema dicts for qualification/type annotation) on every case where this tool benefits from in-script DDL — anything else biases the comparison in our favor.
+Fairness notes to state in the thesis: identical corpus for all systems; model / SDK versions and prompt pinned and reported; **Composer is a coding agent, not a chat-completion baseline** (see README fairness table); this tool's *known limitations* corpus included so failure modes are shown honestly for all systems; **SQLGlot receives equivalent schema context** (it accepts schema dicts for qualification/type annotation) on every case where this tool benefits from in-script DDL — anything else biases the comparison in our favor.
 
 ### Deliverables checklist
 - [x] Golden-file harness + ~40 cases across all categories, incl. DDL+DML script cases that exercise the catalog (inputs accumulated since Phase 2; expecteds snapshot-bootstrapped + reviewed)
 - [x] Testcontainers semantic-equivalence suite **implemented** (`cases/semantic/**`, `-Pintegration`) — **pending Docker proof** on this machine/CI (suite skips when Docker unavailable; not verified green-on-engines yet)
 - [x] Determinism report generation (`JarDeterminismIT` stratified subset ≥20 directions → `target/evaluation/determinism/`)
-- [x] Benchmark driver (sqltranslate jar + SQLGlot + Gemini + Claude) with pinned prompts/versions (`evaluation/prompts/v1.txt`)
-- [x] Results CSV under `target/evaluation/summary/` (`REFUSED_OK` for sqltranslate exit 2; LLM empty unsupported → `REFUSED`; `WRONG_INVENTION` for invention)
+- [x] Benchmark driver (sqltranslate jar + SQLGlot + Gemini + Composer 2.5) with pinned prompts/versions (`evaluation/prompts/v1.txt`)
+- [x] Results CSV under `target/evaluation/summary/` (`REFUSED_OK` for sqltranslate exit 2; LLM/agent empty unsupported → `REFUSED`; `WRONG_INVENTION` for invention)
 - [x] (Scaffold) SQL Server Testcontainers via `-Psqlserver-integration` / `@Tag("sqlserver-integration")` — smoke only day one; not in CI
-- [ ] Thesis evaluation chapter tables from live-regenerated LLM fixtures + full offline CSV
+- [ ] Thesis evaluation chapter tables from live-regenerated Gemini / Composer fixtures + full offline CSV
 
 ---
 

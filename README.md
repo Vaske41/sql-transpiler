@@ -109,19 +109,51 @@ Helper: `evaluation/bin/sqlglot_transpile.py` (`--read` / `--write` with
 `CREATE TABLE`, a minimal schema is extracted and passed into SQLGlot so DDL-backed
 cases stay fair versus sqltranslate.
 
-### LLM fixtures (Gemini / Claude)
+### LLM / agent fixtures (Gemini / Composer 2.5)
+
+Baselines: **sqltranslate** (fat jar), **SQLGlot** (pinned), **Gemini**
+(`gemini-2.5-flash`, chat completion), **Composer 2.5** (Cursor Agent SDK —
+**not** a completion API). Claude / Anthropic is **not** a baseline.
 
 Fixture-first under `evaluation/results/{system}/{caseKey}/{src}-to-{tgt}.sql`
-(+ `.meta.json`). Live regeneration only when **both** are set:
+(+ `.meta.json`). Missing fixture → outcome `NO_FIXTURE` (not success).
+Never call LLMs or agents from GitHub Actions. Prompt: `evaluation/prompts/v1.txt`.
 
-- `-Deval.live=true` or `EVAL_LIVE=1`
-- `GEMINI_API_KEY` (model `gemini-2.5-flash`) and/or `ANTHROPIC_API_KEY` (model `claude-sonnet-4-6`)
+| Dimension | Gemini | Composer 2.5 |
+|-----------|--------|--------------|
+| API shape | Chat completion HTTP | Cursor Agent SDK (`Agent.prompt`) |
+| Tools | None | Local agent tools may run |
+| Determinism | `temperature=0` | Agent loop; no temp=0 analogue |
+| Latency | Network completion | Agent cold start dominates |
+| SQL fixtures | Single-shot pin | Same — not multi-sample consensus |
 
-Temperature is pinned to `0`. Missing fixture → outcome `NO_FIXTURE` (not success).
-Never call LLMs from GitHub Actions. Prompt: `evaluation/prompts/v1.txt`.
+Empty temp `cwd` for Composer prevents repo self-edits; it does **not** equalize
+the systems. Thesis wording: prefer **“LLM / agent baselines”** — do not imply
+Composer ≡ Gemini.
 
-LLM scoring uses the **single-statement** subset only (multi-statement scripts stay
-jar / SQLGlot).
+**Gemini live** (local only): `-Deval.live=true` / `EVAL_LIVE=1` and
+`GEMINI_API_KEY` (`temperature=0`).
+
+**Composer live** (local only): `CURSOR_API_KEY` (Cursor Dashboard → Integrations)
+plus the regen recipe below. Bills Cursor plan / SDK pools. Pin:
+`cursor-sdk==0.1.9` beside `sqlglot==30.12.0` in `evaluation/bin/requirements.txt`.
+
+LLM / agent scoring uses the **single-statement** subset only (multi-statement
+scripts stay jar / SQLGlot).
+
+### Regenerate Composer fixtures (local only)
+
+```text
+pip install -r evaluation/bin/requirements.txt
+mvn -q -DskipTests package
+# Build test classpath (or use your IDE run config for EvaluationMain)
+set EVAL_LIVE=1
+set CURSOR_API_KEY=...
+java -cp <test+runtime> rs.etf.sqltranslator.evaluation.EvaluationMain --live-composer --limit 5
+```
+
+Requires both `EVAL_LIVE=1` (or `-Deval.live=true`) and `CURSOR_API_KEY`. Never CI.
+Offline `verify` / `BenchmarkDriver` keep Composer fixture-only (`forceOffline`).
 
 ### Offline driver and scoring
 
@@ -137,14 +169,15 @@ semantic_equiv, determinism_ok, latency_ms_median, notes`
 
 Primary outcomes:
 
-| Situation | sqltranslate | SQLGlot | LLM |
-|-----------|--------------|---------|-----|
+| Situation | sqltranslate | SQLGlot | LLM / agent |
+|-----------|--------------|---------|-------------|
 | Normal, good SQL | `SUCCESS` | `SUCCESS` | `SUCCESS` if fixture/live SQL |
 | Unsupported / expected refusal | exit 2 → `REFUSED_OK` | invent → `WRONG_INVENTION`; error → `REFUSED` | invent → `WRONG_INVENTION`; empty / non-SQL → `REFUSED` (not `REFUSED_OK`) |
 | Parse / crash | `PARSE` / `INTERNAL` | failure | `NO_FIXTURE` / `ERROR` |
 
-Local latency: N≥3 runs, drop warmup, report median `latency_ms`. LLM latency is
-reported separately (fixture/live meta) — never ranked against local tools.
+Local latency: N≥3 runs, drop warmup, report median `latency_ms`. Gemini /
+Composer latency is reported separately (fixture/live meta; agent class for
+Composer) — never ranked against local tools.
 
 `BenchmarkDriver` always writes `syntactic_valid` / `semantic_equiv` as `n/a`
 (engine columns reserved for a future driver wiring; not filled under
