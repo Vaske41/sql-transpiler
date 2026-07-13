@@ -9,7 +9,9 @@ import java.util.Objects;
  *
  * <p>sqltranslate / SQLGlot adapters already classify exit codes; LLM fixtures return
  * SUCCESS for any non-empty SQL — this scorer remaps unsupported invention to
- * {@link OutcomeKind#WRONG_INVENTION}.
+ * {@link OutcomeKind#WRONG_INVENTION}. Empty LLM output on unsupported cases is
+ * {@link OutcomeKind#REFUSED} (not {@link OutcomeKind#REFUSED_OK}); {@code REFUSED_OK}
+ * is reserved for sqltranslate exit code 2 on unsupported inputs.
  */
 final class OutcomeScorer {
 
@@ -62,7 +64,7 @@ final class OutcomeScorer {
         boolean unsupported = isUnsupportedCase(casePath);
         boolean nonEmpty = raw.sql() != null && !raw.sql().isBlank();
         if (unsupported) {
-            return nonEmpty ? OutcomeKind.WRONG_INVENTION : OutcomeKind.REFUSED_OK;
+            return nonEmpty ? OutcomeKind.WRONG_INVENTION : OutcomeKind.REFUSED;
         }
         return nonEmpty ? OutcomeKind.SUCCESS : OutcomeKind.REFUSED;
     }

@@ -92,7 +92,9 @@ the product jar). Default `verify` stays Docker-free and never calls LLM APIs.
 
 Failsafe (after `package`) runs only:
 
-- `JarDeterminismIT` — fat-jar stdout byte-identity → `target/evaluation/determinism/`
+- `JarDeterminismIT` — fat-jar stdout byte-identity on a **stratified subset**
+  (≥20 directions, `PER_DIRECTION=4`); not a full-corpus determinism claim →
+  `target/evaluation/determinism/`
 - `SqlTranslateJarIT` — jar adapter SUCCESS / `REFUSED_OK`
 - `BenchmarkDriverOfflineIT` — limited corpus CSV → `target/evaluation/summary/latest.csv`
 
@@ -138,15 +140,17 @@ Primary outcomes:
 | Situation | sqltranslate | SQLGlot | LLM |
 |-----------|--------------|---------|-----|
 | Normal, good SQL | `SUCCESS` | `SUCCESS` | `SUCCESS` if fixture/live SQL |
-| Unsupported / expected refusal | exit 2 → `REFUSED_OK` | invent → `WRONG_INVENTION`; error → `REFUSED` | non-empty SQL → `WRONG_INVENTION` |
+| Unsupported / expected refusal | exit 2 → `REFUSED_OK` | invent → `WRONG_INVENTION`; error → `REFUSED` | invent → `WRONG_INVENTION`; empty / non-SQL → `REFUSED` (not `REFUSED_OK`) |
 | Parse / crash | `PARSE` / `INTERNAL` | failure | `NO_FIXTURE` / `ERROR` |
 
 Local latency: N≥3 runs, drop warmup, report median `latency_ms`. LLM latency is
 reported separately (fixture/live meta) — never ranked against local tools.
 
-Offline CSV leaves `syntactic_valid` / `semantic_equiv` as `n/a` unless
-`-Pintegration` engines are used. Do **not** claim engine validity via this
-project's own parsers.
+`BenchmarkDriver` always writes `syntactic_valid` / `semantic_equiv` as `n/a`
+(engine columns reserved for a future driver wiring; not filled under
+`-Pintegration`). Semantic evidence is only from `SemanticEquivalenceTest` under
+`-Pintegration` (Testcontainers), not from the offline CSV. Do **not** claim
+engine validity via this project's own parsers.
 
 ### Semantic authoring rules (summary)
 

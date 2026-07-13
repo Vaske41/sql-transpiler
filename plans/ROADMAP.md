@@ -310,7 +310,11 @@ Target: **~40 cases ⇒ ~200+ generated test executions.** Add cases as bugs are
 **Semantic spot-check via Testcontainers — minimum scope for MySQL + PostgreSQL:** run translated DDL+DML against real engines — execute source SQL on the source engine, translated SQL on the target engine, compare result sets for a subset of ~10 cases. MySQL and PostgreSQL images are light and start in seconds; this is what makes the evaluation chapter credible, so it must not be cut. The **SQL Server image stays extension** (heavy, licensing) — T-SQL *output* without a container is reported honestly as syntax-checked-only. Note: validating output with this project's *own* grammars proves self-consistency, not correctness — never present that as validity evidence.
 
 ### 7b. Determinism validation
-- Repeat-run byte-equality (already in Phase 5 tests) — report as a measured property: *N runs × M cases, 100% identical*.
+- Repeat-run byte-equality (already in Phase 5 golden tests) — in-process printers.
+- Fat-jar CLI determinism (`JarDeterminismIT`): **stratified representative subset**
+  (≥20 directions, capped per source→target pair), 3 JVM ProcessBuilder runs, byte-identical
+  stdout → `target/evaluation/determinism/`. **Not** a full-corpus jar claim; disclose subset
+  size in the thesis (optional full-corpus opt-in later for an appendix).
 
 ### 7c. Benchmark methodology vs. SQLGlot, Gemini 2.5 Flash, Claude Sonnet 4.6
 Baselines (day-one): **sqltranslate** fat jar, **SQLGlot** (pinned), **Gemini** (`gemini-2.5-flash`), **Claude** (`claude-sonnet-4-6`). Fixed evaluation corpus = the golden-file inputs (public, versioned in-repo). For each system × case × direction, record:
@@ -329,10 +333,10 @@ Fairness notes to state in the thesis: identical corpus for all systems; LLM mod
 
 ### Deliverables checklist
 - [x] Golden-file harness + ~40 cases across all categories, incl. DDL+DML script cases that exercise the catalog (inputs accumulated since Phase 2; expecteds snapshot-bootstrapped + reviewed)
-- [x] Testcontainers semantic-equivalence subset for MySQL + PostgreSQL (`cases/semantic/**`, `-Pintegration`) — **minimum scope**
-- [x] Determinism report generation (`JarDeterminismIT` → `target/evaluation/determinism/`)
+- [x] Testcontainers semantic-equivalence suite **implemented** (`cases/semantic/**`, `-Pintegration`) — **pending Docker proof** on this machine/CI (suite skips when Docker unavailable; not verified green-on-engines yet)
+- [x] Determinism report generation (`JarDeterminismIT` stratified subset ≥20 directions → `target/evaluation/determinism/`)
 - [x] Benchmark driver (sqltranslate jar + SQLGlot + Gemini + Claude) with pinned prompts/versions (`evaluation/prompts/v1.txt`)
-- [x] Results CSV under `target/evaluation/summary/` (`REFUSED_OK` / `WRONG_INVENTION` scoring)
+- [x] Results CSV under `target/evaluation/summary/` (`REFUSED_OK` for sqltranslate exit 2; LLM empty unsupported → `REFUSED`; `WRONG_INVENTION` for invention)
 - [x] (Scaffold) SQL Server Testcontainers via `-Psqlserver-integration` / `@Tag("sqlserver-integration")` — smoke only day one; not in CI
 - [ ] Thesis evaluation chapter tables from live-regenerated LLM fixtures + full offline CSV
 
