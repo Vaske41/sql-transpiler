@@ -92,13 +92,19 @@ final class BenchmarkDriver {
 
     static BenchmarkDriver fullOffline(Path jar, Path csvOut, boolean includeSqlGlot)
             throws Exception {
+        return fullOffline(jar, csvOut, includeSqlGlot, 0);
+    }
+
+    static BenchmarkDriver fullOffline(Path jar, Path csvOut, boolean includeSqlGlot, int caseLimit)
+            throws Exception {
         List<TranslatorAdapter> adapters = new ArrayList<>();
         adapters.add(new SqlTranslateJarAdapter(jar));
         if (includeSqlGlot && SqlGlotAdapter.available()) {
             adapters.add(new SqlGlotAdapter());
         }
         adapters.addAll(fixtureLlmAdapters());
-        return new BenchmarkDriver(adapters, csvOut, List.of(), true, LOCAL_LATENCY_RUNS);
+        return new BenchmarkDriver(
+                adapters, csvOut, List.of(), true, LOCAL_LATENCY_RUNS, caseLimit);
     }
 
     /**
@@ -121,15 +127,43 @@ final class BenchmarkDriver {
     /**
      * Live Composer fixture regen only ({@code forceOffline=false}). Gemini stays offline via
      * {@link #fixtureLlmAdapters()}; this path does not include Gemini.
+     *
+     * @param parrotCasesRoot non-null for PARROT-Diverse; {@code null} for golden fanout
+     * @param cursorApiKey resolved key (getenv or {@code .env.local}); passed to child via extraEnv
      */
-    static BenchmarkDriver liveComposerRegen(Path csvOut, int caseLimit) {
+    static BenchmarkDriver liveComposerRegen(
+            Path csvOut, Path parrotCasesRoot, int caseLimit, String cursorApiKey) {
         return new BenchmarkDriver(
-                liveComposerAdapters(),
+                List.of(new ComposerAdapter(new FixtureStore(), false, cursorApiKey)),
                 csvOut,
                 List.of(),
                 true,
                 1,
-                caseLimit);
+                caseLimit,
+                parrotCasesRoot);
+    }
+
+    /**
+     * Live Gemini fixture regen only ({@code forceOffline=false}).
+     *
+     * @param parrotCasesRoot non-null for PARROT-Diverse; {@code null} for golden fanout
+     * @param geminiApiKey resolved key (getenv or {@code .env.local})
+     */
+    static BenchmarkDriver liveGeminiRegen(
+            Path csvOut, Path parrotCasesRoot, int caseLimit, String geminiApiKey) throws Exception {
+        return new BenchmarkDriver(
+                List.of(new GeminiAdapter(
+                        new FixtureStore(),
+                        PromptTemplate.load(),
+                        java.net.http.HttpClient.newHttpClient(),
+                        false,
+                        geminiApiKey)),
+                csvOut,
+                List.of(),
+                true,
+                1,
+                caseLimit,
+                parrotCasesRoot);
     }
 
     private static List<TranslatorAdapter> offlineAdapters(Path jar) throws Exception {
@@ -148,11 +182,6 @@ final class BenchmarkDriver {
                         java.net.http.HttpClient.newHttpClient(),
                         true),
                 new ComposerAdapter(new FixtureStore(), true));
-    }
-
-    /** Used only by {@link EvaluationMain} {@code --live-composer}. */
-    static List<TranslatorAdapter> liveComposerAdapters() {
-        return List.of(new ComposerAdapter(new FixtureStore(), false));
     }
 
     List<ScoreRow> run() throws Exception {

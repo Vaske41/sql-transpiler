@@ -131,29 +131,41 @@ Empty temp `cwd` for Composer prevents repo self-edits; it does **not** equalize
 the systems. Thesis wording: prefer **“LLM / agent baselines”** — do not imply
 Composer ≡ Gemini.
 
-**Gemini live** (local only): `-Deval.live=true` / `EVAL_LIVE=1` and
-`GEMINI_API_KEY` (`temperature=0`).
+**Live keys (local only):** put `GEMINI_API_KEY` / `CURSOR_API_KEY` in
+`evaluation/.env.local` (gitignored; see `evaluation/.env.example`). Set
+`EVAL_LIVE=1` (or `-Deval.live=true`). `EvaluationMain` overlays file values when
+process env is unset — no PowerShell `Get-Content` export dance required.
+Composer injects `CURSOR_API_KEY` into the child ProcessBuilder. Never CI.
 
-**Composer live** (local only): `CURSOR_API_KEY` (Cursor Dashboard → Integrations)
-plus the regen recipe below. Bills Cursor plan / SDK pools. Pin:
-`cursor-sdk==0.1.9` beside `sqlglot==30.12.0` in `evaluation/bin/requirements.txt`.
+Pin: `cursor-sdk==0.1.9` beside `sqlglot==30.12.0` in
+`evaluation/bin/requirements.txt`.
 
 LLM / agent scoring uses the **single-statement** subset only (multi-statement
 scripts stay jar / SQLGlot).
 
-### Regenerate Composer fixtures (local only)
+### PARROT-Diverse offline stress corpus
+
+Uses Hugging Face **PARROT-Diverse** (`weizhoudb/PARROT` split `test`), not the
+NeurIPS 598-pair core. Primary metrics are Phase 7 **outcome classes** / coverage /
+refusal — **not** “PARROT accuracy,” AccEX, AccRES, or leaderboard parity.
+Query-only stress: keep rates in **separate** thesis tables from golden /
+`cases/semantic`. Committed fixture budget: **≤20** Gemini, **≤5** Composer.
 
 ```text
-pip install -r evaluation/bin/requirements.txt
+pip install -r evaluation/bin/requirements-datasets.txt
+python evaluation/bin/fetch_parrot.py
+python evaluation/bin/materialize_parrot.py
+# keys in evaluation/.env.local (gitignored)
 mvn -q -DskipTests package
-# Build test classpath (or use your IDE run config for EvaluationMain)
-set EVAL_LIVE=1
-set CURSOR_API_KEY=...
-java -cp <test+runtime> rs.etf.sqltranslator.evaluation.EvaluationMain --live-composer --limit 5
+java -cp <test+runtime> ...EvaluationMain --corpus parrot-diverse --sqlglot
+$env:EVAL_LIVE=1
+java -cp ... EvaluationMain --live-gemini --corpus parrot-diverse --limit 20
+java -cp ... EvaluationMain --live-composer --corpus parrot-diverse --limit 5
 ```
 
-Requires both `EVAL_LIVE=1` (or `-Deval.live=true`) and `CURSOR_API_KEY`. Never CI.
-Offline `verify` / `BenchmarkDriver` keep Composer fixture-only (`forceOffline`).
+CSV: `target/evaluation/summary/parrot-diverse-latest.csv`.
+`--corpus parrot` is rejected (use `parrot-diverse`). Default `--corpus golden`
+is the existing golden offline path → `latest.csv`.
 
 ### Offline driver and scoring
 

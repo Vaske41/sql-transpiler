@@ -26,16 +26,28 @@ final class GeminiAdapter implements TranslatorAdapter {
     private final PromptTemplate prompt;
     private final HttpClient http;
     private final boolean forceOffline;
+    /** Optional API key from {@link EnvFiles} overlay; used when live and non-blank. */
+    private final String apiKeyOverlay;
 
     GeminiAdapter() throws Exception {
-        this(new FixtureStore(), PromptTemplate.load(), HttpClient.newHttpClient(), false);
+        this(new FixtureStore(), PromptTemplate.load(), HttpClient.newHttpClient(), false, null);
     }
 
     GeminiAdapter(FixtureStore store, PromptTemplate prompt, HttpClient http, boolean forceOffline) {
+        this(store, prompt, http, forceOffline, null);
+    }
+
+    GeminiAdapter(
+            FixtureStore store,
+            PromptTemplate prompt,
+            HttpClient http,
+            boolean forceOffline,
+            String apiKeyOverlay) {
         this.store = Objects.requireNonNull(store, "store");
         this.prompt = Objects.requireNonNull(prompt, "prompt");
         this.http = Objects.requireNonNull(http, "http");
         this.forceOffline = forceOffline;
+        this.apiKeyOverlay = apiKeyOverlay;
     }
 
     @Override
@@ -51,8 +63,8 @@ final class GeminiAdapter implements TranslatorAdapter {
         Dialect target = request.target();
 
         if (!forceOffline && LlmText.liveEnabled()) {
-            String key = System.getenv(API_KEY_ENV);
-            if (key != null && !key.isBlank()) {
+            String key = resolveApiKey();
+            if (key != null) {
                 return liveTranslate(request, caseKey, key);
             }
         }
@@ -65,6 +77,17 @@ final class GeminiAdapter implements TranslatorAdapter {
         long latency = parseLatencyMs(store.readMeta(SystemId.GEMINI, caseKey, source, target).orElse(""));
         return new TranslateOutcome(
                 SystemId.GEMINI, OutcomeKind.SUCCESS, 0, sql, "", latency, OutcomeKind.SUCCESS.name());
+    }
+
+    private String resolveApiKey() {
+        if (apiKeyOverlay != null && !apiKeyOverlay.isBlank()) {
+            return apiKeyOverlay;
+        }
+        String key = System.getenv(API_KEY_ENV);
+        if (key != null && !key.isBlank()) {
+            return key;
+        }
+        return null;
     }
 
     private TranslateOutcome liveTranslate(TranslateRequest request, String caseKey, String apiKey)
