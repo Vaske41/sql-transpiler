@@ -97,6 +97,9 @@ Failsafe (after `package`) runs only:
   `target/evaluation/determinism/`
 - `SqlTranslateJarIT` — jar adapter SUCCESS / `REFUSED_OK`
 - `BenchmarkDriverOfflineIT` — limited corpus CSV → `target/evaluation/summary/latest.csv`
+- `ParrotDiverseBenchmarkIT` — Java-written smoke under
+  `target/evaluation/parrot-diverse-smoke/` (no Python in CI) →
+  `parrot-diverse-smoke.csv`
 
 ### SQLGlot helper
 
@@ -166,6 +169,20 @@ java -cp ... EvaluationMain --live-composer --corpus parrot-diverse --limit 5
 CSV: `target/evaluation/summary/parrot-diverse-latest.csv`.
 `--corpus parrot` is rejected (use `parrot-diverse`). Default `--corpus golden`
 is the existing golden offline path → `latest.csv`.
+
+**Thesis stratification (I1):** do not quote a single undifferentiated SUCCESS%.
+Pivot / count Phase 7 outcomes by `hf_id` embedded in `case_id`
+(`{hf_row:05d}-{hf_id}-{source}-to-{target}`; `hf_id` may contain spaces).
+Excel: add a helper column with the regex capture below, then PivotTable.
+Python one-liner over the CSV:
+
+```text
+python -c "import csv,re,collections as C; p=re.compile(r'^\d{5}-(.+)-(mysql|postgresql|tsql)-to-(mysql|postgresql|tsql)$'); c=C.Counter();
+[c.update({(p.match(r['case_id']).group(1), r['outcome']):1}) for r in csv.DictReader(open('target/evaluation/summary/parrot-diverse-latest.csv',encoding='utf-8')) if r['system']=='sqltranslate' and p.match(r['case_id'])];
+print(*sorted(f'{k[0]}\t{k[1]}\t{v}' for k,v in c.items()), sep='\n')"
+```
+
+A dedicated summary tool is optional YAGNI.
 
 ### Offline driver and scoring
 

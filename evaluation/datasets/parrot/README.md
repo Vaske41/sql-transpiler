@@ -20,7 +20,9 @@ Composer fixtures.
 parity, or implying SUCCESS% equals translation accuracy vs PARROT gold.
 
 Stratify thesis reporting by `hf_id` (benchmark family), not a single
-undifferentiated SUCCESS%.
+undifferentiated SUCCESS%. `case_id` embeds it as
+`{hf_row:05d}-{hf_id}-{source}-to-{target}` (see root README Python/Excel
+one-liner — pivot outcomes by the `hf_id` capture group).
 
 ## Gold SQL
 
@@ -80,6 +82,10 @@ java -cp <test+runtime> ...EvaluationMain --live-composer --corpus parrot-divers
 ```
 
 CSV default: `target/evaluation/summary/parrot-diverse-latest.csv`.
+
+CI smoke (no Python / HF): Failsafe `ParrotDiverseBenchmarkIT` writes cases under
+`target/evaluation/parrot-diverse-smoke/` in Java and runs
+`BenchmarkDriver.parrotDiverseOffline`.
 
 Default `./mvnw --batch-mode clean verify` stays Docker-free and API-free.
 
