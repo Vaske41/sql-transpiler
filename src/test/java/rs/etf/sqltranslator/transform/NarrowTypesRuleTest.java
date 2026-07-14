@@ -69,4 +69,32 @@ class NarrowTypesRuleTest {
         CastExpression cast = (CastExpression) selectExpr(r.script(), 0, 0);
         assertThat(cast.targetType().type()).isEqualTo(GenericType.VARCHAR);
     }
+
+    @Test
+    void mysqlCastVarcharBecomesChar() {
+        // MySQL CAST type list has CHAR[(N)], not VARCHAR — engine rejects CAST(... AS VARCHAR(n)).
+        TranslationResult r = runRule(rule, "SELECT CAST(x AS VARCHAR(32)) FROM t;",
+                Dialect.POSTGRESQL, Dialect.MYSQL);
+        CastExpression cast = (CastExpression) selectExpr(r.script(), 0, 0);
+        assertThat(cast.targetType().type()).isEqualTo(GenericType.CHAR);
+        assertThat(cast.targetType().length().orElseThrow())
+                .isEqualTo(new FixedLength(32));
+    }
+
+    @Test
+    void mysqlCastNvarcharBecomesCharNotVarchar() {
+        TranslationResult r = runRule(rule, "SELECT CAST(x AS NVARCHAR(20)) FROM t;",
+                Dialect.TSQL, Dialect.MYSQL);
+        CastExpression cast = (CastExpression) selectExpr(r.script(), 0, 0);
+        assertThat(cast.targetType().type()).isEqualTo(GenericType.CHAR);
+        assertThat(cast.targetType().length().orElseThrow())
+                .isEqualTo(new FixedLength(20));
+    }
+
+    @Test
+    void mysqlColumnVarcharStillVarchar() {
+        TranslationResult r = runRule(rule, "CREATE TABLE t (a VARCHAR(32));",
+                Dialect.POSTGRESQL, Dialect.MYSQL);
+        assertThat(columnType(r.script(), 0, 0).type()).isEqualTo(GenericType.VARCHAR);
+    }
 }
