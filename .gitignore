@@ -16,3 +16,11 @@ target/
 # OS
 Thumbs.db
 .DS_Store
+
+# Local secrets (API keys for evaluation)
+.env
+.env.*
+!.env.example
+evaluation/.env
+evaluation/.env.*
+!evaluation/.env.example
