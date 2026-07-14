@@ -31,9 +31,9 @@ public final class EvaluationMain {
     static final Path DEFAULT_PARROT_CASES =
             Path.of("evaluation", "datasets", "parrot", "cases");
 
-    /** Hard cap on committed PARROT-Diverse Gemini fixtures (I5). */
+    /** Committed allowlist budget for PARROT-Diverse Gemini fixtures (I5; warn-only at runtime). */
     static final int COMMITTED_GEMINI_BUDGET = 20;
-    /** Hard cap on committed PARROT-Diverse Composer fixtures (I5). */
+    /** Committed allowlist budget for PARROT-Diverse Composer fixtures (I5; warn-only at runtime). */
     static final int COMMITTED_COMPOSER_BUDGET = 5;
 
     private EvaluationMain() {

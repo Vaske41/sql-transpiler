@@ -154,12 +154,13 @@ refusal — **not** “PARROT accuracy,” AccEX, AccRES, or leaderboard parity.
 Query-only stress: keep rates in **separate** thesis tables from golden /
 `cases/semantic`.
 
-**Thesis workflow + hard fixture budget (I5):** (1) fetch + materialize once,
-commit `manifest.json`; (2) offline jar+SQLGlot; (3) live Gemini `--limit 20`
-max for **committed** fixtures; (4) live Composer `--limit 5` max (300s
-timeouts); (5) re-run offline to score; (6) do **not** `git add` large
-`evaluation/results/**` trees — smoke / thesis allowlist only. Details:
-`evaluation/datasets/parrot/README.md`.
+**Thesis workflow + committed fixture allowlist (I5, warn-only at runtime):**
+(1) fetch + materialize once, commit `manifest.json`; (2) offline jar+SQLGlot;
+(3) live Gemini `--limit 20` max for **committed** fixtures; (4) live Composer
+`--limit 5` max (300s timeouts); (5) re-run offline to score; (6) do **not**
+`git add` large `evaluation/results/**` trees — smoke / thesis allowlist only.
+`EvaluationMain` prints a stderr warning if `--limit` exceeds the allowlist;
+it does not hard-exit. Details: `evaluation/datasets/parrot/README.md`.
 
 ```text
 pip install -r evaluation/bin/requirements-datasets.txt

@@ -85,7 +85,7 @@ java -cp <test+runtime> rs.etf.sqltranslator.evaluation.EvaluationMain \
   --corpus parrot-diverse --sqlglot
 
 # live fixture regen (local only; keys via evaluation/.env.local + EVAL_LIVE=1)
-# hard committed budget: ≤20 Gemini, ≤5 Composer
+# committed allowlist budget (warn-only): ≤20 Gemini, ≤5 Composer
 java -cp <test+runtime> ...EvaluationMain --live-gemini --corpus parrot-diverse --limit 20
 java -cp <test+runtime> ...EvaluationMain --live-composer --corpus parrot-diverse --limit 5
 
@@ -108,10 +108,11 @@ Default `./mvnw --batch-mode clean verify` stays Docker-free and API-free.
 
 ## Fixture budget (I5)
 
-Hard cap on **committed** PARROT-Diverse fixtures: **≤20** Gemini and **≤5**
-Composer unless a later plan revises the budget. Local regen may use a higher
-`--limit` for exploration, but only the allowlisted subset may be git-added.
-Missing fixture → `NO_FIXTURE`.
+**Committed allowlist budget** (warn-only at runtime): **≤20** Gemini and **≤5**
+Composer unless a later plan revises the budget. `EvaluationMain` warns on
+stderr if `--limit` exceeds the allowlist; it does not hard-exit. Local regen
+may use a higher `--limit` for exploration, but only the allowlisted subset may
+be git-added. Missing fixture → `NO_FIXTURE`.
 
 ## Citation
 
