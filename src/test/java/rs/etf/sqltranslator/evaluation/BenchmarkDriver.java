@@ -20,7 +20,12 @@ final class BenchmarkDriver {
 
     static final Path DEFAULT_CSV =
             Path.of("target", "evaluation", "summary", "latest.csv");
+    static final Path DEFAULT_PARROT_CSV =
+            Path.of("target", "evaluation", "summary", "parrot-diverse-latest.csv");
     static final Path DEFAULT_JAR = Path.of("target", "sqltranslate.jar");
+
+    private static final String PARROT_NOTES =
+            "corpus=parrot-diverse;filter=diverse-dialect-v1";
 
     /** Local adapters: N≥3 runs, drop first (warmup), median of remainder. */
     static final int LOCAL_LATENCY_RUNS = 3;
@@ -37,6 +42,8 @@ final class BenchmarkDriver {
     private final int localLatencyRuns;
     /** {@code 0} = unlimited; otherwise cap after allowlist / corpus selection. */
     private final int caseLimit;
+    /** Non-null enables PARROT-Diverse single-direction mode (no golden fanout). */
+    private final Path parrotCasesRoot;
 
     BenchmarkDriver(
             List<TranslatorAdapter> adapters,
@@ -54,12 +61,24 @@ final class BenchmarkDriver {
             boolean llmSingleStatementOnly,
             int localLatencyRuns,
             int caseLimit) {
+        this(adapters, csvOut, caseAllowlist, llmSingleStatementOnly, localLatencyRuns, caseLimit, null);
+    }
+
+    BenchmarkDriver(
+            List<TranslatorAdapter> adapters,
+            Path csvOut,
+            List<String> caseAllowlist,
+            boolean llmSingleStatementOnly,
+            int localLatencyRuns,
+            int caseLimit,
+            Path parrotCasesRoot) {
         this.adapters = List.copyOf(Objects.requireNonNull(adapters, "adapters"));
         this.csvOut = Objects.requireNonNull(csvOut, "csvOut");
         this.caseAllowlist = caseAllowlist == null ? List.of() : List.copyOf(caseAllowlist);
         this.llmSingleStatementOnly = llmSingleStatementOnly;
         this.localLatencyRuns = Math.max(1, localLatencyRuns);
         this.caseLimit = Math.max(0, caseLimit);
+        this.parrotCasesRoot = parrotCasesRoot;
     }
 
     static BenchmarkDriver offlineLimited(Path jar, Path csvOut) throws Exception {
@@ -80,6 +99,23 @@ final class BenchmarkDriver {
         }
         adapters.addAll(fixtureLlmAdapters());
         return new BenchmarkDriver(adapters, csvOut, List.of(), true, LOCAL_LATENCY_RUNS);
+    }
+
+    /**
+     * Offline PARROT-Diverse stress corpus: one direction per case from {@code target.txt}.
+     */
+    static BenchmarkDriver parrotDiverseOffline(
+            Path jar, Path csvOut, Path casesRoot, boolean includeSqlGlot, int caseLimit)
+            throws Exception {
+        Objects.requireNonNull(casesRoot, "casesRoot");
+        List<TranslatorAdapter> adapters = new ArrayList<>();
+        adapters.add(new SqlTranslateJarAdapter(jar));
+        if (includeSqlGlot && SqlGlotAdapter.available()) {
+            adapters.add(new SqlGlotAdapter());
+        }
+        adapters.addAll(fixtureLlmAdapters());
+        return new BenchmarkDriver(
+                adapters, csvOut, List.of(), true, LOCAL_LATENCY_RUNS, caseLimit, casesRoot);
     }
 
     /**
@@ -120,6 +156,10 @@ final class BenchmarkDriver {
     }
 
     List<ScoreRow> run() throws Exception {
+        if (parrotCasesRoot != null) {
+            return runParrotDiverse();
+        }
+
         CaseFiles corpus = CaseFiles.under("/cases", BenchmarkDriver::isEvalInput);
         List<Path> inputs = selectInputs(corpus);
 
@@ -146,6 +186,37 @@ final class BenchmarkDriver {
             }
         }
 
+        return finish(rows);
+    }
+
+    private List<ScoreRow> runParrotDiverse() throws Exception {
+        List<Path> inputs = new ArrayList<>(ParrotCorpus.listInputs(parrotCasesRoot));
+        if (caseLimit > 0 && inputs.size() > caseLimit) {
+            inputs = new ArrayList<>(inputs.subList(0, caseLimit));
+        }
+
+        List<ScoreRow> rows = new ArrayList<>();
+        for (Path inputFile : inputs) {
+            String display = ParrotCorpus.displayName(parrotCasesRoot, inputFile);
+            Dialect source = dialectOf(inputFile.getFileName().toString());
+            Path caseDir = inputFile.getParent();
+            Dialect target = ParrotCorpus.readTarget(caseDir);
+            String sqlText = Files.readString(inputFile, StandardCharsets.UTF_8);
+            boolean singleStmt = OutcomeScorer.isSingleStatement(sqlText);
+
+            for (TranslatorAdapter adapter : adapters) {
+                SystemId system = adapter.systemId();
+                if (isLlm(system) && llmSingleStatementOnly && !singleStmt) {
+                    continue;
+                }
+                rows.add(scoreOne(adapter, display, source, target, caseDir, inputFile));
+            }
+        }
+
+        return finish(rows);
+    }
+
+    private List<ScoreRow> finish(List<ScoreRow> rows) throws Exception {
         rows.sort(Comparator
                 .comparing(ScoreRow::system)
                 .thenComparing(ScoreRow::caseId)
@@ -222,6 +293,10 @@ final class BenchmarkDriver {
             } else {
                 notes = "llm_latency_from_fixture_or_live";
             }
+        }
+
+        if (parrotCasesRoot != null) {
+            notes = notes.isEmpty() ? PARROT_NOTES : notes + ";" + PARROT_NOTES;
         }
 
         OutcomeKind scored = OutcomeScorer.score(system, caseDir, last);
