@@ -1,0 +1,4 @@
+Translate the following {src} SQL to {tgt}. Output only SQL.
+Do not explain. Do not wrap in markdown.
+
+{sql}

@@ -1,0 +1,7 @@
+DROP TABLE IF EXISTS users;
+CREATE TABLE users (
+  id INT NOT NULL PRIMARY KEY,
+  active TINYINT(1) NOT NULL DEFAULT 1
+);
+INSERT INTO users (id, active) VALUES (1, 1), (2, 0);
+SELECT id FROM users WHERE active ORDER BY id;

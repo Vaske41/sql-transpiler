@@ -33,8 +33,10 @@ public final class CodegenTestSupport {
 
     /** Corpus walker predicate shared by golden / round-trip / rule-engine suites. */
     public static boolean isCorpusInput(java.nio.file.Path path) {
+        String normalized = path.toString().replace('\\', '/');
         return path.getFileName().toString().startsWith("input.")
-                && !path.toString().replace('\\', '/').contains("/unsupported/");
+                && !normalized.contains("/unsupported/")
+                && !normalized.contains("/semantic/");
     }
 
     static Expression expr(String selectSql, Dialect dialect) {

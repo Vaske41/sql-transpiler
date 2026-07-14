@@ -50,8 +50,20 @@ public final class NarrowTypesRule implements Rule {
         @Override
         public Object visitCastExpression(CastExpression node) {
             CastExpression cast = (CastExpression) super.visitCastExpression(node);
-            return new CastExpression(cast.operand(), narrow(cast.targetType(), cast.pos()),
-                    cast.pos());
+            return new CastExpression(cast.operand(),
+                    narrowCastTarget(cast.targetType(), cast.pos()), cast.pos());
+        }
+
+        /**
+         * CAST targets use a stricter type list than column definitions. MySQL accepts
+         * {@code CAST(... AS CHAR[(n)])} but rejects {@code VARCHAR} in CAST.
+         */
+        private DataType narrowCastTarget(DataType type, SourcePosition pos) {
+            DataType narrowed = narrow(type, pos);
+            if (ctx.target() == Dialect.MYSQL && narrowed.type() == GenericType.VARCHAR) {
+                return new DataType(GenericType.CHAR, narrowed.length(), narrowed.scale());
+            }
+            return narrowed;
         }
 
         private DataType narrow(DataType type, SourcePosition pos) {

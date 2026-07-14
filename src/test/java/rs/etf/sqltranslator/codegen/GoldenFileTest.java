@@ -4,6 +4,7 @@ import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
 import rs.etf.sqltranslator.core.Dialect;
+import rs.etf.sqltranslator.core.TranslationOutput;
 import rs.etf.sqltranslator.core.Translator;
 import rs.etf.sqltranslator.parser.CaseFiles;
 
@@ -113,6 +114,23 @@ class GoldenFileTest {
         String identity = normalize(Files.readString(CASES.resolve(
                 "create-table-types/create-autoincrement/expected.postgresql.tsql.sql")));
         assertThat(identity).contains("IDENTITY(1,1)").doesNotContain("GENERATED");
+    }
+
+    @Test
+    void catalogCastGoldenInsertsCastForPostgres() throws Exception {
+        String sql = normalize(Files.readString(CASES.resolve(
+                "casts/catalog-cast-mysql-pg/expected.mysql.postgresql.sql")));
+        assertThat(sql).contains("CAST(");
+    }
+
+    @Test
+    void unresolvedStandaloneWarnsCastUnresolved() throws Exception {
+        String input = Files.readString(CASES.resolve(
+                "casts/unresolved-cast-standalone/input.mysql.sql"));
+        TranslationOutput out = Translator.translate(input, Dialect.MYSQL, Dialect.POSTGRESQL);
+        assertThat(out.report().warnings())
+                .anyMatch(w -> "CAST_UNRESOLVED".equals(w.code()));
+        assertThat(out.sql()).doesNotContain("CAST(");
     }
 
     private static String normalize(String text) {
