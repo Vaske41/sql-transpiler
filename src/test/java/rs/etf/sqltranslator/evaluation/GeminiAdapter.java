@@ -14,12 +14,12 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Gemini baseline ({@code gemini-2.5-flash}, temperature 0). Fixture-first; live only with
+ * Gemini baseline ({@code gemini-3.5-flash}, temperature 0). Fixture-first; live only with
  * {@code eval.live}/{@code EVAL_LIVE} and {@code GEMINI_API_KEY}.
  */
 final class GeminiAdapter implements TranslatorAdapter {
 
-    static final String MODEL = "gemini-2.5-flash";
+    static final String MODEL = "gemini-3.5-flash";
     private static final String API_KEY_ENV = "GEMINI_API_KEY";
 
     private final FixtureStore store;

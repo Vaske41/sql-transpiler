@@ -115,7 +115,7 @@ cases stay fair versus sqltranslate.
 ### LLM / agent fixtures (Gemini / Composer 2.5)
 
 Baselines: **sqltranslate** (fat jar), **SQLGlot** (pinned), **Gemini**
-(`gemini-2.5-flash`, chat completion), **Composer 2.5** (Cursor Agent SDK —
+(`gemini-3.5-flash`, chat completion), **Composer 2.5** (Cursor Agent SDK —
 **not** a completion API). Claude / Anthropic is **not** a baseline.
 
 Fixture-first under `evaluation/results/{system}/{caseKey}/{src}-to-{tgt}.sql`
