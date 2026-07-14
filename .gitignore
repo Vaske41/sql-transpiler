@@ -24,3 +24,10 @@ Thumbs.db
 evaluation/.env
 evaluation/.env.*
 !evaluation/.env.example
+
+# PARROT-Diverse bulk corpus (regenerate via evaluation/bin/fetch_parrot.py)
+evaluation/datasets/parrot/pairs.jsonl
+evaluation/datasets/parrot/cases/
+!evaluation/datasets/parrot/pairs.smoke.jsonl
+!evaluation/datasets/parrot/README.md
+!evaluation/datasets/parrot/manifest.json

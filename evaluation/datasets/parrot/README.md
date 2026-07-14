@@ -1,0 +1,96 @@
+# PARROT-Diverse offline stress corpus
+
+## Variant
+
+This directory holds the **PARROT-Diverse** offline stress corpus — Hugging Face
+[`weizhoudb/PARROT`](https://huggingface.co/datasets/weizhoudb/PARROT) split
+`test` (~28 003 wide rows), filtered to dialects `mysql` / `postgresql` /
+`tsql` (HF column `postgres` → CLI `postgresql`).
+
+It is **not** the NeurIPS **598-pair** curated PARROT core. Do not treat
+filtered Diverse rates as leaderboard or AccEX/AccRES results.
+
+## Metrics (honesty)
+
+Primary offline metrics are **Phase 7 outcome classes** only: coverage,
+refusal profiles, and stress behavior across sqltranslate / SQLGlot / Gemini /
+Composer fixtures.
+
+**Forbidden captions / wording:** “PARROT accuracy,” AccEX, AccRES, leaderboard
+parity, or implying SUCCESS% equals translation accuracy vs PARROT gold.
+
+Stratify thesis reporting by `hf_id` (benchmark family), not a single
+undifferentiated SUCCESS%.
+
+## Gold SQL
+
+`gold_sql` is stored in JSONL for a **future** compare / AccEX-style plan.
+It is **not** scored today and must **not** be materialized as
+`expected.*.sql`. Direction comes from `target.txt` after materialization.
+
+## Catalog / semantic rules
+
+PARROT-Diverse cases are typically **query-only** stress. They do **not**
+exercise catalog-aware golden / `semantic` rules. Keep these outcome rates in
+**separate** thesis tables from golden/`cases/semantic` metrics.
+
+## Pair contract
+
+On Diverse wide rows, non-empty dialect cells on the **same `hf_row`** are
+parallel renderings of one logical query. Every ordered pair among
+`{mysql, postgresql, tsql}` on that row is a legitimate stress task.
+
+Case keys use **row index** (`hf_row`). HF `id` alone is not unique across the
+~28k dump.
+
+Filter version (when present in `manifest.json`): `diverse-dialect-v1` =
+split `test`, our dialects only, cartesian ordered pairs on the same row, no
+v1-grammar allowlist.
+
+## Layout
+
+| Path | Role |
+|------|------|
+| `pairs.smoke.jsonl` | 3 committed smoke pairs (unit / offline smoke) |
+| `pairs.jsonl` | Full filtered pairs (**gitignored**; regenerate) |
+| `manifest.json` | Fetch metadata — **commit** after a real fetch |
+| `cases/` | Materialized inputs (**gitignored**) |
+
+JSONL fields: `case_id`, `hf_row`, `hf_id`, `source`, `target`, `source_sql`,
+`gold_sql`.
+
+## Fetch → materialize → run
+
+Scripts land in later tasks; intended local workflow:
+
+```text
+pip install -r evaluation/bin/requirements-datasets.txt
+python evaluation/bin/fetch_parrot.py
+
+python evaluation/bin/materialize_parrot.py
+
+# after package; test classpath (never CI network / HF / live APIs)
+java -cp <test+runtime> rs.etf.sqltranslator.evaluation.EvaluationMain \
+  --corpus parrot-diverse --sqlglot
+
+# optional live fixture regen (local only; keys via evaluation/.env.local)
+# budget: ≤20 Gemini, ≤5 Composer committed fixtures
+java -cp <test+runtime> ...EvaluationMain --live-gemini --corpus parrot-diverse --limit 20
+java -cp <test+runtime> ...EvaluationMain --live-composer --corpus parrot-diverse --limit 5
+```
+
+CSV default: `target/evaluation/summary/parrot-diverse-latest.csv`.
+
+Default `./mvnw --batch-mode clean verify` stays Docker-free and API-free.
+
+## Fixture budget
+
+Committed PARROT-Diverse fixtures: **≤20** Gemini and **≤5** Composer unless a
+later plan revises the budget. Missing fixture → `NO_FIXTURE`.
+
+## Citation
+
+Zhou et al., *PARROT: A Benchmark for Evaluating SQL Dialect Translation*
+(NeurIPS). This repo uses the **PARROT-Diverse** wide dump on Hugging Face for
+**offline stress / coverage**, not the curated 598-pair NeurIPS evaluation
+protocol or AccEX/AccRES scoring.
