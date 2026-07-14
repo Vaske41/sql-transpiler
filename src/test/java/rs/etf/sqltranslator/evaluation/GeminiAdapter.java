@@ -2,10 +2,12 @@ package rs.etf.sqltranslator.evaluation;
 
 import rs.etf.sqltranslator.core.Dialect;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Duration;
@@ -108,11 +110,34 @@ final class GeminiAdapter implements TranslatorAdapter {
                         + apiKey);
         long start = System.nanoTime();
         HttpRequest httpRequest = HttpRequest.newBuilder(uri)
-                .timeout(Duration.ofSeconds(120))
+                .timeout(Duration.ofSeconds(180))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build();
-        HttpResponse<String> response = http.send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        HttpResponse<String> response;
+        try {
+            response = http.send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        } catch (HttpTimeoutException e) {
+            long latencyMs = (System.nanoTime() - start) / 1_000_000L;
+            return new TranslateOutcome(
+                    SystemId.GEMINI,
+                    OutcomeKind.ERROR,
+                    -1,
+                    "",
+                    "timeout after 180s: " + e.getMessage(),
+                    latencyMs,
+                    OutcomeKind.ERROR.name());
+        } catch (IOException e) {
+            long latencyMs = (System.nanoTime() - start) / 1_000_000L;
+            return new TranslateOutcome(
+                    SystemId.GEMINI,
+                    OutcomeKind.ERROR,
+                    -1,
+                    "",
+                    "http_io: " + e.getMessage(),
+                    latencyMs,
+                    OutcomeKind.ERROR.name());
+        }
         long latencyMs = (System.nanoTime() - start) / 1_000_000L;
         if (response.statusCode() / 100 != 2) {
             return new TranslateOutcome(
