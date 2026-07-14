@@ -152,7 +152,14 @@ Uses Hugging Face **PARROT-Diverse** (`weizhoudb/PARROT` split `test`), not the
 NeurIPS 598-pair core. Primary metrics are Phase 7 **outcome classes** / coverage /
 refusal — **not** “PARROT accuracy,” AccEX, AccRES, or leaderboard parity.
 Query-only stress: keep rates in **separate** thesis tables from golden /
-`cases/semantic`. Committed fixture budget: **≤20** Gemini, **≤5** Composer.
+`cases/semantic`.
+
+**Thesis workflow + hard fixture budget (I5):** (1) fetch + materialize once,
+commit `manifest.json`; (2) offline jar+SQLGlot; (3) live Gemini `--limit 20`
+max for **committed** fixtures; (4) live Composer `--limit 5` max (300s
+timeouts); (5) re-run offline to score; (6) do **not** `git add` large
+`evaluation/results/**` trees — smoke / thesis allowlist only. Details:
+`evaluation/datasets/parrot/README.md`.
 
 ```text
 pip install -r evaluation/bin/requirements-datasets.txt
@@ -164,6 +171,7 @@ java -cp <test+runtime> ...EvaluationMain --corpus parrot-diverse --sqlglot
 $env:EVAL_LIVE=1
 java -cp ... EvaluationMain --live-gemini --corpus parrot-diverse --limit 20
 java -cp ... EvaluationMain --live-composer --corpus parrot-diverse --limit 5
+# then re-run offline to score fixtures
 ```
 
 CSV: `target/evaluation/summary/parrot-diverse-latest.csv`.

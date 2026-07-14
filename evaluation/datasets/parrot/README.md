@@ -61,27 +61,44 @@ v1-grammar allowlist.
 JSONL fields: `case_id`, `hf_row`, `hf_id`, `source`, `target`, `source_sql`,
 `gold_sql`.
 
-## Fetch → materialize → run
+## Thesis workflow (budget-capped)
 
-Scripts land in later tasks; intended local workflow:
+Recommended local sequence for thesis tables. Never run HF / live APIs from CI.
+
+1. **Fetch + materialize once** — commit `manifest.json` (not bulk `pairs.jsonl` / `cases/`).
+2. **Offline jar + SQLGlot** — full corpus or `--limit N` (Phase 7 outcomes only).
+3. **Live Gemini** — `--limit 20` max for **committed** fixtures under
+   `evaluation/results/gemini/...`.
+4. **Live Composer** — `--limit 5` max for **committed** fixtures
+   (`ComposerAdapter` 300s timeouts) under `evaluation/results/composer/...`.
+5. **Re-run offline** — score fixtures (`NO_FIXTURE` when missing).
+6. **Git hygiene** — do **not** `git add` large `evaluation/results/**` trees;
+   commit only a smoke / thesis **allowlist** within the budget below.
 
 ```text
 pip install -r evaluation/bin/requirements-datasets.txt
 python evaluation/bin/fetch_parrot.py
-
 python evaluation/bin/materialize_parrot.py
 
 # after package; test classpath (never CI network / HF / live APIs)
 java -cp <test+runtime> rs.etf.sqltranslator.evaluation.EvaluationMain \
   --corpus parrot-diverse --sqlglot
 
-# optional live fixture regen (local only; keys via evaluation/.env.local)
-# budget: ≤20 Gemini, ≤5 Composer committed fixtures
+# live fixture regen (local only; keys via evaluation/.env.local + EVAL_LIVE=1)
+# hard committed budget: ≤20 Gemini, ≤5 Composer
 java -cp <test+runtime> ...EvaluationMain --live-gemini --corpus parrot-diverse --limit 20
 java -cp <test+runtime> ...EvaluationMain --live-composer --corpus parrot-diverse --limit 5
+
+# re-score fixtures offline
+java -cp <test+runtime> ...EvaluationMain --corpus parrot-diverse --sqlglot
 ```
 
 CSV default: `target/evaluation/summary/parrot-diverse-latest.csv`.
+
+Live factories use the same single-direction walk as offline (`target.txt` +
+`--limit` on `ParrotCorpus.listInputs`). Optional local smoke: `--limit 2`
+(Gemini) / `--limit 1` (Composer) — do not commit those smoke trees unless they
+fit the allowlist budget.
 
 CI smoke (no Python / HF): Failsafe `ParrotDiverseBenchmarkIT` writes cases under
 `target/evaluation/parrot-diverse-smoke/` in Java and runs
@@ -89,10 +106,12 @@ CI smoke (no Python / HF): Failsafe `ParrotDiverseBenchmarkIT` writes cases unde
 
 Default `./mvnw --batch-mode clean verify` stays Docker-free and API-free.
 
-## Fixture budget
+## Fixture budget (I5)
 
-Committed PARROT-Diverse fixtures: **≤20** Gemini and **≤5** Composer unless a
-later plan revises the budget. Missing fixture → `NO_FIXTURE`.
+Hard cap on **committed** PARROT-Diverse fixtures: **≤20** Gemini and **≤5**
+Composer unless a later plan revises the budget. Local regen may use a higher
+`--limit` for exploration, but only the allowlisted subset may be git-added.
+Missing fixture → `NO_FIXTURE`.
 
 ## Citation
 
