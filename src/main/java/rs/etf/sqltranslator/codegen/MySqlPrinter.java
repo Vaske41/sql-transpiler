@@ -1,6 +1,7 @@
 package rs.etf.sqltranslator.codegen;
 
 import rs.etf.sqltranslator.ast.DataType;
+import rs.etf.sqltranslator.ast.NullsOrder;
 import rs.etf.sqltranslator.ast.StringLiteral;
 
 /**
@@ -61,5 +62,11 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
     @Override
     protected void renderAutoIncrement() {
         out.token("AUTO_INCREMENT");
+    }
+
+    @Override
+    protected void renderNullsOrder(NullsOrder nulls) {
+        throw new IllegalStateException(
+                "NULLS ordering must be dropped by DropNullsOrderingRule before printing");
     }
 }

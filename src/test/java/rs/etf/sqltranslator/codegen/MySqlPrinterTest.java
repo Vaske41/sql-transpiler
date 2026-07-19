@@ -73,4 +73,13 @@ class MySqlPrinterTest {
         assertThatThrownBy(() -> new MySqlPrinter().print(pg))
                 .isInstanceOf(IllegalStateException.class);
     }
+
+    @Test
+    void nullsOrderingReachingThePrinterIsAContractViolation() {
+        Script script = AstBuilderFacade.buildScript(
+                "SELECT a FROM t ORDER BY a NULLS FIRST", Dialect.POSTGRESQL);
+        assertThatThrownBy(() -> new MySqlPrinter().print(script))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("DropNullsOrderingRule");
+    }
 }

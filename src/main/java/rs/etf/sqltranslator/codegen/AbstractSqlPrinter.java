@@ -468,8 +468,16 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         if (node.direction() == SortDirection.DESC) {
             out.token("DESC");
         }
-        node.nulls().ifPresent(nulls -> out.token("NULLS").token(nulls.name()));
+        node.nulls().ifPresent(this::renderNullsOrder);
         return null;
+    }
+
+    /**
+     * Base: PostgreSQL shape. Targets without the clause (MySQL, T-SQL) override
+     * with a contract guard — DropNullsOrderingRule must have removed it.
+     */
+    protected void renderNullsOrder(NullsOrder nulls) {
+        out.token("NULLS").token(nulls.name());
     }
 
     @Override
