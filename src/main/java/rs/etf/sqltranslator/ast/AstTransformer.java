@@ -107,7 +107,8 @@ public class AstTransformer implements AstVisitor<Object> {
     @Override
     public Object visitInsertStatement(InsertStatement node) {
         return new InsertStatement(rebuild(node.table()), rebuildList(node.columns()),
-                node.rows().stream().map(this::rebuildList).toList(), node.pos());
+                node.rows().stream().map(this::rebuildList).toList(),
+                rebuildOptional(node.query()), node.pos());
     }
 
     @Override

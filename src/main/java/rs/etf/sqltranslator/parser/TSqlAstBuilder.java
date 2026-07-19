@@ -233,7 +233,8 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
         List<List<Expression>> rows = ctx.rowValue().stream()
                 .map(row -> row.expression().stream().map(this::expr).toList())
                 .toList();
-        return new InsertStatement(qname(ctx.qualifiedName()), columns, rows, pos(ctx));
+        return new InsertStatement(qname(ctx.qualifiedName()), columns, rows,
+                Optional.empty(), pos(ctx));
     }
 
     @Override

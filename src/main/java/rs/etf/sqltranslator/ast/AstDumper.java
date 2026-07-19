@@ -126,6 +126,7 @@ public final class AstDumper implements AstVisitor<String> {
                 dump.child("rows[" + i + "][" + j + "]", row.get(j));
             }
         }
+        dump.child("query", node.query());
         return dump.done();
     }
 

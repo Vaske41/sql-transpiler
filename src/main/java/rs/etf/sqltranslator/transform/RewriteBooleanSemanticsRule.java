@@ -180,7 +180,8 @@ public final class RewriteBooleanSemanticsRule implements Rule {
             List<List<Expression>> rows = insert.rows().stream()
                     .map(row -> harmonizeRow(row, insert.columns(), schema.get()))
                     .toList();
-            return new InsertStatement(insert.table(), insert.columns(), rows, insert.pos());
+            return new InsertStatement(insert.table(), insert.columns(), rows,
+                    insert.query(), insert.pos());
         }
 
         @Override
