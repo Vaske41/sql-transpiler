@@ -38,11 +38,20 @@ class GeminiAdapterTest {
 
     @Test
     void fixtureHitReturnsSuccessWithoutNetwork() throws Exception {
+        FixtureStore store = new FixtureStore(temp);
+        store.write(
+                SystemId.GEMINI,
+                "select-basic/select-literal",
+                Dialect.MYSQL,
+                Dialect.POSTGRESQL,
+                "SELECT 1;\n",
+                GeminiAdapter.MODEL,
+                PromptTemplate.VERSION,
+                "2026-07-13T00:00:00Z",
+                1L);
+
         GeminiAdapter adapter = new GeminiAdapter(
-                new FixtureStore(),
-                PromptTemplate.load(),
-                HttpClient.newHttpClient(),
-                true);
+                store, PromptTemplate.load(), HttpClient.newHttpClient(), true);
 
         Path casePath = Path.of("src", "test", "resources", "cases", "select-basic", "select-literal");
         Path input = casePath.resolve("input.mysql.sql");

@@ -36,7 +36,20 @@ class ComposerAdapterTest {
 
     @Test
     void fixtureHitReturnsSuccessWithoutNetwork() throws Exception {
-        ComposerAdapter adapter = new ComposerAdapter(new FixtureStore(), true);
+        FixtureStore store = new FixtureStore(temp);
+        store.write(
+                SystemId.COMPOSER,
+                "select-basic/select-literal",
+                Dialect.MYSQL,
+                Dialect.POSTGRESQL,
+                "SELECT 1;\n",
+                ComposerAdapter.MODEL,
+                PromptTemplate.VERSION,
+                "2026-07-14T00:00:00Z",
+                1L);
+
+        ComposerAdapter adapter = new ComposerAdapter(
+                store, ComposerAdapter.HELPER, ComposerAdapter.PROMPT_PATH, "python", true);
 
         Path casePath = Path.of("src", "test", "resources", "cases", "select-basic", "select-literal");
         Path input = casePath.resolve("input.mysql.sql");
