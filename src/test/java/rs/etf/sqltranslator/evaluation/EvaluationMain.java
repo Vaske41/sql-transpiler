@@ -31,9 +31,9 @@ public final class EvaluationMain {
     static final Path DEFAULT_PARROT_CASES =
             Path.of("evaluation", "datasets", "parrot", "cases");
 
-    /** Committed allowlist budget for PARROT-Diverse Gemini fixtures (I5; warn-only at runtime). */
+    /** Local thesis budget for PARROT-Diverse Gemini fixtures (I5; warn-only at runtime). */
     static final int COMMITTED_GEMINI_BUDGET = 20;
-    /** Committed allowlist budget for PARROT-Diverse Composer fixtures (I5; warn-only at runtime). */
+    /** Local thesis budget for PARROT-Diverse Composer fixtures (I5; warn-only at runtime). */
     static final int COMMITTED_COMPOSER_BUDGET = 5;
 
     private EvaluationMain() {
@@ -128,19 +128,16 @@ public final class EvaluationMain {
         System.out.println("Wrote " + rows.size() + " rows to " + csv.toAbsolutePath());
     }
 
-    /**
-     * Soft warn when parrot-diverse live {@code --limit} exceeds the committed fixture budget.
-     * Local exploration may exceed; only ≤ budget may be git-added.
-     */
+    /** Soft warn when parrot-diverse live {@code --limit} exceeds the local fixture budget. */
     static void warnIfOverCommittedBudget(String system, String corpus, int limit, int budget) {
         if (!"parrot-diverse".equals(corpus)) {
             return;
         }
         if (limit <= 0 || limit > budget) {
             System.err.println(
-                    "warning: committed PARROT-Diverse " + system + " fixture budget is ≤"
+                    "warning: local PARROT-Diverse " + system + " fixture budget is ≤"
                             + budget + " (I5); --limit=" + (limit <= 0 ? "all" : limit)
-                            + " — do not git-add large evaluation/results/** trees.");
+                            + " — evaluation/results/** is gitignored (local only).");
         }
     }
     private static void requireLive(String which) {

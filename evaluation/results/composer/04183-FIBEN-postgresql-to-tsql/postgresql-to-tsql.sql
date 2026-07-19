@@ -1,1 +1,0 @@
-SELECT MIN(oMonetaryAmount.[HASAMOUNT]) AS AggResult1, oListedSecurity.[HASLEGALNAME] AS oListedSecurity_hasLegalName FROM FIBEN.[LISTEDSECURITY] oListedSecurity INNER JOIN FIBEN.[MONETARYAMOUNT] oMonetaryAmount ON oListedSecurity.[HASLASTTRADEDVALUE] = oMonetaryAmount.[MONETARYAMOUNTID] GROUP BY oListedSecurity.[HASLEGALNAME] ORDER BY AggResult1 ASC

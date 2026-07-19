@@ -67,13 +67,12 @@ Recommended local sequence for thesis tables. Never run HF / live APIs from CI.
 
 1. **Fetch + materialize once** — commit `manifest.json` (not bulk `pairs.jsonl` / `cases/`).
 2. **Offline jar + SQLGlot** — full corpus or `--limit N` (Phase 7 outcomes only).
-3. **Live Gemini** — `--limit 20` max for **committed** fixtures under
-   `evaluation/results/gemini/...`.
-4. **Live Composer** — `--limit 5` max for **committed** fixtures
+3. **Live Gemini** — `--limit 20` max for **local** fixtures under
+   `evaluation/results/gemini/...` (gitignored).
+4. **Live Composer** — `--limit 5` max for **local** fixtures
    (`ComposerAdapter` 300s timeouts) under `evaluation/results/composer/...`.
 5. **Re-run offline** — score fixtures (`NO_FIXTURE` when missing).
-6. **Git hygiene** — do **not** `git add` large `evaluation/results/**` trees;
-   commit only a smoke / thesis **allowlist** within the budget below.
+6. **Git hygiene** — `evaluation/results/**` is gitignored; keep fixtures local only.
 
 ```text
 pip install -r evaluation/bin/requirements-datasets.txt
@@ -85,7 +84,7 @@ java -cp <test+runtime> rs.etf.sqltranslator.evaluation.EvaluationMain \
   --corpus parrot-diverse --sqlglot
 
 # live fixture regen (local only; keys via evaluation/.env.local + EVAL_LIVE=1)
-# committed allowlist budget (warn-only): ≤20 Gemini, ≤5 Composer
+# local budget (warn-only): ≤20 Gemini, ≤5 Composer — results/ is gitignored
 java -cp <test+runtime> ...EvaluationMain --live-gemini --corpus parrot-diverse --limit 20
 java -cp <test+runtime> ...EvaluationMain --live-composer --corpus parrot-diverse --limit 5
 
@@ -97,8 +96,8 @@ CSV default: `target/evaluation/summary/parrot-diverse-latest.csv`.
 
 Live factories use the same single-direction walk as offline (`target.txt` +
 `--limit` on `ParrotCorpus.listInputs`). Optional local smoke: `--limit 2`
-(Gemini) / `--limit 1` (Composer) — do not commit those smoke trees unless they
-fit the allowlist budget.
+(Gemini) / `--limit 1` (Composer). Fixtures stay under gitignored
+`evaluation/results/**`.
 
 CI smoke (no Python / HF): Failsafe `ParrotDiverseBenchmarkIT` writes cases under
 `target/evaluation/parrot-diverse-smoke/` in Java and runs
@@ -108,11 +107,12 @@ Default `./mvnw --batch-mode clean verify` stays Docker-free and API-free.
 
 ## Fixture budget (I5)
 
-**Committed allowlist budget** (warn-only at runtime): **≤20** Gemini and **≤5**
+**Local thesis budget** (warn-only at runtime): **≤20** Gemini and **≤5**
 Composer unless a later plan revises the budget. `EvaluationMain` warns on
-stderr if `--limit` exceeds the allowlist; it does not hard-exit. Local regen
-may use a higher `--limit` for exploration, but only the allowlisted subset may
-be git-added. Missing fixture → `NO_FIXTURE`.
+stderr if `--limit` exceeds the budget; it does not hard-exit. Local regen
+may use a higher `--limit` for exploration. Fixtures under
+`evaluation/results/` are **gitignored** and must not be committed.
+Missing fixture → `NO_FIXTURE`.
 
 ## Citation
 

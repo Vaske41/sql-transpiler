@@ -119,7 +119,8 @@ Baselines: **sqltranslate** (fat jar), **SQLGlot** (pinned), **Gemini**
 **not** a completion API). Claude / Anthropic is **not** a baseline.
 
 Fixture-first under `evaluation/results/{system}/{caseKey}/{src}-to-{tgt}.sql`
-(+ `.meta.json`). Missing fixture → outcome `NO_FIXTURE` (not success).
+(+ `.meta.json`). That directory is **gitignored** — fixtures stay local only.
+Missing fixture → outcome `NO_FIXTURE` (not success).
 Never call LLMs or agents from GitHub Actions. Prompt: `evaluation/prompts/v1.txt`.
 
 | Dimension | Gemini | Composer 2.5 |
@@ -154,12 +155,12 @@ refusal — **not** “PARROT accuracy,” AccEX, AccRES, or leaderboard parity.
 Query-only stress: keep rates in **separate** thesis tables from golden /
 `cases/semantic`.
 
-**Thesis workflow + committed fixture allowlist (I5, warn-only at runtime):**
+**Thesis workflow + local fixture budget (I5, warn-only at runtime):**
 (1) fetch + materialize once, commit `manifest.json`; (2) offline jar+SQLGlot;
-(3) live Gemini `--limit 20` max for **committed** fixtures; (4) live Composer
-`--limit 5` max (300s timeouts); (5) re-run offline to score; (6) do **not**
-`git add` large `evaluation/results/**` trees — smoke / thesis allowlist only.
-`EvaluationMain` prints a stderr warning if `--limit` exceeds the allowlist;
+(3) live Gemini `--limit 20` max for local fixtures; (4) live Composer
+`--limit 5` max (300s timeouts); (5) re-run offline to score.
+`evaluation/results/**` is gitignored — do not commit fixtures.
+`EvaluationMain` prints a stderr warning if `--limit` exceeds the local budget;
 it does not hard-exit. Details: `evaluation/datasets/parrot/README.md`.
 
 ```text

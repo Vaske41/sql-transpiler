@@ -36,3 +36,6 @@ evaluation/datasets/parrot/cases/
 !evaluation/datasets/parrot/pairs.smoke.jsonl
 !evaluation/datasets/parrot/README.md
 !evaluation/datasets/parrot/manifest.json
+
+# LLM/agent fixtures — local only (regen with EVAL_LIVE=1; never commit)
+evaluation/results/

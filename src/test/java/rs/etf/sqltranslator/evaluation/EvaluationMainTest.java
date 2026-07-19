@@ -40,7 +40,7 @@ class EvaluationMainTest {
             System.setErr(previous);
         }
         assertThat(buf.toString(StandardCharsets.UTF_8))
-                .contains("committed PARROT-Diverse gemini fixture budget")
+                .contains("local PARROT-Diverse gemini fixture budget")
                 .contains("≤20");
     }
 
