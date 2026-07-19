@@ -97,6 +97,9 @@ Failsafe (after `package`) runs only:
   `target/evaluation/determinism/`
 - `SqlTranslateJarIT` — jar adapter SUCCESS / `REFUSED_OK`
 - `BenchmarkDriverOfflineIT` — limited corpus CSV → `target/evaluation/summary/latest.csv`
+- `ParrotDiverseBenchmarkIT` — Java-written smoke under
+  `target/evaluation/parrot-diverse-smoke/` (no Python in CI) →
+  `parrot-diverse-smoke.csv`
 
 ### SQLGlot helper
 
@@ -112,11 +115,12 @@ cases stay fair versus sqltranslate.
 ### LLM / agent fixtures (Gemini / Composer 2.5)
 
 Baselines: **sqltranslate** (fat jar), **SQLGlot** (pinned), **Gemini**
-(`gemini-2.5-flash`, chat completion), **Composer 2.5** (Cursor Agent SDK —
+(`gemini-3.5-flash`, chat completion), **Composer 2.5** (Cursor Agent SDK —
 **not** a completion API). Claude / Anthropic is **not** a baseline.
 
 Fixture-first under `evaluation/results/{system}/{caseKey}/{src}-to-{tgt}.sql`
-(+ `.meta.json`). Missing fixture → outcome `NO_FIXTURE` (not success).
+(+ `.meta.json`). That directory is **gitignored** — fixtures stay local only.
+Missing fixture → outcome `NO_FIXTURE` (not success).
 Never call LLMs or agents from GitHub Actions. Prompt: `evaluation/prompts/v1.txt`.
 
 | Dimension | Gemini | Composer 2.5 |
@@ -131,29 +135,64 @@ Empty temp `cwd` for Composer prevents repo self-edits; it does **not** equalize
 the systems. Thesis wording: prefer **“LLM / agent baselines”** — do not imply
 Composer ≡ Gemini.
 
-**Gemini live** (local only): `-Deval.live=true` / `EVAL_LIVE=1` and
-`GEMINI_API_KEY` (`temperature=0`).
+**Live keys (local only):** put `GEMINI_API_KEY` / `CURSOR_API_KEY` in
+`evaluation/.env.local` (gitignored; see `evaluation/.env.example`). Set
+`EVAL_LIVE=1` (or `-Deval.live=true`). `EvaluationMain` overlays file values when
+process env is unset — no PowerShell `Get-Content` export dance required.
+Composer injects `CURSOR_API_KEY` into the child ProcessBuilder. Never CI.
 
-**Composer live** (local only): `CURSOR_API_KEY` (Cursor Dashboard → Integrations)
-plus the regen recipe below. Bills Cursor plan / SDK pools. Pin:
-`cursor-sdk==0.1.9` beside `sqlglot==30.12.0` in `evaluation/bin/requirements.txt`.
+Pin: `cursor-sdk==0.1.9` beside `sqlglot==30.12.0` in
+`evaluation/bin/requirements.txt`.
 
 LLM / agent scoring uses the **single-statement** subset only (multi-statement
 scripts stay jar / SQLGlot).
 
-### Regenerate Composer fixtures (local only)
+### PARROT-Diverse offline stress corpus
+
+Uses Hugging Face **PARROT-Diverse** (`weizhoudb/PARROT` split `test`), not the
+NeurIPS 598-pair core. Primary metrics are Phase 7 **outcome classes** / coverage /
+refusal — **not** “PARROT accuracy,” AccEX, AccRES, or leaderboard parity.
+Query-only stress: keep rates in **separate** thesis tables from golden /
+`cases/semantic`.
+
+**Thesis workflow + local fixture budget (I5, warn-only at runtime):**
+(1) fetch + materialize once, commit `manifest.json`; (2) offline jar+SQLGlot;
+(3) live Gemini `--limit 20` max for local fixtures; (4) live Composer
+`--limit 5` max (300s timeouts); (5) re-run offline to score.
+`evaluation/results/**` is gitignored — do not commit fixtures.
+`EvaluationMain` prints a stderr warning if `--limit` exceeds the local budget;
+it does not hard-exit. Details: `evaluation/datasets/parrot/README.md`.
 
 ```text
-pip install -r evaluation/bin/requirements.txt
+pip install -r evaluation/bin/requirements-datasets.txt
+python evaluation/bin/fetch_parrot.py
+python evaluation/bin/materialize_parrot.py
+# keys in evaluation/.env.local (gitignored)
 mvn -q -DskipTests package
-# Build test classpath (or use your IDE run config for EvaluationMain)
-set EVAL_LIVE=1
-set CURSOR_API_KEY=...
-java -cp <test+runtime> rs.etf.sqltranslator.evaluation.EvaluationMain --live-composer --limit 5
+java -cp <test+runtime> ...EvaluationMain --corpus parrot-diverse --sqlglot
+$env:EVAL_LIVE=1
+java -cp ... EvaluationMain --live-gemini --corpus parrot-diverse --limit 20
+java -cp ... EvaluationMain --live-composer --corpus parrot-diverse --limit 5
+# then re-run offline to score fixtures
 ```
 
-Requires both `EVAL_LIVE=1` (or `-Deval.live=true`) and `CURSOR_API_KEY`. Never CI.
-Offline `verify` / `BenchmarkDriver` keep Composer fixture-only (`forceOffline`).
+CSV: `target/evaluation/summary/parrot-diverse-latest.csv`.
+`--corpus parrot` is rejected (use `parrot-diverse`). Default `--corpus golden`
+is the existing golden offline path → `latest.csv`.
+
+**Thesis stratification (I1):** do not quote a single undifferentiated SUCCESS%.
+Pivot / count Phase 7 outcomes by `hf_id` embedded in `case_id`
+(`{hf_row:05d}-{hf_id}-{source}-to-{target}`; `hf_id` may contain spaces).
+Excel: add a helper column with the regex capture below, then PivotTable.
+Python one-liner over the CSV:
+
+```text
+python -c "import csv,re,collections as C; p=re.compile(r'^\d{5}-(.+)-(mysql|postgresql|tsql)-to-(mysql|postgresql|tsql)$'); c=C.Counter();
+[c.update({(p.match(r['case_id']).group(1), r['outcome']):1}) for r in csv.DictReader(open('target/evaluation/summary/parrot-diverse-latest.csv',encoding='utf-8')) if r['system']=='sqltranslate' and p.match(r['case_id'])];
+print(*sorted(f'{k[0]}\t{k[1]}\t{v}' for k,v in c.items()), sep='\n')"
+```
+
+A dedicated summary tool is optional YAGNI.
 
 ### Offline driver and scoring
 

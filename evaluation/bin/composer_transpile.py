@@ -13,7 +13,95 @@ import argparse
 import os
 import sys
 import tempfile
+import time
 from pathlib import Path
+
+
+def ensure_os_blocking_api() -> None:
+    """Stub os.get_blocking/set_blocking on Windows Python < 3.12.
+
+    cursor_sdk imports these during bridge discovery. CPython only provides them
+    on Windows from 3.12+. We install no-op stubs so AttributeError is avoided;
+    actual discovery uses {@link patch_bridge_discovery_for_windows} because
+    PIPE_NOWAIT + os.read raises Errno 22 on many Windows pipe handles.
+    """
+    if hasattr(os, "get_blocking") and hasattr(os, "set_blocking"):
+        return
+    if sys.platform != "win32":
+        return
+
+    _blocking_state: dict[int, bool] = {}
+
+    def get_blocking(fd: int) -> bool:
+        return _blocking_state.get(fd, True)
+
+    def set_blocking(fd: int, blocking: bool) -> None:
+        _blocking_state[fd] = blocking
+
+    os.get_blocking = get_blocking  # type: ignore[attr-defined]
+    os.set_blocking = set_blocking  # type: ignore[attr-defined]
+
+
+def patch_bridge_discovery_for_windows() -> None:
+    """Replace cursor_sdk bridge discovery with a threaded blocking reader.
+
+    The stock implementation toggles non-blocking stderr and uses selectors +
+    os.read. On Windows Python < 3.12 that path is broken (missing
+    get_blocking, then Errno 22 after PIPE_NOWAIT). A daemon reader thread
+    feeding a queue works with blocking pipes.
+    """
+    if sys.platform != "win32":
+        return
+
+    import queue
+    import threading
+
+    import cursor_sdk._bridge as bridge
+
+    def _read_discovery(process, timeout: float):  # type: ignore[no-untyped-def]
+        if process.stderr is None:
+            raise bridge.CursorSDKError("Bridge process stderr is unavailable")
+
+        lines: queue.Queue[str | None] = queue.Queue()
+
+        def reader() -> None:
+            try:
+                for line in process.stderr:
+                    lines.put(line)
+            finally:
+                lines.put(None)
+
+        thread = threading.Thread(target=reader, name="cursor-bridge-stderr", daemon=True)
+        thread.start()
+
+        deadline = time.monotonic() + timeout
+        stderr_lines: list[str] = []
+        while time.monotonic() < deadline:
+            remaining = max(0.01, deadline - time.monotonic())
+            try:
+                line = lines.get(timeout=min(0.25, remaining))
+            except queue.Empty:
+                if process.poll() is not None and lines.empty():
+                    raise bridge.CursorSDKError(
+                        f"Bridge exited before discovery with status {process.poll()}: "
+                        + "".join(stderr_lines)
+                    )
+                continue
+            if line is None:
+                raise bridge.CursorSDKError(
+                    f"Bridge exited before discovery with status {process.poll()}: "
+                    + "".join(stderr_lines)
+                )
+            stderr_lines.append(line)
+            discovery = bridge.parse_discovery_line(line)
+            if discovery is not None:
+                return discovery
+        raise bridge.CursorSDKError(
+            "Timed out waiting for bridge discovery: " + "".join(stderr_lines)
+        )
+
+    bridge._read_discovery = _read_discovery  # type: ignore[assignment]
+
 
 
 def strip_fences(text: str) -> str:
@@ -70,11 +158,15 @@ def main(argv: list[str] | None = None) -> int:
 
     prompt = render_prompt(template, args.source, args.target, sql)
 
+    ensure_os_blocking_api()
+
     try:
         from cursor_sdk import Agent, AgentOptions, CursorAgentError, LocalAgentOptions
     except ImportError as e:
         sys.stderr.write(f"error: composer: startup: {e}\n")
         return 1
+
+    patch_bridge_discovery_for_windows()
 
     with tempfile.TemporaryDirectory(prefix="composer-eval-") as cwd:
         try:

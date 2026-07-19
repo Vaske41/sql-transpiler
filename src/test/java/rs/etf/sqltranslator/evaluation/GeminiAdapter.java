@@ -2,10 +2,12 @@ package rs.etf.sqltranslator.evaluation;
 
 import rs.etf.sqltranslator.core.Dialect;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Duration;
@@ -14,28 +16,40 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Gemini baseline ({@code gemini-2.5-flash}, temperature 0). Fixture-first; live only with
+ * Gemini baseline ({@code gemini-3.5-flash}, temperature 0). Fixture-first; live only with
  * {@code eval.live}/{@code EVAL_LIVE} and {@code GEMINI_API_KEY}.
  */
 final class GeminiAdapter implements TranslatorAdapter {
 
-    static final String MODEL = "gemini-2.5-flash";
+    static final String MODEL = "gemini-3.5-flash";
     private static final String API_KEY_ENV = "GEMINI_API_KEY";
 
     private final FixtureStore store;
     private final PromptTemplate prompt;
     private final HttpClient http;
     private final boolean forceOffline;
+    /** Optional API key from {@link EnvFiles} overlay; used when live and non-blank. */
+    private final String apiKeyOverlay;
 
     GeminiAdapter() throws Exception {
-        this(new FixtureStore(), PromptTemplate.load(), HttpClient.newHttpClient(), false);
+        this(new FixtureStore(), PromptTemplate.load(), HttpClient.newHttpClient(), false, null);
     }
 
     GeminiAdapter(FixtureStore store, PromptTemplate prompt, HttpClient http, boolean forceOffline) {
+        this(store, prompt, http, forceOffline, null);
+    }
+
+    GeminiAdapter(
+            FixtureStore store,
+            PromptTemplate prompt,
+            HttpClient http,
+            boolean forceOffline,
+            String apiKeyOverlay) {
         this.store = Objects.requireNonNull(store, "store");
         this.prompt = Objects.requireNonNull(prompt, "prompt");
         this.http = Objects.requireNonNull(http, "http");
         this.forceOffline = forceOffline;
+        this.apiKeyOverlay = apiKeyOverlay;
     }
 
     @Override
@@ -51,8 +65,8 @@ final class GeminiAdapter implements TranslatorAdapter {
         Dialect target = request.target();
 
         if (!forceOffline && LlmText.liveEnabled()) {
-            String key = System.getenv(API_KEY_ENV);
-            if (key != null && !key.isBlank()) {
+            String key = resolveApiKey();
+            if (key != null) {
                 return liveTranslate(request, caseKey, key);
             }
         }
@@ -65,6 +79,17 @@ final class GeminiAdapter implements TranslatorAdapter {
         long latency = parseLatencyMs(store.readMeta(SystemId.GEMINI, caseKey, source, target).orElse(""));
         return new TranslateOutcome(
                 SystemId.GEMINI, OutcomeKind.SUCCESS, 0, sql, "", latency, OutcomeKind.SUCCESS.name());
+    }
+
+    private String resolveApiKey() {
+        if (apiKeyOverlay != null && !apiKeyOverlay.isBlank()) {
+            return apiKeyOverlay;
+        }
+        String key = System.getenv(API_KEY_ENV);
+        if (key != null && !key.isBlank()) {
+            return key;
+        }
+        return null;
     }
 
     private TranslateOutcome liveTranslate(TranslateRequest request, String caseKey, String apiKey)
@@ -85,11 +110,34 @@ final class GeminiAdapter implements TranslatorAdapter {
                         + apiKey);
         long start = System.nanoTime();
         HttpRequest httpRequest = HttpRequest.newBuilder(uri)
-                .timeout(Duration.ofSeconds(120))
+                .timeout(Duration.ofSeconds(180))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build();
-        HttpResponse<String> response = http.send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        HttpResponse<String> response;
+        try {
+            response = http.send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        } catch (HttpTimeoutException e) {
+            long latencyMs = (System.nanoTime() - start) / 1_000_000L;
+            return new TranslateOutcome(
+                    SystemId.GEMINI,
+                    OutcomeKind.ERROR,
+                    -1,
+                    "",
+                    "timeout after 180s: " + e.getMessage(),
+                    latencyMs,
+                    OutcomeKind.ERROR.name());
+        } catch (IOException e) {
+            long latencyMs = (System.nanoTime() - start) / 1_000_000L;
+            return new TranslateOutcome(
+                    SystemId.GEMINI,
+                    OutcomeKind.ERROR,
+                    -1,
+                    "",
+                    "http_io: " + e.getMessage(),
+                    latencyMs,
+                    OutcomeKind.ERROR.name());
+        }
         long latencyMs = (System.nanoTime() - start) / 1_000_000L;
         if (response.statusCode() / 100 != 2) {
             return new TranslateOutcome(

@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -63,11 +64,24 @@ final class ProcessRunner {
      */
     static Result run(List<String> command, byte[] stdinUtf8, long timeoutSeconds)
             throws IOException, InterruptedException {
+        return run(command, stdinUtf8, timeoutSeconds, Map.of());
+    }
+
+    /**
+     * Like {@link #run(List, byte[], long)} but merges {@code extraEnv} into the child environment
+     * (e.g. {@code CURSOR_API_KEY} from {@code evaluation/.env.local} overlay).
+     */
+    static Result run(
+            List<String> command, byte[] stdinUtf8, long timeoutSeconds, Map<String, String> extraEnv)
+            throws IOException, InterruptedException {
         if (timeoutSeconds <= 0) {
             throw new IllegalArgumentException("timeoutSeconds must be > 0");
         }
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectError(ProcessBuilder.Redirect.PIPE);
+        if (extraEnv != null && !extraEnv.isEmpty()) {
+            pb.environment().putAll(extraEnv);
+        }
         long start = System.nanoTime();
         Process process = pb.start();
         try (OutputStream stdin = process.getOutputStream()) {

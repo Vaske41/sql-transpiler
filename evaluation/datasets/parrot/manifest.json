@@ -1,0 +1,28 @@
+{
+  "dataset": "weizhoudb/PARROT",
+  "split": "test",
+  "variantLabel": "PARROT-Diverse-filtered-mysql-postgresql-tsql",
+  "filterVersion": "diverse-dialect-v1",
+  "filterRules": [
+    "HF wide row; non-empty cells among mysql|postgres|tsql on same hf_row",
+    "emit all ordered pairs among those cells (parallel-rendering contract)",
+    "no v1 grammar allowlist",
+    "not the NeurIPS 598-pair curated core",
+    "Phase 7 outcomes only; gold_sql not scored in v1"
+  ],
+  "datasetsPackage": "datasets==3.6.0",
+  "fetchedUtc": "2026-07-14T20:01:35Z",
+  "hfRows": 28003,
+  "pairCount": 1426,
+  "pairCountByHfId": {
+    "BIRD Critic (MySQL)": 278,
+    "BIRD Critic (PostgreSQL)": 854,
+    "BIRD Critic (SQLServer)": 226,
+    "FIBEN": 68
+  },
+  "dialects": [
+    "mysql",
+    "postgresql",
+    "tsql"
+  ]
+}

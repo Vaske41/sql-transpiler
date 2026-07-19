@@ -139,6 +139,7 @@
             <include>**/SqlTranslateJarIT.java</include>
             <include>**/JarDeterminismIT.java</include>
             <include>**/BenchmarkDriverOfflineIT.java</include>
+            <include>**/ParrotDiverseBenchmarkIT.java</include>
           </includes>
         </configuration>
         <executions>

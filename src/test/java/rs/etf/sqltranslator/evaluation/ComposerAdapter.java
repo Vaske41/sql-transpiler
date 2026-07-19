@@ -30,6 +30,8 @@ final class ComposerAdapter implements TranslatorAdapter {
     private final Path promptPath;
     private final String python;
     private final boolean forceOffline;
+    /** Optional API key from {@link EnvFiles} overlay; injected into child env when live. */
+    private final String apiKeyOverlay;
 
     ComposerAdapter() {
         this(
@@ -37,7 +39,8 @@ final class ComposerAdapter implements TranslatorAdapter {
                 HELPER,
                 PROMPT_PATH,
                 SqlGlotAdapter.resolvePython().orElse("python"),
-                false);
+                false,
+                null);
     }
 
     ComposerAdapter(FixtureStore store, boolean forceOffline) {
@@ -46,7 +49,18 @@ final class ComposerAdapter implements TranslatorAdapter {
                 HELPER,
                 PROMPT_PATH,
                 SqlGlotAdapter.resolvePython().orElse("python"),
-                forceOffline);
+                forceOffline,
+                null);
+    }
+
+    ComposerAdapter(FixtureStore store, boolean forceOffline, String apiKeyOverlay) {
+        this(
+                store,
+                HELPER,
+                PROMPT_PATH,
+                SqlGlotAdapter.resolvePython().orElse("python"),
+                forceOffline,
+                apiKeyOverlay);
     }
 
     ComposerAdapter(
@@ -55,11 +69,22 @@ final class ComposerAdapter implements TranslatorAdapter {
             Path promptPath,
             String python,
             boolean forceOffline) {
+        this(store, helper, promptPath, python, forceOffline, null);
+    }
+
+    ComposerAdapter(
+            FixtureStore store,
+            Path helper,
+            Path promptPath,
+            String python,
+            boolean forceOffline,
+            String apiKeyOverlay) {
         this.store = Objects.requireNonNull(store, "store");
         this.helper = Objects.requireNonNull(helper, "helper");
         this.promptPath = Objects.requireNonNull(promptPath, "promptPath");
         this.python = Objects.requireNonNull(python, "python");
         this.forceOffline = forceOffline;
+        this.apiKeyOverlay = apiKeyOverlay;
     }
 
     @Override
@@ -75,9 +100,9 @@ final class ComposerAdapter implements TranslatorAdapter {
         Dialect target = request.target();
 
         if (!forceOffline && LlmText.liveEnabled()) {
-            String key = System.getenv(API_KEY_ENV);
-            if (key != null && !key.isBlank()) {
-                return liveTranslate(request, caseKey);
+            String key = resolveApiKey();
+            if (key != null) {
+                return liveTranslate(request, caseKey, key);
             }
         }
 
@@ -92,11 +117,23 @@ final class ComposerAdapter implements TranslatorAdapter {
                 SystemId.COMPOSER, OutcomeKind.SUCCESS, 0, sql, "", latency, OutcomeKind.SUCCESS.name());
     }
 
-    private TranslateOutcome liveTranslate(TranslateRequest request, String caseKey)
+    private String resolveApiKey() {
+        if (apiKeyOverlay != null && !apiKeyOverlay.isBlank()) {
+            return apiKeyOverlay;
+        }
+        String key = System.getenv(API_KEY_ENV);
+        if (key != null && !key.isBlank()) {
+            return key;
+        }
+        return null;
+    }
+
+    private TranslateOutcome liveTranslate(TranslateRequest request, String caseKey, String apiKey)
             throws Exception {
         byte[] sqlBytes = Files.readAllBytes(request.inputFile());
         String promptAbs = promptPath.toAbsolutePath().normalize().toString();
         String helperAbs = helper.toAbsolutePath().normalize().toString();
+        Map<String, String> extraEnv = Map.of(API_KEY_ENV, apiKey);
         ProcessRunner.Result run = ProcessRunner.run(
                 List.of(
                         python,
@@ -105,7 +142,8 @@ final class ComposerAdapter implements TranslatorAdapter {
                         "--to", cliName(request.target()),
                         "--prompt", promptAbs),
                 sqlBytes,
-                TIMEOUT_SECONDS);
+                TIMEOUT_SECONDS,
+                extraEnv);
         if (run.exitCode() != 0) {
             return new TranslateOutcome(
                     SystemId.COMPOSER,
