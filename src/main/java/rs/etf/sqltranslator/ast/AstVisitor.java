@@ -62,6 +62,10 @@ public interface AstVisitor<R> {
 
     R visitDropColumn(DropColumn node);
 
+    R visitCreateIndexStatement(CreateIndexStatement node);
+
+    R visitIndexColumn(IndexColumn node);
+
     // --- expressions ---
     R visitBinaryOp(BinaryOp node);
 

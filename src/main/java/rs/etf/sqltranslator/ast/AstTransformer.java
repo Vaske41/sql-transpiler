@@ -186,6 +186,17 @@ public class AstTransformer implements AstVisitor<Object> {
     }
 
     @Override
+    public Object visitCreateIndexStatement(CreateIndexStatement node) {
+        return new CreateIndexStatement(rebuild(node.name()), node.unique(),
+                rebuild(node.table()), rebuildList(node.columns()), node.pos());
+    }
+
+    @Override
+    public Object visitIndexColumn(IndexColumn node) {
+        return new IndexColumn(rebuild(node.column()), node.direction(), node.pos());
+    }
+
+    @Override
     public Object visitDropColumn(DropColumn node) {
         return new DropColumn(rebuild(node.column()), node.pos());
     }

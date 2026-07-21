@@ -1,9 +1,17 @@
 package rs.etf.sqltranslator.codegen;
 
 import org.junit.jupiter.api.Test;
+import rs.etf.sqltranslator.ast.CreateIndexStatement;
+import rs.etf.sqltranslator.ast.Identifier;
+import rs.etf.sqltranslator.ast.IndexColumn;
+import rs.etf.sqltranslator.ast.QualifiedName;
 import rs.etf.sqltranslator.ast.Script;
+import rs.etf.sqltranslator.ast.SortDirection;
 import rs.etf.sqltranslator.core.Dialect;
+import rs.etf.sqltranslator.core.SourcePosition;
 import rs.etf.sqltranslator.parser.AstBuilderFacade;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -81,5 +89,21 @@ class MySqlPrinterTest {
         assertThatThrownBy(() -> new MySqlPrinter().print(script))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("DropNullsOrderingRule");
+    }
+
+    @Test
+    void printsCreateIndexCanonically() {
+        SourcePosition pos = new SourcePosition(1, 0);
+        CreateIndexStatement stmt = new CreateIndexStatement(
+                new Identifier("idx_users_name", false, pos), true,
+                new QualifiedName(List.of(new Identifier("users", false, pos)), pos),
+                List.of(new IndexColumn(new Identifier("name", false, pos),
+                                SortDirection.DESC, pos),
+                        new IndexColumn(new Identifier("id", false, pos),
+                                SortDirection.ASC, pos)),
+                pos);
+        Script script = new Script(List.of(stmt), pos);
+        assertThat(new MySqlPrinter().print(script))
+                .isEqualTo("CREATE UNIQUE INDEX idx_users_name ON users (name DESC, id);\n");
     }
 }

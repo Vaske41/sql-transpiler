@@ -690,6 +690,28 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         return null;
     }
 
+    @Override
+    public Void visitCreateIndexStatement(CreateIndexStatement node) {
+        out.token("CREATE");
+        if (node.unique()) {
+            out.token("UNIQUE");
+        }
+        out.token("INDEX").token(identifier(node.name()))
+                .token("ON").token(dotted(node.table())).token("(");
+        csv(node.columns());
+        out.raw(")");
+        return null;
+    }
+
+    @Override
+    public Void visitIndexColumn(IndexColumn node) {
+        out.token(identifier(node.column()));
+        if (node.direction() == SortDirection.DESC) {
+            out.token("DESC");
+        }
+        return null;
+    }
+
     /** T-SQL rejects the COLUMN keyword in ALTER TABLE ... ADD. */
     protected String addColumnClause() {
         return "ADD COLUMN";

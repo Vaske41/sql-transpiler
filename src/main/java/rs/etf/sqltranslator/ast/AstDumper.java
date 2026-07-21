@@ -239,6 +239,22 @@ public final class AstDumper implements AstVisitor<String> {
         return node("DropColumn").child("column", node.column()).done();
     }
 
+    @Override
+    public String visitCreateIndexStatement(CreateIndexStatement node) {
+        return node("CreateIndexStatement unique=" + node.unique())
+                .child("name", node.name())
+                .child("table", node.table())
+                .children("columns", node.columns())
+                .done();
+    }
+
+    @Override
+    public String visitIndexColumn(IndexColumn node) {
+        return node("IndexColumn direction=" + node.direction())
+                .child("column", node.column())
+                .done();
+    }
+
     // --- expressions ---
 
     @Override
