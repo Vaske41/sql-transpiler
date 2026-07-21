@@ -95,4 +95,17 @@ class ThroughRulesPrinterTest {
                         "INSERT INTO archive SELECT id FROM users LIMIT 2 OFFSET 1",
                         Dialect.MYSQL, Dialect.TSQL));
     }
+
+    @Test
+    void insertSelectBooleanHarmonizesLikeValuesForPostgres() {
+        String ddl = "CREATE TABLE flags (active BOOLEAN, qty INT);\n";
+        TranslationOutput values = printTranslated(
+                ddl + "INSERT INTO flags (active, qty) VALUES (1, 5);",
+                Dialect.MYSQL, Dialect.POSTGRESQL);
+        TranslationOutput select = printTranslated(
+                ddl + "INSERT INTO flags (active, qty) SELECT 1, 5;",
+                Dialect.MYSQL, Dialect.POSTGRESQL);
+        assertThat(values.sql()).contains("VALUES (TRUE, 5)");
+        assertThat(select.sql()).contains("SELECT TRUE, 5").doesNotContain("SELECT 1, 5");
+    }
 }

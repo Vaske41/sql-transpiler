@@ -395,6 +395,14 @@ class NormalizationTest {
     }
 
     @Test
+    void mysqlIndexUsingMethodIsRefused() {
+        assertThatExceptionOfType(UnsupportedFeatureException.class)
+                .isThrownBy(() -> AstBuilderFacade.buildScript(
+                        "CREATE INDEX idx_a USING btree ON t (a)", Dialect.MYSQL))
+                .withMessageContaining("USING");
+    }
+
+    @Test
     void partialIndexWhereIsRefused() {
         assertThatExceptionOfType(UnsupportedFeatureException.class)
                 .isThrownBy(() -> AstBuilderFacade.buildScript(

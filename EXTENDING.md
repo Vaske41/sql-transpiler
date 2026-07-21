@@ -135,9 +135,9 @@ the documented rollback if the ladder proves incomplete.
 
 1. ~~`INSERT ... SELECT`~~ — shipped (2026-07) — one grammar alternative + one AST field reusing `Query`
 2. ~~`CREATE INDEX`~~ — shipped (2026-07) — small grammar surface, high practical relevance
-1. **CTEs (`WITH`)** — near-identical syntax in all three dialects; mostly plumbing
-2. **Derived tables in `FROM`** — unlocks the subquery scope line
-3. **Window functions** — large expression-grammar surface; last
+3. **CTEs (`WITH`)** — near-identical syntax in all three dialects; mostly plumbing
+4. **Derived tables in `FROM`** — unlocks the subquery scope line
+5. **Window functions** — large expression-grammar surface; last
 
 The queue is the first thing sacrificed when behind schedule: v1 scope never
 grows before the day-14 milestones are green.

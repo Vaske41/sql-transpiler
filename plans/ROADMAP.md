@@ -19,8 +19,8 @@ To fit 2 weeks, fix the supported SQL subset **up front** and refuse everything 
 
 | Category | In scope (v1) | Out of scope |
 |---|---|---|
-| DML | `SELECT` (joins, `WHERE`, `GROUP BY`/`HAVING`, `ORDER BY`, `LIMIT`/`TOP`/`FETCH`), `INSERT ... VALUES` (incl. multi-row), `UPDATE`, `DELETE` | CTEs, window functions, `MERGE` (`INSERT ... SELECT` → Extension Queue #1) |
-| DDL | `CREATE TABLE` (columns, types, `NOT NULL`, `DEFAULT`, `PRIMARY KEY`, `FOREIGN KEY`, `UNIQUE`, auto-increment), `DROP TABLE`, basic `ALTER TABLE ADD/DROP COLUMN` | Indexes beyond PK/UNIQUE, partitioning, triggers, procedures |
+| DML | `SELECT` (joins, `WHERE`, `GROUP BY`/`HAVING`, `ORDER BY`, `LIMIT`/`TOP`/`FETCH`), `INSERT ... VALUES` (incl. multi-row), `INSERT ... SELECT`, `UPDATE`, `DELETE` | CTEs, window functions, `MERGE` |
+| DDL | `CREATE TABLE` (columns, types, `NOT NULL`, `DEFAULT`, `PRIMARY KEY`, `FOREIGN KEY`, `UNIQUE`, auto-increment), `CREATE INDEX` / `CREATE UNIQUE INDEX` (column list + optional `DESC`; dialect-only options refused — see README), `DROP TABLE`, basic `ALTER TABLE ADD/DROP COLUMN` | Partitioning, triggers, procedures; index options beyond the shared shape (`CLUSTERED`, `USING`, partial `WHERE`, index `NULLS`, prefix lengths) |
 | Expressions | Literals, identifiers, arithmetic/comparison/logical ops, `CASE`, `CAST`, subqueries in expression position (scalar, `IN (SELECT …)`, `EXISTS`), ~15 common functions (see Phase 4) | Vendor-specific function long tail; derived tables (subqueries in `FROM`) → Extension Queue |
 
 **Explicit refuse-list** (each either rejected with a named `UnsupportedFeatureException` or downgraded to a documented `TranslationReport` warning; this enumeration becomes a thesis table):
@@ -359,9 +359,9 @@ Adding statement N+1 is this ordered touch-list — a ~30-minute checklist, not 
 ### The ranked queue (value-per-hour order)
 1. ~~`INSERT ... SELECT`~~ — shipped (2026-07) — nearly free: one grammar alternative + one AST field reusing `Query`
 2. ~~`CREATE INDEX`~~ — shipped (2026-07) — small grammar surface, high practical relevance
-1. **CTEs (`WITH`)** — near-identical syntax in all 3 dialects; mostly plumbing
-2. **Derived tables in `FROM`** — unlocks the subquery scope line drawn in the scope table
-3. **Window functions** — large expression-grammar surface; last
+3. **CTEs (`WITH`)** — near-identical syntax in all 3 dialects; mostly plumbing
+4. **Derived tables in `FROM`** — unlocks the subquery scope line drawn in the scope table
+5. **Window functions** — large expression-grammar surface; last
 
 ---
 
