@@ -101,4 +101,13 @@ class TSqlPrinterTest {
                 Dialect.POSTGRESQL, Dialect.TSQL).sql())
                 .isEqualTo("SELECT id FROM flags WHERE NOT deleted <> 0;\n");
     }
+
+    @Test
+    void nullsOrderingReachingThePrinterIsAContractViolation() {
+        Script script = AstBuilderFacade.buildScript(
+                "SELECT a FROM t ORDER BY a NULLS FIRST", Dialect.POSTGRESQL);
+        assertThatThrownBy(() -> new TSqlPrinter().print(script))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("DropNullsOrderingRule");
+    }
 }

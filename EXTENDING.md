@@ -26,8 +26,17 @@ Add the rule with the **same canonical rule name** to `TSql.g4`, `MySql.g4`, and
 ```antlr
 statement : ... | createIndexStatement ;
 
-createIndexStatement : CREATE UNIQUE? INDEX identifier ON qualifiedName columnList ;
+createIndexStatement
+    : CREATE UNIQUE? INDEX identifier ON qualifiedName
+      '(' indexColumn (',' indexColumn)* ')'
+    ;
+
+indexColumn : identifier (ASC | DESC)? ;
 ```
+
+Dialect-only options (`CLUSTERED`/`NONCLUSTERED`, `USING`, partial `WHERE`,
+index-column `NULLS`, MySQL prefix lengths) may parse in section 2 of a grammar
+but are refused at build — never recorded on the node.
 
 - Canonical section 1 should stay textually aligned across the three files;
   dialect-specific shapes go in section 2 of each grammar.
@@ -40,20 +49,26 @@ createIndexStatement : CREATE UNIQUE? INDEX identifier ON qualifiedName columnLi
 
 ```java
 public record CreateIndexStatement(Identifier name, boolean unique, QualifiedName table,
-                                   List<Identifier> columns, SourcePosition pos)
+                                   List<IndexColumn> columns, SourcePosition pos)
         implements Statement { ... }
+
+public record IndexColumn(Identifier column, SortDirection direction, SourcePosition pos)
+        implements AstNode { ... }
 ```
 
 - Java 17 record; `SourcePosition` is always the **last** component, populated
   from `ctx.getStart()`.
 - Defensive-copy list components in a compact constructor (`List.copyOf`).
-- Add the record to `Statement`'s `permits` list. From this moment the compiler
-  enumerates everything else that must change — follow the errors.
+- Index columns are deliberately `Identifier`s (never `ColumnRef`s) so expression
+  rewrite rules cannot touch index DDL.
+- Add the statement record to `Statement`'s `permits` list. From this moment the
+  compiler enumerates everything else that must change — follow the errors.
 - Implement `accept` delegating to the new visitor method (step 3).
 
 ## 3. `AstVisitor<R>` method (`ast/AstVisitor.java`)
 
-Add `R visitCreateIndexStatement(CreateIndexStatement node);`. The compiler now
+Add `R visitCreateIndexStatement(CreateIndexStatement node);` and
+`R visitIndexColumn(IndexColumn node);`. The compiler now
 forces implementations in:
 
 - **`AstDumper`** — header line + labeled children; scalar components go in the
@@ -118,8 +133,8 @@ the documented rollback if the ladder proves incomplete.
 
 ## The ranked Extension Queue (value-per-hour order)
 
-1. **`INSERT ... SELECT`** — one grammar alternative + one AST field reusing `Query`
-2. **`CREATE INDEX`** — small grammar surface, high practical relevance
+1. ~~`INSERT ... SELECT`~~ — shipped (2026-07) — one grammar alternative + one AST field reusing `Query`
+2. ~~`CREATE INDEX`~~ — shipped (2026-07) — small grammar surface, high practical relevance
 3. **CTEs (`WITH`)** — near-identical syntax in all three dialects; mostly plumbing
 4. **Derived tables in `FROM`** — unlocks the subquery scope line
 5. **Window functions** — large expression-grammar surface; last
@@ -182,6 +197,21 @@ claims for same-dialect paths.
 
 `PreserveNullsOrderingRule` injects `NULLS FIRST`/`LAST` for MySQL/T-SQL→PG without
 a warning (semantics preserved, not lost).
+
+### Builder refusals (Phase 3)
+
+Dialect-only index options parse (so the error is a clean refusal, not a syntax
+error) and throw `UnsupportedFeatureException` at build with a `SourcePosition`:
+
+| Construct | Source dialect(s) | Refuse string |
+|---|---|---|
+| `CLUSTERED` index | T-SQL | `CLUSTERED index` |
+| Index method (`USING`) | MySQL, PostgreSQL | `index method (USING)` |
+| Partial index (`WHERE`) | PostgreSQL | `partial index (WHERE)` |
+| `NULLS` ordering in index columns | PostgreSQL | `NULLS ordering in index columns` |
+| Index column prefix length | MySQL | `index column prefix length` |
+
+T-SQL `NONCLUSTERED` folds away (canonical index shape has no clustered flag).
 
 ## Adding printer behavior (Phase 5)
 

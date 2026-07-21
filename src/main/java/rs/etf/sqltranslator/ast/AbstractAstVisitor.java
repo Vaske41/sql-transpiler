@@ -148,6 +148,16 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitCreateIndexStatement(CreateIndexStatement node) {
+        return defaultResult();
+    }
+
+    @Override
+    public R visitIndexColumn(IndexColumn node) {
+        return defaultResult();
+    }
+
+    @Override
     public R visitBinaryOp(BinaryOp node) {
         return defaultResult();
     }

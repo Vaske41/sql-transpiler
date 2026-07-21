@@ -16,11 +16,16 @@ import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.NullLiteral;
 import rs.etf.sqltranslator.ast.NumericLiteral;
 import rs.etf.sqltranslator.ast.QualifiedName;
+import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.QuerySpecification;
 import rs.etf.sqltranslator.ast.Script;
+import rs.etf.sqltranslator.ast.SelectExpr;
+import rs.etf.sqltranslator.ast.SelectItem;
+import rs.etf.sqltranslator.ast.SelectStar;
 import rs.etf.sqltranslator.ast.TableSource;
 import rs.etf.sqltranslator.ast.UnaryOp;
 import rs.etf.sqltranslator.ast.UnaryOperator;
+import rs.etf.sqltranslator.ast.UnionArm;
 import rs.etf.sqltranslator.ast.WhenClause;
 import rs.etf.sqltranslator.core.Dialect;
 import rs.etf.sqltranslator.core.SourcePosition;
@@ -177,10 +182,17 @@ public final class RewriteBooleanSemanticsRule implements Rule {
             if (schema.isEmpty()) {
                 return insert;
             }
+            if (insert.query().isPresent()) {
+                Query query = harmonizeInsertQuery(
+                        insert.query().get(), insert.columns(), schema.get());
+                return new InsertStatement(insert.table(), insert.columns(), List.of(),
+                        Optional.of(query), insert.pos());
+            }
             List<List<Expression>> rows = insert.rows().stream()
                     .map(row -> harmonizeRow(row, insert.columns(), schema.get()))
                     .toList();
-            return new InsertStatement(insert.table(), insert.columns(), rows, insert.pos());
+            return new InsertStatement(insert.table(), insert.columns(), rows,
+                    Optional.empty(), insert.pos());
         }
 
         @Override
@@ -200,6 +212,43 @@ public final class RewriteBooleanSemanticsRule implements Rule {
         }
 
         // --- helpers ---
+
+        /**
+         * Same positional BOOLEAN literal policy as {@link #harmonizeRow}, applied to
+         * each select-list of an {@code INSERT … SELECT} (and UNION arms). {@code SELECT *}
+         * cannot be aligned — left unchanged.
+         */
+        private Query harmonizeInsertQuery(Query query, List<Identifier> namedColumns,
+                                           TableSchema schema) {
+            QuerySpecification first = harmonizeSelectList(query.first(), namedColumns, schema);
+            List<UnionArm> arms = query.unionArms().stream()
+                    .map(arm -> new UnionArm(arm.all(),
+                            harmonizeSelectList(arm.spec(), namedColumns, schema), arm.pos()))
+                    .toList();
+            return new Query(first, arms, query.orderBy(), query.limit(), query.pos());
+        }
+
+        private QuerySpecification harmonizeSelectList(QuerySpecification spec,
+                                                       List<Identifier> namedColumns,
+                                                       TableSchema schema) {
+            if (spec.items().stream().anyMatch(SelectStar.class::isInstance)) {
+                return spec;
+            }
+            List<SelectItem> items = new java.util.ArrayList<>(spec.items().size());
+            for (int i = 0; i < spec.items().size(); i++) {
+                SelectItem item = spec.items().get(i);
+                if (!(item instanceof SelectExpr selectExpr)) {
+                    items.add(item);
+                    continue;
+                }
+                GenericType type = columnTypeAt(i, namedColumns, schema);
+                Expression expr = type == GenericType.BOOLEAN
+                        ? asBooleanLiteral(selectExpr.expr()) : selectExpr.expr();
+                items.add(new SelectExpr(expr, selectExpr.alias(), selectExpr.pos()));
+            }
+            return new QuerySpecification(spec.quantifier(), items, spec.from(), spec.where(),
+                    spec.groupBy(), spec.having(), spec.pos());
+        }
 
         private List<Expression> harmonizeRow(List<Expression> row,
                                               List<Identifier> namedColumns,

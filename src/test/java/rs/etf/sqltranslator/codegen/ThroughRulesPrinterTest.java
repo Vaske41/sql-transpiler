@@ -3,8 +3,10 @@ package rs.etf.sqltranslator.codegen;
 import org.junit.jupiter.api.Test;
 import rs.etf.sqltranslator.core.Dialect;
 import rs.etf.sqltranslator.core.TranslationOutput;
+import rs.etf.sqltranslator.core.UnsupportedFeatureException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static rs.etf.sqltranslator.codegen.CodegenTestSupport.printTranslated;
 
 /** Through-rules printer contracts — parse → RuleEngine → print. */
@@ -69,5 +71,41 @@ class ThroughRulesPrinterTest {
                 "SELECT N'café';",
                 Dialect.TSQL, Dialect.MYSQL);
         assertThat(out.sql()).isEqualTo("SELECT 'café';\n");
+    }
+
+    @Test
+    void rulesReachTheQueryInsideInsertSelect() {
+        TranslationOutput out = printTranslated(
+                "INSERT INTO logs SELECT GETDATE()", Dialect.TSQL, Dialect.MYSQL);
+        assertThat(out.sql()).contains("NOW()").doesNotContain("GETDATE");
+    }
+
+    @Test
+    void insertSelectRowLimitTranslatesAcrossShapes() {
+        TranslationOutput out = printTranslated(
+                "INSERT INTO archive SELECT id FROM users ORDER BY id LIMIT 3",
+                Dialect.MYSQL, Dialect.TSQL);
+        assertThat(out.sql()).contains("TOP").doesNotContain("LIMIT");
+    }
+
+    @Test
+    void insertSelectInnerQueryValidationStillRefuses() {
+        assertThatExceptionOfType(UnsupportedFeatureException.class)
+                .isThrownBy(() -> printTranslated(
+                        "INSERT INTO archive SELECT id FROM users LIMIT 2 OFFSET 1",
+                        Dialect.MYSQL, Dialect.TSQL));
+    }
+
+    @Test
+    void insertSelectBooleanHarmonizesLikeValuesForPostgres() {
+        String ddl = "CREATE TABLE flags (active BOOLEAN, qty INT);\n";
+        TranslationOutput values = printTranslated(
+                ddl + "INSERT INTO flags (active, qty) VALUES (1, 5);",
+                Dialect.MYSQL, Dialect.POSTGRESQL);
+        TranslationOutput select = printTranslated(
+                ddl + "INSERT INTO flags (active, qty) SELECT 1, 5;",
+                Dialect.MYSQL, Dialect.POSTGRESQL);
+        assertThat(values.sql()).contains("VALUES (TRUE, 5)");
+        assertThat(select.sql()).contains("SELECT TRUE, 5").doesNotContain("SELECT 1, 5");
     }
 }

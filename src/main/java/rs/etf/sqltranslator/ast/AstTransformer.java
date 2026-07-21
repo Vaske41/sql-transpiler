@@ -107,7 +107,8 @@ public class AstTransformer implements AstVisitor<Object> {
     @Override
     public Object visitInsertStatement(InsertStatement node) {
         return new InsertStatement(rebuild(node.table()), rebuildList(node.columns()),
-                node.rows().stream().map(this::rebuildList).toList(), node.pos());
+                node.rows().stream().map(this::rebuildList).toList(),
+                rebuildOptional(node.query()), node.pos());
     }
 
     @Override
@@ -182,6 +183,17 @@ public class AstTransformer implements AstVisitor<Object> {
     @Override
     public Object visitAddColumn(AddColumn node) {
         return new AddColumn(rebuild(node.column()), node.pos());
+    }
+
+    @Override
+    public Object visitCreateIndexStatement(CreateIndexStatement node) {
+        return new CreateIndexStatement(rebuild(node.name()), node.unique(),
+                rebuild(node.table()), rebuildList(node.columns()), node.pos());
+    }
+
+    @Override
+    public Object visitIndexColumn(IndexColumn node) {
+        return new IndexColumn(rebuild(node.column()), node.direction(), node.pos());
     }
 
     @Override

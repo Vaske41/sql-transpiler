@@ -126,6 +126,7 @@ public final class AstDumper implements AstVisitor<String> {
                 dump.child("rows[" + i + "][" + j + "]", row.get(j));
             }
         }
+        dump.child("query", node.query());
         return dump.done();
     }
 
@@ -236,6 +237,22 @@ public final class AstDumper implements AstVisitor<String> {
     @Override
     public String visitDropColumn(DropColumn node) {
         return node("DropColumn").child("column", node.column()).done();
+    }
+
+    @Override
+    public String visitCreateIndexStatement(CreateIndexStatement node) {
+        return node("CreateIndexStatement unique=" + node.unique())
+                .child("name", node.name())
+                .child("table", node.table())
+                .children("columns", node.columns())
+                .done();
+    }
+
+    @Override
+    public String visitIndexColumn(IndexColumn node) {
+        return node("IndexColumn direction=" + node.direction())
+                .child("column", node.column())
+                .done();
     }
 
     // --- expressions ---

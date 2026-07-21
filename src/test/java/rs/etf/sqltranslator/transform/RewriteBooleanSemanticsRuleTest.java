@@ -11,6 +11,7 @@ import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.InsertStatement;
 import rs.etf.sqltranslator.ast.NumericLiteral;
 import rs.etf.sqltranslator.ast.Script;
+import rs.etf.sqltranslator.ast.SelectExpr;
 import rs.etf.sqltranslator.ast.SelectStatement;
 import rs.etf.sqltranslator.ast.UnaryOp;
 import rs.etf.sqltranslator.ast.UpdateStatement;
@@ -114,6 +115,20 @@ class RewriteBooleanSemanticsRuleTest {
         assertThat(positional.rows().get(0).get(0)).isInstanceOf(BooleanLiteral.class);
         UpdateStatement update = (UpdateStatement) r.script().statements().get(3);
         assertThat(update.assignments().get(0).value()).isInstanceOf(BooleanLiteral.class);
+    }
+
+    @Test
+    void insertSelectNumericLiteralsIntoBooleanColumnsBecomeBooleanLiteralsForPostgres() {
+        TranslationResult r = runRule(rule,
+                DDL + "INSERT INTO flags (active, qty) SELECT 1, 5;",
+                Dialect.MYSQL, Dialect.POSTGRESQL);
+        InsertStatement insert = (InsertStatement) r.script().statements().get(1);
+        assertThat(insert.query()).isPresent();
+        SelectExpr first = (SelectExpr) insert.query().orElseThrow().first().items().get(0);
+        SelectExpr second = (SelectExpr) insert.query().orElseThrow().first().items().get(1);
+        assertThat(first.expr()).isInstanceOf(BooleanLiteral.class);
+        assertThat(((BooleanLiteral) first.expr()).value()).isTrue();
+        assertThat(second.expr()).isInstanceOf(NumericLiteral.class);
     }
 
     @Test

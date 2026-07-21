@@ -13,6 +13,7 @@ import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.CastExpression;
 import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.ColumnRef;
+import rs.etf.sqltranslator.ast.CreateIndexStatement;
 import rs.etf.sqltranslator.ast.CreateTableStatement;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.DeleteStatement;
@@ -26,6 +27,7 @@ import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.InListPredicate;
 import rs.etf.sqltranslator.ast.InSubqueryPredicate;
+import rs.etf.sqltranslator.ast.IndexColumn;
 import rs.etf.sqltranslator.ast.InsertStatement;
 import rs.etf.sqltranslator.ast.IsNullPredicate;
 import rs.etf.sqltranslator.ast.Join;
@@ -230,10 +232,17 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     @Override
     public Object visitInsertStatement(TSqlParser.InsertStatementContext ctx) {
         List<Identifier> columns = ctx.identifier().stream().map(this::ident).toList();
-        List<List<Expression>> rows = ctx.rowValue().stream()
+        QualifiedName table = qname(ctx.qualifiedName());
+        if (ctx.insertSource() instanceof TSqlParser.InsertQueryContext queryCtx) {
+            return new InsertStatement(table, columns, List.of(),
+                    Optional.of((Query) visit(queryCtx.queryExpression())), pos(ctx));
+        }
+        TSqlParser.InsertValuesContext values =
+                (TSqlParser.InsertValuesContext) ctx.insertSource();
+        List<List<Expression>> rows = values.rowValue().stream()
                 .map(row -> row.expression().stream().map(this::expr).toList())
                 .toList();
-        return new InsertStatement(qname(ctx.qualifiedName()), columns, rows, pos(ctx));
+        return new InsertStatement(table, columns, rows, Optional.empty(), pos(ctx));
     }
 
     @Override
@@ -254,6 +263,24 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     }
 
     // --- DDL ---
+
+    @Override
+    public Object visitCreateIndexStatement(TSqlParser.CreateIndexStatementContext ctx) {
+        TSqlParser.ClusterOptionContext cluster = ctx.clusterOption();
+        if (cluster != null && cluster.CLUSTERED() != null) {
+            throw support.refuse("CLUSTERED index", pos(cluster));
+        }
+        List<IndexColumn> columns = ctx.indexColumn().stream()
+                .map(this::indexColumn).toList();
+        return new CreateIndexStatement(ident(ctx.identifier()), ctx.UNIQUE() != null,
+                qname(ctx.qualifiedName()), columns, pos(ctx));
+    }
+
+    private IndexColumn indexColumn(TSqlParser.IndexColumnContext ctx) {
+        SortDirection direction =
+                ctx.DESC() != null ? SortDirection.DESC : SortDirection.ASC;
+        return new IndexColumn(ident(ctx.identifier()), direction, pos(ctx));
+    }
 
     @Override
     public Object visitCreateTableStatement(TSqlParser.CreateTableStatementContext ctx) {

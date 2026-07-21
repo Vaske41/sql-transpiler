@@ -1,0 +1,1 @@
+INSERT INTO archive SELECT id FROM users ORDER BY id LIMIT 3;

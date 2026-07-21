@@ -468,8 +468,16 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         if (node.direction() == SortDirection.DESC) {
             out.token("DESC");
         }
-        node.nulls().ifPresent(nulls -> out.token("NULLS").token(nulls.name()));
+        node.nulls().ifPresent(this::renderNullsOrder);
         return null;
+    }
+
+    /**
+     * Base: PostgreSQL shape. Targets without the clause (MySQL, T-SQL) override
+     * with a contract guard — DropNullsOrderingRule must have removed it.
+     */
+    protected void renderNullsOrder(NullsOrder nulls) {
+        out.token("NULLS").token(nulls.name());
     }
 
     @Override
@@ -527,6 +535,10 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             out.token("(");
             csv(node.columns());
             out.raw(")");
+        }
+        if (node.query().isPresent()) {
+            node.query().get().accept(this);
+            return null;
         }
         out.token("VALUES");
         for (int i = 0; i < node.rows().size(); i++) {
@@ -675,6 +687,28 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     @Override
     public Void visitDropColumn(DropColumn node) {
         out.token("DROP COLUMN").token(identifier(node.column()));
+        return null;
+    }
+
+    @Override
+    public Void visitCreateIndexStatement(CreateIndexStatement node) {
+        out.token("CREATE");
+        if (node.unique()) {
+            out.token("UNIQUE");
+        }
+        out.token("INDEX").token(identifier(node.name()))
+                .token("ON").token(dotted(node.table())).token("(");
+        csv(node.columns());
+        out.raw(")");
+        return null;
+    }
+
+    @Override
+    public Void visitIndexColumn(IndexColumn node) {
+        out.token(identifier(node.column()));
+        if (node.direction() == SortDirection.DESC) {
+            out.token("DESC");
+        }
         return null;
     }
 

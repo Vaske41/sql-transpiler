@@ -5,6 +5,29 @@ Source-to-source SQL translator between **T-SQL (SQL Server)**, **MySQL**, and
 project (ETF, University of Belgrade), built with Java 17 and ANTLR4 using an
 Apache Spark Catalyst-inspired rule-based pipeline.
 
+## Supported subset
+
+| Category | In scope | Refused / out of scope |
+|---|---|---|
+| DML | `SELECT` (joins, `WHERE`, `GROUP BY`/`HAVING`, `ORDER BY`, `LIMIT`/`TOP`/`FETCH`), `INSERT ... VALUES` (incl. multi-row), `INSERT ... SELECT`, `UPDATE`, `DELETE` | CTEs, window functions, `MERGE` |
+| DDL | `CREATE TABLE` (columns, types, `NOT NULL`, `DEFAULT`, `PRIMARY KEY`, `FOREIGN KEY`, `UNIQUE`, auto-increment), `CREATE INDEX` / `CREATE UNIQUE INDEX` (column list with optional `ASC`/`DESC`), `DROP TABLE`, basic `ALTER TABLE ADD/DROP COLUMN` | `DROP INDEX`; index options below |
+
+**`CREATE INDEX` refusals** (parse, then `UnsupportedFeatureException` at build):
+
+- T-SQL `CLUSTERED` indexes (`NONCLUSTERED` is accepted and folded away)
+- MySQL / PostgreSQL index methods (`USING …`)
+- PostgreSQL partial indexes (`WHERE …`)
+- PostgreSQL `NULLS FIRST` / `NULLS LAST` on index columns
+- MySQL index-column prefix lengths (`col(n)`)
+
+### Known limitations — reserved keywords
+
+`INDEX`, `USING`, `CLUSTERED`, and `NONCLUSTERED` are keywords in **all three**
+input grammars (shared keyword block). They cannot appear as bare identifiers
+even where a real engine allows it — e.g. `SELECT index FROM t` is legal in
+PostgreSQL / MySQL but a parse error here. Quote such identifiers
+(`"index"`, `` `index` ``, or `[index]` per dialect).
+
 ## Build
 
     ./mvnw clean verify   # Linux/macOS

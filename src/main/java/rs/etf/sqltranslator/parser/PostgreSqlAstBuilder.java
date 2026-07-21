@@ -13,6 +13,7 @@ import rs.etf.sqltranslator.ast.BooleanLiteral;
 import rs.etf.sqltranslator.ast.CastExpression;
 import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.ColumnRef;
+import rs.etf.sqltranslator.ast.CreateIndexStatement;
 import rs.etf.sqltranslator.ast.CreateTableStatement;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.DeleteStatement;
@@ -26,6 +27,7 @@ import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.InListPredicate;
 import rs.etf.sqltranslator.ast.InSubqueryPredicate;
+import rs.etf.sqltranslator.ast.IndexColumn;
 import rs.etf.sqltranslator.ast.InsertStatement;
 import rs.etf.sqltranslator.ast.IsNullPredicate;
 import rs.etf.sqltranslator.ast.Join;
@@ -210,10 +212,17 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     @Override
     public Object visitInsertStatement(PostgreSqlParser.InsertStatementContext ctx) {
         List<Identifier> columns = ctx.identifier().stream().map(this::ident).toList();
-        List<List<Expression>> rows = ctx.rowValue().stream()
+        QualifiedName table = qname(ctx.qualifiedName());
+        if (ctx.insertSource() instanceof PostgreSqlParser.InsertQueryContext queryCtx) {
+            return new InsertStatement(table, columns, List.of(),
+                    Optional.of((Query) visit(queryCtx.queryExpression())), pos(ctx));
+        }
+        PostgreSqlParser.InsertValuesContext values =
+                (PostgreSqlParser.InsertValuesContext) ctx.insertSource();
+        List<List<Expression>> rows = values.rowValue().stream()
                 .map(row -> row.expression().stream().map(this::expr).toList())
                 .toList();
-        return new InsertStatement(qname(ctx.qualifiedName()), columns, rows, pos(ctx));
+        return new InsertStatement(table, columns, rows, Optional.empty(), pos(ctx));
     }
 
     @Override
@@ -234,6 +243,29 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     }
 
     // --- DDL ---
+
+    @Override
+    public Object visitCreateIndexStatement(PostgreSqlParser.CreateIndexStatementContext ctx) {
+        if (ctx.indexMethod() != null) {
+            throw support.refuse("index method (USING)", pos(ctx.indexMethod()));
+        }
+        if (ctx.whereClause() != null) {
+            throw support.refuse("partial index (WHERE)", pos(ctx.whereClause()));
+        }
+        List<IndexColumn> columns = ctx.indexColumn().stream()
+                .map(this::indexColumn).toList();
+        return new CreateIndexStatement(ident(ctx.identifier()), ctx.UNIQUE() != null,
+                qname(ctx.qualifiedName()), columns, pos(ctx));
+    }
+
+    private IndexColumn indexColumn(PostgreSqlParser.IndexColumnContext ctx) {
+        if (ctx.NULLS() != null) {
+            throw support.refuse("NULLS ordering in index columns", pos(ctx));
+        }
+        SortDirection direction =
+                ctx.DESC() != null ? SortDirection.DESC : SortDirection.ASC;
+        return new IndexColumn(ident(ctx.identifier()), direction, pos(ctx));
+    }
 
     @Override
     public Object visitCreateTableStatement(PostgreSqlParser.CreateTableStatementContext ctx) {
