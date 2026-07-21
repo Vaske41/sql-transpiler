@@ -230,11 +230,17 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     @Override
     public Object visitInsertStatement(TSqlParser.InsertStatementContext ctx) {
         List<Identifier> columns = ctx.identifier().stream().map(this::ident).toList();
-        List<List<Expression>> rows = ctx.rowValue().stream()
+        QualifiedName table = qname(ctx.qualifiedName());
+        if (ctx.insertSource() instanceof TSqlParser.InsertQueryContext queryCtx) {
+            return new InsertStatement(table, columns, List.of(),
+                    Optional.of((Query) visit(queryCtx.queryExpression())), pos(ctx));
+        }
+        TSqlParser.InsertValuesContext values =
+                (TSqlParser.InsertValuesContext) ctx.insertSource();
+        List<List<Expression>> rows = values.rowValue().stream()
                 .map(row -> row.expression().stream().map(this::expr).toList())
                 .toList();
-        return new InsertStatement(qname(ctx.qualifiedName()), columns, rows,
-                Optional.empty(), pos(ctx));
+        return new InsertStatement(table, columns, rows, Optional.empty(), pos(ctx));
     }
 
     @Override

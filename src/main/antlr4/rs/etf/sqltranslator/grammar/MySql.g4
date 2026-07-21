@@ -19,7 +19,12 @@ statement
 // MySQL: INTO is optional.
 insertStatement
     : INSERT INTO? qualifiedName ('(' identifier (',' identifier)* ')')?
-      VALUES rowValue (',' rowValue)*
+      insertSource
+    ;
+
+insertSource
+    : VALUES rowValue (',' rowValue)*   # insertValues
+    | queryExpression                   # insertQuery
     ;
 
 rowValue : '(' expression (',' expression)* ')' ;
