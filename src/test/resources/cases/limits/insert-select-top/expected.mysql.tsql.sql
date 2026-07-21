@@ -1,0 +1,1 @@
+INSERT INTO archive SELECT TOP (3) id FROM users ORDER BY id;
