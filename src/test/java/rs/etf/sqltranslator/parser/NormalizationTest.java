@@ -28,6 +28,7 @@ import rs.etf.sqltranslator.core.UnsupportedFeatureException;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 /**
@@ -364,6 +365,57 @@ class NormalizationTest {
         assertThat(arms).hasSize(2);
         assertThat(arms.get(0).all()).isTrue();
         assertThat(arms.get(1).all()).isFalse();
+    }
+
+    // ------------------------------------------------------------------
+    // CREATE INDEX — dialect-only options refused at build
+    // ------------------------------------------------------------------
+
+    @Test
+    void clusteredIndexIsRefused() {
+        assertThatExceptionOfType(UnsupportedFeatureException.class)
+                .isThrownBy(() -> AstBuilderFacade.buildScript(
+                        "CREATE CLUSTERED INDEX idx_a ON t (a)", Dialect.TSQL))
+                .withMessageContaining("CLUSTERED");
+    }
+
+    @Test
+    void nonclusteredFoldsToCanonicalIndex() {
+        assertThatCode(() -> AstBuilderFacade.buildScript(
+                "CREATE NONCLUSTERED INDEX idx_a ON t (a)", Dialect.TSQL))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void indexUsingMethodIsRefused() {
+        assertThatExceptionOfType(UnsupportedFeatureException.class)
+                .isThrownBy(() -> AstBuilderFacade.buildScript(
+                        "CREATE INDEX idx_a ON t USING hash (a)", Dialect.POSTGRESQL))
+                .withMessageContaining("USING");
+    }
+
+    @Test
+    void partialIndexWhereIsRefused() {
+        assertThatExceptionOfType(UnsupportedFeatureException.class)
+                .isThrownBy(() -> AstBuilderFacade.buildScript(
+                        "CREATE INDEX idx_a ON t (a) WHERE a > 0", Dialect.POSTGRESQL))
+                .withMessageContaining("partial index");
+    }
+
+    @Test
+    void indexColumnNullsOrderingIsRefused() {
+        assertThatExceptionOfType(UnsupportedFeatureException.class)
+                .isThrownBy(() -> AstBuilderFacade.buildScript(
+                        "CREATE INDEX idx_a ON t (a NULLS FIRST)", Dialect.POSTGRESQL))
+                .withMessageContaining("NULLS");
+    }
+
+    @Test
+    void indexColumnPrefixLengthIsRefused() {
+        assertThatExceptionOfType(UnsupportedFeatureException.class)
+                .isThrownBy(() -> AstBuilderFacade.buildScript(
+                        "CREATE INDEX idx_a ON t (a(10))", Dialect.MYSQL))
+                .withMessageContaining("prefix length");
     }
 
     // ------------------------------------------------------------------

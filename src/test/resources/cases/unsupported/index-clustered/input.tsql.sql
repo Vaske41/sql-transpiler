@@ -1,0 +1,1 @@
+CREATE CLUSTERED INDEX idx_a ON t (a);

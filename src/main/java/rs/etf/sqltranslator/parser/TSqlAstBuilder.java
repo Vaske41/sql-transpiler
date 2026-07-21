@@ -13,6 +13,7 @@ import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.CastExpression;
 import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.ColumnRef;
+import rs.etf.sqltranslator.ast.CreateIndexStatement;
 import rs.etf.sqltranslator.ast.CreateTableStatement;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.DeleteStatement;
@@ -26,6 +27,7 @@ import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.InListPredicate;
 import rs.etf.sqltranslator.ast.InSubqueryPredicate;
+import rs.etf.sqltranslator.ast.IndexColumn;
 import rs.etf.sqltranslator.ast.InsertStatement;
 import rs.etf.sqltranslator.ast.IsNullPredicate;
 import rs.etf.sqltranslator.ast.Join;
@@ -261,6 +263,24 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     }
 
     // --- DDL ---
+
+    @Override
+    public Object visitCreateIndexStatement(TSqlParser.CreateIndexStatementContext ctx) {
+        TSqlParser.ClusterOptionContext cluster = ctx.clusterOption();
+        if (cluster != null && cluster.CLUSTERED() != null) {
+            throw support.refuse("CLUSTERED index", pos(cluster));
+        }
+        List<IndexColumn> columns = ctx.indexColumn().stream()
+                .map(this::indexColumn).toList();
+        return new CreateIndexStatement(ident(ctx.identifier()), ctx.UNIQUE() != null,
+                qname(ctx.qualifiedName()), columns, pos(ctx));
+    }
+
+    private IndexColumn indexColumn(TSqlParser.IndexColumnContext ctx) {
+        SortDirection direction =
+                ctx.DESC() != null ? SortDirection.DESC : SortDirection.ASC;
+        return new IndexColumn(ident(ctx.identifier()), direction, pos(ctx));
+    }
 
     @Override
     public Object visitCreateTableStatement(TSqlParser.CreateTableStatementContext ctx) {

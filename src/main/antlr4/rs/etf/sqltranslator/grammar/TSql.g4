@@ -12,6 +12,7 @@ statement
     | updateStatement
     | deleteStatement
     | createTableStatement
+    | createIndexStatement
     | dropTableStatement
     | alterTableStatement
     ;
@@ -35,6 +36,13 @@ assignment : identifier '=' expression ;
 deleteStatement : DELETE FROM qualifiedName whereClause? ;
 
 createTableStatement : CREATE TABLE qualifiedName '(' tableElement (',' tableElement)* ')' ;
+
+createIndexStatement
+    : CREATE UNIQUE? clusterOption? INDEX identifier ON qualifiedName
+      '(' indexColumn (',' indexColumn)* ')'
+    ;
+
+indexColumn : identifier (ASC | DESC)? ;
 
 tableElement : columnDefinition | tableConstraint ;
 
@@ -207,6 +215,8 @@ autoIncrement : IDENTITY '(' INTEGER_LITERAL ',' INTEGER_LITERAL ')' ;
 // T-SQL allows NVARCHAR(MAX).
 dataTypeArg : INTEGER_LITERAL | MAX ;
 
+clusterOption : CLUSTERED | NONCLUSTERED ;
+
 // =====================================================================
 // 3. Keywords (shared block — byte-identical in all three grammars)
 // =====================================================================
@@ -214,22 +224,23 @@ dataTypeArg : INTEGER_LITERAL | MAX ;
 ADD:A D D; ALL:A L L; ALTER:A L T E R; ALWAYS:A L W A Y S; AND:A N D;
 AS:A S; ASC:A S C; AUTO_INCREMENT:A U T O '_' I N C R E M E N T;
 BETWEEN:B E T W E E N; BY:B Y; CASE:C A S E; CAST:C A S T;
-COLUMN:C O L U M N; CONSTRAINT:C O N S T R A I N T; CONVERT:C O N V E R T;
-CREATE:C R E A T E; CROSS:C R O S S; DEFAULT:D E F A U L T;
-DELETE:D E L E T E; DESC:D E S C; DISTINCT:D I S T I N C T; DROP:D R O P;
-ELSE:E L S E; END:E N D; EXISTS:E X I S T S; FALSE:F A L S E;
-FETCH:F E T C H; FIRST:F I R S T; FOREIGN:F O R E I G N; FROM:F R O M;
-FULL:F U L L; GENERATED:G E N E R A T E D; GROUP:G R O U P;
-HAVING:H A V I N G; IDENTITY:I D E N T I T Y; IF:I F; IN:I N;
+CLUSTERED:C L U S T E R E D; COLUMN:C O L U M N;
+CONSTRAINT:C O N S T R A I N T; CONVERT:C O N V E R T; CREATE:C R E A T E;
+CROSS:C R O S S; DEFAULT:D E F A U L T; DELETE:D E L E T E; DESC:D E S C;
+DISTINCT:D I S T I N C T; DROP:D R O P; ELSE:E L S E; END:E N D;
+EXISTS:E X I S T S; FALSE:F A L S E; FETCH:F E T C H; FIRST:F I R S T;
+FOREIGN:F O R E I G N; FROM:F R O M; FULL:F U L L;
+GENERATED:G E N E R A T E D; GROUP:G R O U P; HAVING:H A V I N G;
+IDENTITY:I D E N T I T Y; IF:I F; IN:I N; INDEX:I N D E X;
 INNER:I N N E R; INSERT:I N S E R T; INTO:I N T O; IS:I S; JOIN:J O I N;
 KEY:K E Y; LAST:L A S T; LEFT:L E F T; LIKE:L I K E; LIMIT:L I M I T;
-MAX:M A X; NEXT:N E X T; NOT:N O T; NULL:N U L L; NULLS:N U L L S;
-OFFSET:O F F S E T; ON:O N; ONLY:O N L Y; OR:O R; ORDER:O R D E R;
-OUTER:O U T E R; PRIMARY:P R I M A R Y; REFERENCES:R E F E R E N C E S;
-RIGHT:R I G H T; ROW:R O W; ROWS:R O W S; SELECT:S E L E C T; SET:S E T;
-TABLE:T A B L E; THEN:T H E N; TOP:T O P; TRUE:T R U E; UNION:U N I O N;
-UNIQUE:U N I Q U E; UPDATE:U P D A T E; VALUES:V A L U E S;
-WHEN:W H E N; WHERE:W H E R E;
+MAX:M A X; NEXT:N E X T; NONCLUSTERED:N O N C L U S T E R E D; NOT:N O T;
+NULL:N U L L; NULLS:N U L L S; OFFSET:O F F S E T; ON:O N; ONLY:O N L Y;
+OR:O R; ORDER:O R D E R; OUTER:O U T E R; PRIMARY:P R I M A R Y;
+REFERENCES:R E F E R E N C E S; RIGHT:R I G H T; ROW:R O W; ROWS:R O W S;
+SELECT:S E L E C T; SET:S E T; TABLE:T A B L E; THEN:T H E N; TOP:T O P;
+TRUE:T R U E; UNION:U N I O N; UNIQUE:U N I Q U E; UPDATE:U P D A T E;
+USING:U S I N G; VALUES:V A L U E S; WHEN:W H E N; WHERE:W H E R E;
 
 // =====================================================================
 // 4. Operators, literals, identifiers (dialect-specific lexing)
