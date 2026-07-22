@@ -73,6 +73,18 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitDerivedTable(DerivedTable node) {
+        node.query().accept(this);
+        node.alias().accept(this);
+        node.columnAliases().ifPresent(cols -> {
+            for (Identifier col : cols) {
+                col.accept(this);
+            }
+        });
+        return defaultResult();
+    }
+
+    @Override
     public R visitJoin(Join node) {
         return defaultResult();
     }

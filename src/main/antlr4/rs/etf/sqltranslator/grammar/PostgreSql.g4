@@ -104,7 +104,11 @@ selectItem
 
 tableSource : tablePrimary joinedTable* ;
 
-tablePrimary : qualifiedName (AS? identifier)? ;
+tablePrimary
+    : qualifiedName (AS? identifier)?                          # namedTablePrimary
+    | '(' queryExpression ')' AS? identifier
+        ('(' identifier (',' identifier)* ')')?              # derivedTablePrimary
+    ;
 
 joinedTable
     : joinType tablePrimary ON expression

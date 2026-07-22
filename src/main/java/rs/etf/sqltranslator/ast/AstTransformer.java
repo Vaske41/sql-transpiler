@@ -97,6 +97,15 @@ public class AstTransformer implements AstVisitor<Object> {
     }
 
     @Override
+    public Object visitDerivedTable(DerivedTable node) {
+        return new DerivedTable(
+                rebuild(node.query()),
+                rebuild(node.alias()),
+                node.columnAliases().map(this::rebuildList),
+                node.pos());
+    }
+
+    @Override
     public Object visitJoin(Join node) {
         return new Join(node.kind(), rebuild(node.table()), rebuildOptional(node.on()),
                 node.pos());

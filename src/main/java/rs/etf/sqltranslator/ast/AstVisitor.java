@@ -30,6 +30,8 @@ public interface AstVisitor<R> {
 
     R visitTableRef(TableRef node);
 
+    R visitDerivedTable(DerivedTable node);
+
     R visitJoin(Join node);
 
     // --- DML ---

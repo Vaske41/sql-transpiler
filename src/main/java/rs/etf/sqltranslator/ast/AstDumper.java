@@ -105,6 +105,14 @@ public final class AstDumper implements AstVisitor<String> {
     }
 
     @Override
+    public String visitDerivedTable(DerivedTable node) {
+        Dump dump = node("DerivedTable alias=" + quote(node.alias().value()))
+                .child("query", node.query());
+        node.columnAliases().ifPresent(cols -> dump.children("columnAliases", cols));
+        return dump.done();
+    }
+
+    @Override
     public String visitJoin(Join node) {
         return node("Join kind=" + node.kind())
                 .child("table", node.table())

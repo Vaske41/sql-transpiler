@@ -17,6 +17,7 @@ import rs.etf.sqltranslator.ast.CreateIndexStatement;
 import rs.etf.sqltranslator.ast.CreateTableStatement;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.DeleteStatement;
+import rs.etf.sqltranslator.ast.DerivedTable;
 import rs.etf.sqltranslator.ast.DropColumn;
 import rs.etf.sqltranslator.ast.DropTableStatement;
 import rs.etf.sqltranslator.ast.ExistsPredicate;
@@ -40,6 +41,7 @@ import rs.etf.sqltranslator.ast.PrimaryKeyConstraint;
 import rs.etf.sqltranslator.ast.QualifiedName;
 import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.QuerySpecification;
+import rs.etf.sqltranslator.ast.Relation;
 import rs.etf.sqltranslator.ast.RowLimit;
 import rs.etf.sqltranslator.ast.Script;
 import rs.etf.sqltranslator.ast.SelectExpr;
@@ -159,19 +161,30 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     @Override
     public Object visitTableSource(PostgreSqlParser.TableSourceContext ctx) {
         List<Join> joins = ctx.joinedTable().stream().map(j -> (Join) visit(j)).toList();
-        return new TableSource((TableRef) visit(ctx.tablePrimary()), joins, pos(ctx));
+        return new TableSource((Relation) visit(ctx.tablePrimary()), joins, pos(ctx));
     }
 
     @Override
-    public Object visitTablePrimary(PostgreSqlParser.TablePrimaryContext ctx) {
+    public Object visitNamedTablePrimary(PostgreSqlParser.NamedTablePrimaryContext ctx) {
         Optional<Identifier> alias = ctx.identifier() == null
                 ? Optional.empty() : Optional.of(ident(ctx.identifier()));
         return new TableRef(qname(ctx.qualifiedName()), alias, pos(ctx));
     }
 
     @Override
+    public Object visitDerivedTablePrimary(PostgreSqlParser.DerivedTablePrimaryContext ctx) {
+        Query query = (Query) visit(ctx.queryExpression());
+        Identifier alias = ident(ctx.identifier(0));
+        Optional<List<Identifier>> cols = Optional.empty();
+        if (ctx.identifier().size() > 1) {
+            cols = Optional.of(ctx.identifier().stream().skip(1).map(this::ident).toList());
+        }
+        return new DerivedTable(query, alias, cols, pos(ctx));
+    }
+
+    @Override
     public Object visitJoinedTable(PostgreSqlParser.JoinedTableContext ctx) {
-        TableRef table = (TableRef) visit(ctx.tablePrimary());
+        Relation table = (Relation) visit(ctx.tablePrimary());
         if (ctx.CROSS() != null) {
             return new Join(JoinKind.CROSS, table, Optional.empty(), pos(ctx));
         }

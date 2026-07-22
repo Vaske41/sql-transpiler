@@ -49,6 +49,8 @@ class CrossDialectAstEqualityTest {
             "constraints/drop-alter",
             "constraints/pk-fk-unique",
             "create-table-types/double-precision",
+            "derived-tables/from-subquery",
+            "derived-tables/join-subquery",
             "functions/count-star-distinct",
             "functions/left-right",
             "functions/max-aggregate",

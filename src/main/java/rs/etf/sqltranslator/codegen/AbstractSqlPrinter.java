@@ -510,6 +510,18 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     }
 
     @Override
+    public Void visitDerivedTable(DerivedTable node) {
+        subquery(node.query());
+        out.token("AS").token(identifier(node.alias()));
+        node.columnAliases().ifPresent(cols -> {
+            out.raw("(");
+            csv(cols);
+            out.raw(")");
+        });
+        return null;
+    }
+
+    @Override
     public Void visitJoin(Join node) {
         out.token(switch (node.kind()) {
             case INNER -> "INNER JOIN";

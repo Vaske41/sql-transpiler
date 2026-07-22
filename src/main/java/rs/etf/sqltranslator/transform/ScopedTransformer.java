@@ -6,12 +6,15 @@ import rs.etf.sqltranslator.ast.BooleanLiteral;
 import rs.etf.sqltranslator.ast.CastExpression;
 import rs.etf.sqltranslator.ast.ColumnRef;
 import rs.etf.sqltranslator.ast.DeleteStatement;
+import rs.etf.sqltranslator.ast.DerivedTable;
 import rs.etf.sqltranslator.ast.Expression;
+import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.InsertStatement;
 import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.NumericLiteral;
 import rs.etf.sqltranslator.ast.QualifiedName;
 import rs.etf.sqltranslator.ast.QuerySpecification;
+import rs.etf.sqltranslator.ast.Relation;
 import rs.etf.sqltranslator.ast.StringLiteral;
 import rs.etf.sqltranslator.ast.TableRef;
 import rs.etf.sqltranslator.ast.TableSource;
@@ -169,11 +172,31 @@ import java.util.Optional;
     // --- scope construction ---
 
     private List<ScopedTable> tablesOf(TableSource from) {
-        List<ScopedTable> tables = new ArrayList<>(tableScope(from.first()));
+        List<ScopedTable> tables = new ArrayList<>(relationScope(from.first()));
         for (Join join : from.joins()) {
-            tables.addAll(tableScope(join.table()));
+            tables.addAll(relationScope(join.table()));
         }
         return tables;
+    }
+
+    private List<ScopedTable> relationScope(Relation relation) {
+        if (relation instanceof TableRef ref) {
+            List<ScopedTable> fromCatalog = tableScope(ref);
+            if (!fromCatalog.isEmpty()) {
+                return fromCatalog;
+            }
+            // CTE names are resolved in Task 3 via cteSchemas — derived-only path ends here.
+            return List.of();
+        }
+        if (relation instanceof DerivedTable derived) {
+            String key = derived.alias().value().toLowerCase(Locale.ROOT);
+            // Empty schema: columns unresolved → rules warn, never guess.
+            QualifiedName qn = new QualifiedName(
+                    List.of(new Identifier(derived.alias().value(), false, derived.alias().pos())),
+                    derived.alias().pos());
+            return List.of(new ScopedTable(key, new TableSchema(qn, List.of())));
+        }
+        throw new IllegalStateException("unknown Relation: " + relation.getClass());
     }
 
     private List<ScopedTable> tableScope(TableRef ref) {
