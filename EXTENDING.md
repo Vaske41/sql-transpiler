@@ -135,12 +135,26 @@ the documented rollback if the ladder proves incomplete.
 
 1. ~~`INSERT ... SELECT`~~ — shipped (2026-07) — one grammar alternative + one AST field reusing `Query`
 2. ~~`CREATE INDEX`~~ — shipped (2026-07) — small grammar surface, high practical relevance
-3. **CTEs (`WITH`)** — near-identical syntax in all three dialects; mostly plumbing
-4. **Derived tables in `FROM`** — unlocks the subquery scope line
+3. ~~CTEs (`WITH`)~~ — shipped (2026-07) — non-recursive `WITH` / `Cte` on `Query`; refuse recursive
+4. ~~Derived tables in `FROM`~~ — shipped (2026-07) — `Relation` / `DerivedTable`
 5. **Window functions** — large expression-grammar surface; last
 
 The queue is the first thing sacrificed when behind schedule: v1 scope never
 grows before the day-14 milestones are green.
+
+### CTE policy (Wave 1)
+
+Non-recursive `WITH` is supported end-to-end (parse → AST → rules → print). Nested
+`WITH` inside a CTE body is supported via recursive `Query.ctes`.
+
+**Refused** (parse OK, build throws `UnsupportedFeatureException` `"recursive CTE"`):
+
+- `WITH RECURSIVE` on all three dialects
+- Any CTE whose body references its own name as a `TableRef` (covers T-SQL
+  recursion that omits the `RECURSIVE` keyword)
+
+CTE names are visible to `ScopedTransformer.relationScope` as empty-schema
+relations (catalog lookup first, then CTE map). Column types are never invented.
 
 ## Adding a transformation rule (Phase 4)
 
@@ -210,6 +224,7 @@ error) and throw `UnsupportedFeatureException` at build with a `SourcePosition`:
 | Partial index (`WHERE`) | PostgreSQL | `partial index (WHERE)` |
 | `NULLS` ordering in index columns | PostgreSQL | `NULLS ordering in index columns` |
 | Index column prefix length | MySQL | `index column prefix length` |
+| Recursive CTE (`WITH RECURSIVE` or self-`TableRef`) | all | `recursive CTE` |
 
 T-SQL `NONCLUSTERED` folds away (canonical index shape has no clustered flag).
 

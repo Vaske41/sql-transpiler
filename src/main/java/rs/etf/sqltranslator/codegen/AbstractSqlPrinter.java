@@ -387,6 +387,17 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
 
     @Override
     public Void visitQuery(Query node) {
+        if (!node.ctes().isEmpty()) {
+            out.token("WITH");
+            boolean first = true;
+            for (Cte cte : node.ctes()) {
+                if (!first) {
+                    out.raw(",");
+                }
+                first = false;
+                cte.accept(this);
+            }
+        }
         renderSpec(node.first(), node);
         for (UnionArm arm : node.unionArms()) {
             arm.accept(this);
@@ -396,6 +407,19 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             csv(node.orderBy());
         }
         renderRowLimit(node);
+        return null;
+    }
+
+    @Override
+    public Void visitCte(Cte node) {
+        out.token(identifier(node.name()));
+        node.columns().ifPresent(cols -> {
+            out.raw("(");
+            csv(cols);
+            out.raw(")");
+        });
+        out.token("AS");
+        subquery(node.query());
         return null;
     }
 

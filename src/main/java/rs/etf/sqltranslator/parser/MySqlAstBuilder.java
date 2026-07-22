@@ -15,6 +15,7 @@ import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.ColumnRef;
 import rs.etf.sqltranslator.ast.CreateIndexStatement;
 import rs.etf.sqltranslator.ast.CreateTableStatement;
+import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.DeleteStatement;
 import rs.etf.sqltranslator.ast.DerivedTable;
@@ -95,13 +96,33 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
 
     @Override
     public Object visitQueryExpression(MySqlParser.QueryExpressionContext ctx) {
+        List<Cte> ctes = List.of();
+        if (ctx.withClause() != null) {
+            var w = ctx.withClause();
+            support.refuseIfRecursiveKeyword(w, w.RECURSIVE() != null);
+            ctes = w.commonTableExpression().stream().map(c -> (Cte) visit(c)).toList();
+            for (Cte cte : ctes) {
+                support.refuseIfCteSelfReference(cte);
+            }
+        }
         QuerySpecification first = (QuerySpecification) visit(ctx.querySpecification(0));
         List<UnionArm> arms = support.unionArms(ctx, MySqlParser.UNION, MySqlParser.ALL, this);
         List<OrderItem> orderBy = ctx.orderByClause() == null
                 ? List.of()
                 : ctx.orderByClause().orderItem().stream()
                         .map(i -> (OrderItem) visit(i)).toList();
-        return new Query(first, arms, orderBy, rowLimit(ctx.rowLimitClause()), pos(ctx));
+        return new Query(ctes, first, arms, orderBy, rowLimit(ctx.rowLimitClause()), pos(ctx));
+    }
+
+    @Override
+    public Object visitCommonTableExpression(MySqlParser.CommonTableExpressionContext ctx) {
+        Identifier name = ident(ctx.identifier(0));
+        Optional<List<Identifier>> cols = Optional.empty();
+        if (ctx.identifier().size() > 1) {
+            cols = Optional.of(ctx.identifier().stream().skip(1).map(this::ident).toList());
+        }
+        Query query = (Query) visit(ctx.queryExpression());
+        return new Cte(name, cols, query, pos(ctx));
     }
 
     /** MySQL: LIMIT n [OFFSET m] | LIMIT m, n — the comma form swaps operands (§2.2). */

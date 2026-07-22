@@ -49,8 +49,22 @@ public class AstTransformer implements AstVisitor<Object> {
 
     @Override
     public Object visitQuery(Query node) {
-        return new Query(rebuild(node.first()), rebuildList(node.unionArms()),
-                rebuildList(node.orderBy()), rebuildOptional(node.limit()), node.pos());
+        return new Query(
+                rebuildList(node.ctes()),
+                rebuild(node.first()),
+                rebuildList(node.unionArms()),
+                rebuildList(node.orderBy()),
+                rebuildOptional(node.limit()),
+                node.pos());
+    }
+
+    @Override
+    public Object visitCte(Cte node) {
+        return new Cte(
+                rebuild(node.name()),
+                node.columns().map(this::rebuildList),
+                rebuild(node.query()),
+                node.pos());
     }
 
     @Override

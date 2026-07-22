@@ -14,6 +14,8 @@ public interface AstVisitor<R> {
 
     R visitQuery(Query node);
 
+    R visitCte(Cte node);
+
     R visitUnionArm(UnionArm node);
 
     R visitQuerySpecification(QuerySpecification node);

@@ -24,51 +24,97 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitSelectStatement(SelectStatement node) {
+        node.query().accept(this);
         return defaultResult();
     }
 
     @Override
     public R visitQuery(Query node) {
+        for (Cte cte : node.ctes()) {
+            cte.accept(this);
+        }
+        node.first().accept(this);
+        for (UnionArm arm : node.unionArms()) {
+            arm.accept(this);
+        }
+        for (OrderItem item : node.orderBy()) {
+            item.accept(this);
+        }
+        node.limit().ifPresent(limit -> limit.accept(this));
+        return defaultResult();
+    }
+
+    @Override
+    public R visitCte(Cte node) {
+        node.name().accept(this);
+        node.columns().ifPresent(cols -> {
+            for (Identifier col : cols) {
+                col.accept(this);
+            }
+        });
+        node.query().accept(this);
         return defaultResult();
     }
 
     @Override
     public R visitUnionArm(UnionArm node) {
+        node.spec().accept(this);
         return defaultResult();
     }
 
     @Override
     public R visitQuerySpecification(QuerySpecification node) {
+        for (SelectItem item : node.items()) {
+            item.accept(this);
+        }
+        node.from().ifPresent(from -> from.accept(this));
+        node.where().ifPresent(where -> where.accept(this));
+        for (Expression group : node.groupBy()) {
+            group.accept(this);
+        }
+        node.having().ifPresent(having -> having.accept(this));
         return defaultResult();
     }
 
     @Override
     public R visitRowLimit(RowLimit node) {
+        node.count().ifPresent(count -> count.accept(this));
+        node.offset().ifPresent(offset -> offset.accept(this));
         return defaultResult();
     }
 
     @Override
     public R visitOrderItem(OrderItem node) {
+        node.expr().accept(this);
         return defaultResult();
     }
 
     @Override
     public R visitSelectStar(SelectStar node) {
+        node.qualifier().ifPresent(q -> q.accept(this));
         return defaultResult();
     }
 
     @Override
     public R visitSelectExpr(SelectExpr node) {
+        node.expr().accept(this);
+        node.alias().ifPresent(alias -> alias.accept(this));
         return defaultResult();
     }
 
     @Override
     public R visitTableSource(TableSource node) {
+        node.first().accept(this);
+        for (Join join : node.joins()) {
+            join.accept(this);
+        }
         return defaultResult();
     }
 
     @Override
     public R visitTableRef(TableRef node) {
+        node.table().accept(this);
+        node.alias().ifPresent(alias -> alias.accept(this));
         return defaultResult();
     }
 
@@ -86,6 +132,8 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitJoin(Join node) {
+        node.table().accept(this);
+        node.on().ifPresent(on -> on.accept(this));
         return defaultResult();
     }
 
@@ -196,6 +244,8 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitInSubqueryPredicate(InSubqueryPredicate node) {
+        node.value().accept(this);
+        node.subquery().accept(this);
         return defaultResult();
     }
 
@@ -206,6 +256,7 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitExistsPredicate(ExistsPredicate node) {
+        node.subquery().accept(this);
         return defaultResult();
     }
 
@@ -231,6 +282,7 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitSubqueryExpression(SubqueryExpression node) {
+        node.query().accept(this);
         return defaultResult();
     }
 

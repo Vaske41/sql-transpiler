@@ -98,6 +98,33 @@ class ScopedTransformerTest {
     }
 
     @Test
+    void cteNamesVisibleInRelationScopeForMainQuery() {
+        class CteProbe extends ScopedTransformer {
+            boolean sawCte;
+
+            CteProbe(TranslationContext c) {
+                super(c);
+            }
+
+            @Override
+            protected Object afterQuerySpecification(
+                    rs.etf.sqltranslator.ast.QuerySpecification rebuilt) {
+                if (rebuilt.from().isPresent()) {
+                    sawCte = cteSchemas().containsKey("c");
+                }
+                return rebuilt;
+            }
+        }
+        Script script = AstBuilderFacade.buildScript(
+                "WITH c AS (SELECT 1 AS x) SELECT c.x FROM c;", Dialect.POSTGRESQL);
+        TranslationContext ctx = new TranslationContext(Dialect.POSTGRESQL, Dialect.MYSQL,
+                CatalogBuilder.build(script), new TranslationReport());
+        CteProbe probe = new CteProbe(ctx);
+        probe.transform(script);
+        assertThat(probe.sawCte).isTrue();
+    }
+
+    @Test
     void familyOfDoesNotInferThroughCoalesce() {
         Script script = AstBuilderFacade.buildScript(
                 DDL + "SELECT COALESCE(name, 'x') FROM products;", Dialect.MYSQL);

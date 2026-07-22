@@ -37,11 +37,21 @@ public final class AstDumper implements AstVisitor<String> {
     @Override
     public String visitQuery(Query node) {
         return node("Query")
+                .children("ctes", node.ctes())
                 .child("first", node.first())
                 .children("unionArms", node.unionArms())
                 .children("orderBy", node.orderBy())
                 .child("limit", node.limit())
                 .done();
+    }
+
+    @Override
+    public String visitCte(Cte node) {
+        Dump dump = node("Cte")
+                .child("name", node.name())
+                .child("query", node.query());
+        node.columns().ifPresent(cols -> dump.children("columns", cols));
+        return dump.done();
     }
 
     @Override

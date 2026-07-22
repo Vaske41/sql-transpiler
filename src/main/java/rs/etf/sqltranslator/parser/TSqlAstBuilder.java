@@ -15,6 +15,7 @@ import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.ColumnRef;
 import rs.etf.sqltranslator.ast.CreateIndexStatement;
 import rs.etf.sqltranslator.ast.CreateTableStatement;
+import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.DeleteStatement;
 import rs.etf.sqltranslator.ast.DerivedTable;
@@ -96,6 +97,15 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
 
     @Override
     public Object visitQueryExpression(TSqlParser.QueryExpressionContext ctx) {
+        List<Cte> ctes = List.of();
+        if (ctx.withClause() != null) {
+            var w = ctx.withClause();
+            support.refuseIfRecursiveKeyword(w, w.RECURSIVE() != null);
+            ctes = w.commonTableExpression().stream().map(c -> (Cte) visit(c)).toList();
+            for (Cte cte : ctes) {
+                support.refuseIfCteSelfReference(cte);
+            }
+        }
         List<TSqlParser.QuerySpecificationContext> specs = ctx.querySpecification();
         boolean hasArms = specs.size() > 1;
         List<AstBuilderSupport.ExtractedTop> tops = specs.stream()
@@ -132,7 +142,18 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
                 top == null ? null : top.count(),
                 top == null ? null : top.position(),
                 offset, fetch, offsetPos);
-        return new Query(first, arms, orderBy, limit, pos(ctx));
+        return new Query(ctes, first, arms, orderBy, limit, pos(ctx));
+    }
+
+    @Override
+    public Object visitCommonTableExpression(TSqlParser.CommonTableExpressionContext ctx) {
+        Identifier name = ident(ctx.identifier(0));
+        Optional<List<Identifier>> cols = Optional.empty();
+        if (ctx.identifier().size() > 1) {
+            cols = Optional.of(ctx.identifier().stream().skip(1).map(this::ident).toList());
+        }
+        Query query = (Query) visit(ctx.queryExpression());
+        return new Cte(name, cols, query, pos(ctx));
     }
 
     private Expression topExpression(TSqlParser.TopClauseContext ctx) {
