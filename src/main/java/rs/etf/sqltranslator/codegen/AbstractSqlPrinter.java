@@ -279,7 +279,39 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             csv(node.args());
         }
         out.raw(")");
+        node.window().ifPresent(w -> {
+            out.token("OVER").raw("(");
+            w.accept(this);
+            out.raw(")");
+        });
         return null;
+    }
+
+    @Override
+    public Void visitWindowSpec(WindowSpec node) {
+        if (!node.partitionBy().isEmpty()) {
+            out.token("PARTITION").token("BY");
+            csv(node.partitionBy());
+        }
+        if (!node.orderBy().isEmpty()) {
+            out.token("ORDER").token("BY");
+            csv(node.orderBy());
+        }
+        if (node.frame().isPresent()) {
+            throw new IllegalStateException(
+                    "window frames must be refused before print");
+        }
+        return null;
+    }
+
+    @Override
+    public Void visitWindowFrame(WindowFrame node) {
+        throw new IllegalStateException("window frames must be refused before print");
+    }
+
+    @Override
+    public Void visitFrameBound(FrameBound node) {
+        throw new IllegalStateException("window frames must be refused before print");
     }
 
     @Override

@@ -338,6 +338,31 @@ public final class AstDumper implements AstVisitor<String> {
         return node("FunctionCall name=" + node.name() + " star=" + node.star()
                 + optional("quantifier", node.quantifier()))
                 .children("args", node.args())
+                .child("window", node.window())
+                .done();
+    }
+
+    @Override
+    public String visitWindowSpec(WindowSpec node) {
+        return node("WindowSpec")
+                .children("partitionBy", node.partitionBy())
+                .children("orderBy", node.orderBy())
+                .child("frame", node.frame())
+                .done();
+    }
+
+    @Override
+    public String visitWindowFrame(WindowFrame node) {
+        return node("WindowFrame mode=" + node.mode())
+                .child("start", node.start())
+                .child("end", node.end())
+                .done();
+    }
+
+    @Override
+    public String visitFrameBound(FrameBound node) {
+        return node("FrameBound kind=" + node.kind())
+                .child("offset", node.offset())
                 .done();
     }
 

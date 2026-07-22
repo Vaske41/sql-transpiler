@@ -179,13 +179,36 @@ primaryExpression
     : literal                               # literalExpr
     | caseExpression                        # caseExpr
     | castExpression                        # castExpr
-    | functionCall                          # functionExpr
+    | functionCall windowOverlay?           # functionExpr
     | qualifiedName                         # columnRefExpr
     | subquery                              # scalarSubqueryExpr
     | '(' expression ')'                    # parenExpr
     ;
 
 functionCall : functionName '(' (setQuantifier? expression (',' expression)* | '*')? ')' ;
+
+windowOverlay
+    : OVER '(' windowSpecification ')'
+    ;
+
+windowSpecification
+    : (PARTITION BY expression (',' expression)*)?
+      (ORDER BY orderItem (',' orderItem)*)?
+      windowFrame?
+    ;
+
+windowFrame
+    : (ROWS | RANGE) frameBound
+    | (ROWS | RANGE) BETWEEN frameBound AND frameBound
+    ;
+
+frameBound
+    : UNBOUNDED PRECEDING
+    | UNBOUNDED FOLLOWING
+    | CURRENT_ROW
+    | expression PRECEDING
+    | expression FOLLOWING
+    ;
 
 // A join's LEFT/RIGHT is never followed by '(' — unambiguous as function names.
 functionName : identifier | MAX | LEFT | RIGHT ;
@@ -240,7 +263,7 @@ AS:A S; ASC:A S C; AUTO_INCREMENT:A U T O '_' I N C R E M E N T;
 BETWEEN:B E T W E E N; BY:B Y; CASE:C A S E; CAST:C A S T;
 CLUSTERED:C L U S T E R E D; COLUMN:C O L U M N;
 CONSTRAINT:C O N S T R A I N T; CONVERT:C O N V E R T; CREATE:C R E A T E;
-CROSS:C R O S S; CURRENT_ROW:C U R R E N T '_' R O W; DEFAULT:D E F A U L T; DELETE:D E L E T E; DESC:D E S C;
+CROSS:C R O S S; CURRENT_ROW:C U R R E N T [ \t\r\n]+ R O W; DEFAULT:D E F A U L T; DELETE:D E L E T E; DESC:D E S C;
 DISTINCT:D I S T I N C T; DROP:D R O P; ELSE:E L S E; END:E N D;
 EXISTS:E X I S T S; FALSE:F A L S E; FETCH:F E T C H; FIRST:F I R S T;
 FOLLOWING:F O L L O W I N G; FOREIGN:F O R E I G N; FROM:F R O M; FULL:F U L L;

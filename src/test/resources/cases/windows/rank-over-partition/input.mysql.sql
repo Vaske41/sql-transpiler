@@ -1,0 +1,1 @@
+SELECT id, RANK() OVER (PARTITION BY dept_id ORDER BY salary DESC) AS r FROM emp;

@@ -83,7 +83,9 @@ class CrossDialectAstEqualityTest {
             "set-ops/union-all-ordered",
             "subqueries/exists-subquery",
             "subqueries/in-subquery",
-            "subqueries/scalar-subquery");
+            "subqueries/scalar-subquery",
+            "windows/rank-over-partition",
+            "windows/sum-over-order");
 
     @TestFactory
     Stream<DynamicTest> threeDialectInputsBuildIdenticalAsts() {

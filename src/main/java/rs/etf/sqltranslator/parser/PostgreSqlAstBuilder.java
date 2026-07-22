@@ -25,6 +25,9 @@ import rs.etf.sqltranslator.ast.ExistsPredicate;
 import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.ForeignKeyConstraint;
 import rs.etf.sqltranslator.ast.ForeignKeyRef;
+import rs.etf.sqltranslator.ast.FrameBound;
+import rs.etf.sqltranslator.ast.FrameBoundKind;
+import rs.etf.sqltranslator.ast.FrameMode;
 import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.InListPredicate;
@@ -61,6 +64,8 @@ import rs.etf.sqltranslator.ast.UnaryOperator;
 import rs.etf.sqltranslator.ast.UnionArm;
 import rs.etf.sqltranslator.ast.UniqueConstraint;
 import rs.etf.sqltranslator.ast.UpdateStatement;
+import rs.etf.sqltranslator.ast.WindowFrame;
+import rs.etf.sqltranslator.ast.WindowSpec;
 import rs.etf.sqltranslator.core.Dialect;
 import rs.etf.sqltranslator.core.SourcePosition;
 import rs.etf.sqltranslator.grammar.PostgreSqlBaseVisitor;
@@ -534,7 +539,16 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
 
     @Override
     public Object visitFunctionExpr(PostgreSqlParser.FunctionExprContext ctx) {
-        return visit(ctx.functionCall());
+        FunctionCall call = (FunctionCall) visit(ctx.functionCall());
+        if (ctx.windowOverlay() != null) {
+            WindowSpec spec = (WindowSpec) visit(ctx.windowOverlay().windowSpecification());
+            if (spec.frame().isPresent()) {
+                throw support.refuse("window frame", spec.frame().get().pos());
+            }
+            call = new FunctionCall(call.name(), call.args(), call.star(), call.quantifier(),
+                    Optional.of(spec), call.pos());
+        }
+        return call;
     }
 
     @Override
@@ -547,7 +561,47 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
             }
         }
         List<Expression> args = ctx.expression().stream().map(this::expr).toList();
-        return new FunctionCall(name, args, star, quantifier(ctx.setQuantifier()), pos(ctx));
+        return new FunctionCall(name, args, star, quantifier(ctx.setQuantifier()),
+                Optional.empty(), pos(ctx));
+    }
+
+    @Override
+    public Object visitWindowSpecification(PostgreSqlParser.WindowSpecificationContext ctx) {
+        List<Expression> partitionBy = ctx.expression().stream().map(this::expr).toList();
+        List<OrderItem> orderBy = ctx.orderItem().stream()
+                .map(item -> (OrderItem) visit(item)).toList();
+        Optional<WindowFrame> frame = ctx.windowFrame() == null
+                ? Optional.empty()
+                : Optional.of((WindowFrame) visit(ctx.windowFrame()));
+        return new WindowSpec(partitionBy, orderBy, frame, pos(ctx));
+    }
+
+    @Override
+    public Object visitWindowFrame(PostgreSqlParser.WindowFrameContext ctx) {
+        FrameMode mode = ctx.ROWS() != null ? FrameMode.ROWS : FrameMode.RANGE;
+        List<PostgreSqlParser.FrameBoundContext> bounds = ctx.frameBound();
+        FrameBound start = (FrameBound) visit(bounds.get(0));
+        Optional<FrameBound> end = bounds.size() > 1
+                ? Optional.of((FrameBound) visit(bounds.get(1)))
+                : Optional.empty();
+        return new WindowFrame(mode, start, end, pos(ctx));
+    }
+
+    @Override
+    public Object visitFrameBound(PostgreSqlParser.FrameBoundContext ctx) {
+        if (ctx.CURRENT_ROW() != null) {
+            return new FrameBound(FrameBoundKind.CURRENT_ROW, Optional.empty(), pos(ctx));
+        }
+        if (ctx.UNBOUNDED() != null) {
+            FrameBoundKind kind = ctx.PRECEDING() != null
+                    ? FrameBoundKind.UNBOUNDED_PRECEDING
+                    : FrameBoundKind.UNBOUNDED_FOLLOWING;
+            return new FrameBound(kind, Optional.empty(), pos(ctx));
+        }
+        FrameBoundKind kind = ctx.PRECEDING() != null
+                ? FrameBoundKind.PRECEDING
+                : FrameBoundKind.FOLLOWING;
+        return new FrameBound(kind, Optional.of(expr(ctx.expression())), pos(ctx));
     }
 
     private Identifier functionNameIdentifier(PostgreSqlParser.FunctionNameContext ctx) {

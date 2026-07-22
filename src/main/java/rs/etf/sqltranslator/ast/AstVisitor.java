@@ -89,6 +89,12 @@ public interface AstVisitor<R> {
 
     R visitFunctionCall(FunctionCall node);
 
+    R visitWindowSpec(WindowSpec node);
+
+    R visitWindowFrame(WindowFrame node);
+
+    R visitFrameBound(FrameBound node);
+
     R visitCaseExpression(CaseExpression node);
 
     R visitWhenClause(WhenClause node);

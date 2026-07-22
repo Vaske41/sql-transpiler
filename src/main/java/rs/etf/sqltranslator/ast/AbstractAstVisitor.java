@@ -262,6 +262,35 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitFunctionCall(FunctionCall node) {
+        for (Expression arg : node.args()) {
+            arg.accept(this);
+        }
+        node.window().ifPresent(w -> w.accept(this));
+        return defaultResult();
+    }
+
+    @Override
+    public R visitWindowSpec(WindowSpec node) {
+        for (Expression part : node.partitionBy()) {
+            part.accept(this);
+        }
+        for (OrderItem item : node.orderBy()) {
+            item.accept(this);
+        }
+        node.frame().ifPresent(f -> f.accept(this));
+        return defaultResult();
+    }
+
+    @Override
+    public R visitWindowFrame(WindowFrame node) {
+        node.start().accept(this);
+        node.end().ifPresent(end -> end.accept(this));
+        return defaultResult();
+    }
+
+    @Override
+    public R visitFrameBound(FrameBound node) {
+        node.offset().ifPresent(offset -> offset.accept(this));
         return defaultResult();
     }
 
