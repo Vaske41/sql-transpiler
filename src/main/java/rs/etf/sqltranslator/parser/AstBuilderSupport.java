@@ -6,12 +6,15 @@ import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.ParseTreeVisitor;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import rs.etf.sqltranslator.ast.AbstractAstVisitor;
+import rs.etf.sqltranslator.ast.AlterColumnType;
 import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.BinaryOperator;
 import rs.etf.sqltranslator.ast.CaseExpression;
 import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.DataType;
+import rs.etf.sqltranslator.ast.DropRoutineStatement;
+import rs.etf.sqltranslator.ast.DropViewStatement;
 import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.FixedLength;
 import rs.etf.sqltranslator.ast.ForeignKeyRef;
@@ -24,8 +27,10 @@ import rs.etf.sqltranslator.ast.QualifiedName;
 import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.QuerySpecification;
 import rs.etf.sqltranslator.ast.RowLimit;
+import rs.etf.sqltranslator.ast.Statement;
 import rs.etf.sqltranslator.ast.StringLiteral;
 import rs.etf.sqltranslator.ast.TableRef;
+import rs.etf.sqltranslator.ast.TruncateStatement;
 import rs.etf.sqltranslator.ast.TypeLength;
 import rs.etf.sqltranslator.ast.UnionArm;
 import rs.etf.sqltranslator.ast.WhenClause;
@@ -165,6 +170,60 @@ final class AstBuilderSupport {
         refuseIf(name.quoted() || !name.value().equalsIgnoreCase("FILTER"),
                 "aggregate filter keyword \"" + name.value() + "\"", name.pos());
         return predicate;
+    }
+
+    /** Requires an unquoted contextual keyword (VIEW / FUNCTION / TRUNCATE / …). */
+    void requireContextualKeyword(Identifier name, String expected) {
+        refuseIf(name.quoted() || !name.value().equalsIgnoreCase(expected),
+                "expected " + expected + ", got \"" + name.value() + "\"", name.pos());
+    }
+
+    Statement dropViewOrRoutine(Identifier kind, QualifiedName name, boolean ifExists,
+                                boolean hasSignature, List<DataType> argTypes,
+                                Optional<Identifier> cascadeToken, SourcePosition position) {
+        boolean cascade = false;
+        if (cascadeToken.isPresent()) {
+            requireContextualKeyword(cascadeToken.get(), "CASCADE");
+            cascade = true;
+        }
+        if (kind.value().equalsIgnoreCase("VIEW")) {
+            refuseIf(kind.quoted(), "quoted DROP object kind", kind.pos());
+            refuseIf(hasSignature, "DROP VIEW with argument list", position);
+            return new DropViewStatement(name, ifExists, cascade, position);
+        }
+        if (kind.value().equalsIgnoreCase("FUNCTION")) {
+            refuseIf(kind.quoted(), "quoted DROP object kind", kind.pos());
+            return new DropRoutineStatement(name, ifExists, cascade, hasSignature, argTypes, position);
+        }
+        throw refuse("DROP " + kind.value(), kind.pos());
+    }
+
+    TruncateStatement truncate(Identifier keyword, QualifiedName table, SourcePosition position) {
+        requireContextualKeyword(keyword, "TRUNCATE");
+        return new TruncateStatement(table, position);
+    }
+
+    AlterColumnType alterColumnType(Identifier column, DataType type,
+                                    Optional<Expression> using, SourcePosition position) {
+        return new AlterColumnType(column, type, using, position);
+    }
+
+    Optional<Expression> usingClause(Identifier keyword, Expression expression) {
+        requireContextualKeyword(keyword, "USING");
+        return Optional.of(expression);
+    }
+
+    void requireModifyKeyword(Identifier keyword) {
+        requireContextualKeyword(keyword, "MODIFY");
+    }
+
+    void requireTypeKeyword(Identifier keyword) {
+        requireContextualKeyword(keyword, "TYPE");
+    }
+
+    void requireDataTypeKeywords(Identifier data, Identifier type) {
+        requireContextualKeyword(data, "DATA");
+        requireContextualKeyword(type, "TYPE");
     }
 
     // ------------------------------------------------------------------

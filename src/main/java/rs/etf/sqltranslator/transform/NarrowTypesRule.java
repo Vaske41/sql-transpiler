@@ -1,5 +1,6 @@
 package rs.etf.sqltranslator.transform;
 
+import rs.etf.sqltranslator.ast.AlterColumnType;
 import rs.etf.sqltranslator.ast.AstTransformer;
 import rs.etf.sqltranslator.ast.CastExpression;
 import rs.etf.sqltranslator.ast.ColumnDefinition;
@@ -16,8 +17,8 @@ import java.util.Optional;
  * Rewrites generic types the target cannot express into ones it can, with loss
  * warnings. Name rendering (BOOLEAN→BIT, DOUBLE→FLOAT, BLOB→VARBINARY(MAX), …) is
  * Phase 5's job; this rule only changes the generic structure. DataType carries no
- * position, so narrowing happens at the two owners (column definitions, casts) whose
- * positions anchor the warnings.
+ * position, so narrowing happens at the owners (column definitions, casts, ALTER
+ * COLUMN type) whose positions anchor the warnings.
  */
 public final class NarrowTypesRule implements Rule {
 
@@ -45,6 +46,13 @@ public final class NarrowTypesRule implements Rule {
             return new ColumnDefinition(column.name(), narrow(column.type(), column.pos()),
                     column.autoIncrement(), column.nullable(), column.defaultValue(),
                     column.primaryKey(), column.unique(), column.references(), column.pos());
+        }
+
+        @Override
+        public Object visitAlterColumnType(AlterColumnType node) {
+            AlterColumnType altered = (AlterColumnType) super.visitAlterColumnType(node);
+            return new AlterColumnType(altered.column(), narrow(altered.type(), altered.pos()),
+                    altered.using(), altered.pos());
         }
 
         @Override

@@ -182,4 +182,14 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
         throw new IllegalStateException(
                 "NULLS ordering must be dropped by DropNullsOrderingRule before printing");
     }
+
+    @Override
+    protected void renderAlterColumnType(rs.etf.sqltranslator.ast.AlterColumnType node) {
+        out.token("ALTER COLUMN").token(identifier(node.column()));
+        renderDataType(node.type());
+        if (node.using().isPresent()) {
+            throw new IllegalStateException(
+                    "rule engine contract: USING must be dropped before T-SQL print");
+        }
+    }
 }

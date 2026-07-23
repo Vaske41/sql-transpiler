@@ -198,6 +198,28 @@ public class AstTransformer implements AstVisitor<Object> {
     }
 
     @Override
+    public Object visitDropViewStatement(DropViewStatement node) {
+        return new DropViewStatement(rebuild(node.name()), node.ifExists(), node.cascade(), node.pos());
+    }
+
+    @Override
+    public Object visitDropRoutineStatement(DropRoutineStatement node) {
+        return new DropRoutineStatement(rebuild(node.name()), node.ifExists(), node.cascade(),
+                node.hasSignature(), rebuildList(node.argTypes()), node.pos());
+    }
+
+    @Override
+    public Object visitDropIndexStatement(DropIndexStatement node) {
+        return new DropIndexStatement(rebuild(node.name()), node.ifExists(),
+                node.table().map(this::rebuild), node.pos());
+    }
+
+    @Override
+    public Object visitTruncateStatement(TruncateStatement node) {
+        return new TruncateStatement(rebuild(node.table()), node.pos());
+    }
+
+    @Override
     public Object visitAlterTableStatement(AlterTableStatement node) {
         return new AlterTableStatement(rebuild(node.table()), rebuild(node.action()),
                 node.pos());
@@ -222,6 +244,12 @@ public class AstTransformer implements AstVisitor<Object> {
     @Override
     public Object visitDropColumn(DropColumn node) {
         return new DropColumn(rebuild(node.column()), node.pos());
+    }
+
+    @Override
+    public Object visitAlterColumnType(AlterColumnType node) {
+        return new AlterColumnType(rebuild(node.column()), rebuild(node.type()),
+                node.using().map(this::rebuild), node.pos());
     }
 
     // --- expressions ---

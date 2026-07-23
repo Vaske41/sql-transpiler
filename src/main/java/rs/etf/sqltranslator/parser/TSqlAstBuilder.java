@@ -20,6 +20,7 @@ import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.DeleteStatement;
 import rs.etf.sqltranslator.ast.DerivedTable;
 import rs.etf.sqltranslator.ast.DropColumn;
+import rs.etf.sqltranslator.ast.DropIndexStatement;
 import rs.etf.sqltranslator.ast.DropTableStatement;
 import rs.etf.sqltranslator.ast.ExistsPredicate;
 import rs.etf.sqltranslator.ast.Expression;
@@ -402,11 +403,107 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitDropIndexStatement(TSqlParser.DropIndexStatementContext ctx) {
+        return new DropIndexStatement(ident(ctx.identifier()), ctx.IF() != null,
+                ctx.qualifiedName() != null ? Optional.of(qname(ctx.qualifiedName())) : Optional.empty(),
+                pos(ctx));
+    }
+
+    @Override
+    public Object visitDropViewOrRoutineStatement(TSqlParser.DropViewOrRoutineStatementContext ctx) {
+        boolean hasSignature = false;
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            if ("(".equals(ctx.getChild(i).getText())) {
+                hasSignature = true;
+                break;
+            }
+        }
+        List<DataType> argTypes = hasSignature
+                ? ctx.dataType().stream().map(this::castType).toList()
+                : List.of();
+        Optional<Identifier> cascade = ctx.identifier().size() > 1
+                ? Optional.of(ident(ctx.identifier(ctx.identifier().size() - 1)))
+                : Optional.empty();
+        return support.dropViewOrRoutine(ident(ctx.identifier(0)), qname(ctx.qualifiedName()),
+                ctx.IF() != null, hasSignature, argTypes, cascade, pos(ctx));
+    }
+
+    @Override
+    public Object visitTruncateStatement(TSqlParser.TruncateStatementContext ctx) {
+        return support.truncate(ident(ctx.identifier()), qname(ctx.qualifiedName()), pos(ctx));
+    }
+
+    @Override
     public Object visitAlterTableStatement(TSqlParser.AlterTableStatementContext ctx) {
-        AlterAction action = ctx.ADD() != null
-                ? new AddColumn((ColumnDefinition) visit(ctx.columnDefinition()), pos(ctx))
-                : new DropColumn(ident(ctx.identifier()), pos(ctx));
-        return new AlterTableStatement(qname(ctx.qualifiedName()), action, pos(ctx));
+        return new AlterTableStatement(qname(ctx.qualifiedName()),
+                (AlterAction) visit(ctx.alterTableAction()), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterAddColumn(TSqlParser.AlterAddColumnContext ctx) {
+        return new AddColumn((ColumnDefinition) visit(ctx.columnDefinition()), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterDropColumn(TSqlParser.AlterDropColumnContext ctx) {
+        return new DropColumn(ident(ctx.identifier()), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterChangeColumnType(TSqlParser.AlterChangeColumnTypeContext ctx) {
+        @SuppressWarnings("unchecked")
+        TypeChange change = (TypeChange) visit(ctx.alterColumnTypeSpec());
+        return support.alterColumnType(ident(ctx.identifier()), change.type(), change.using(), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterModifyColumn(TSqlParser.AlterModifyColumnContext ctx) {
+        support.requireModifyKeyword(ident(ctx.identifier(0)));
+        return support.alterColumnType(ident(ctx.identifier(1)), castType(ctx.dataType()),
+                Optional.empty(), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterTypeKeyword(TSqlParser.AlterTypeKeywordContext ctx) {
+        support.requireTypeKeyword(ident(ctx.identifier()));
+        Optional<Expression> using = Optional.empty();
+        if (ctx.usingClause() != null) {
+            @SuppressWarnings("unchecked")
+            Optional<Expression> u = (Optional<Expression>) visit(ctx.usingClause());
+            using = u;
+        }
+        return new TypeChange(castAlterType(ctx.alterDataType()), using);
+    }
+
+    @Override
+    public Object visitAlterSetDataType(TSqlParser.AlterSetDataTypeContext ctx) {
+        support.requireDataTypeKeywords(ident(ctx.identifier(0)), ident(ctx.identifier(1)));
+        Optional<Expression> using = Optional.empty();
+        if (ctx.usingClause() != null) {
+            @SuppressWarnings("unchecked")
+            Optional<Expression> u = (Optional<Expression>) visit(ctx.usingClause());
+            using = u;
+        }
+        return new TypeChange(castAlterType(ctx.alterDataType()), using);
+    }
+
+    @Override
+    public Object visitAlterBareType(TSqlParser.AlterBareTypeContext ctx) {
+        Optional<Expression> using = Optional.empty();
+        if (ctx.usingClause() != null) {
+            @SuppressWarnings("unchecked")
+            Optional<Expression> u = (Optional<Expression>) visit(ctx.usingClause());
+            using = u;
+        }
+        return new TypeChange(castAlterType(ctx.alterDataType()), using);
+    }
+
+    @Override
+    public Object visitUsingClause(TSqlParser.UsingClauseContext ctx) {
+        return Optional.of(expr(ctx.expression()));
+    }
+
+    private record TypeChange(DataType type, Optional<Expression> using) {
     }
 
     // --- expression ladder ---
@@ -738,6 +835,13 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
                 AstBuilderSupport.arrayDims(ctx));
     }
 
+    private DataType castAlterType(TSqlParser.AlterDataTypeContext ctx) {
+        return AstBuilderSupport.withArrayDims(
+                support.foldCastType(alterTypeWord(ctx), null, alterArgTexts(ctx),
+                        pos(ctx)),
+                AstBuilderSupport.arrayDims(ctx));
+    }
+
     private String typeWord(TSqlParser.DataTypeContext ctx, int index) {
         return support.identifier(ctx.identifier(index).getStart()).value();
     }
@@ -747,6 +851,14 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     }
 
     private List<String> argTexts(TSqlParser.DataTypeContext ctx) {
+        return ctx.dataTypeArg().stream().map(ParserRuleContext::getText).toList();
+    }
+
+    private String alterTypeWord(TSqlParser.AlterDataTypeContext ctx) {
+        return support.identifier(ctx.identifier().getStart()).value();
+    }
+
+    private List<String> alterArgTexts(TSqlParser.AlterDataTypeContext ctx) {
         return ctx.dataTypeArg().stream().map(ParserRuleContext::getText).toList();
     }
 

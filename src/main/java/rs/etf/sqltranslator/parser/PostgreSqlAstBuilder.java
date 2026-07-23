@@ -20,6 +20,7 @@ import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.DeleteStatement;
 import rs.etf.sqltranslator.ast.DerivedTable;
 import rs.etf.sqltranslator.ast.DropColumn;
+import rs.etf.sqltranslator.ast.DropIndexStatement;
 import rs.etf.sqltranslator.ast.DropTableStatement;
 import rs.etf.sqltranslator.ast.ExistsPredicate;
 import rs.etf.sqltranslator.ast.Expression;
@@ -387,11 +388,107 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitDropIndexStatement(PostgreSqlParser.DropIndexStatementContext ctx) {
+        return new DropIndexStatement(ident(ctx.identifier()), ctx.IF() != null,
+                ctx.qualifiedName() != null ? Optional.of(qname(ctx.qualifiedName())) : Optional.empty(),
+                pos(ctx));
+    }
+
+    @Override
+    public Object visitDropViewOrRoutineStatement(PostgreSqlParser.DropViewOrRoutineStatementContext ctx) {
+        boolean hasSignature = false;
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            if ("(".equals(ctx.getChild(i).getText())) {
+                hasSignature = true;
+                break;
+            }
+        }
+        List<DataType> argTypes = hasSignature
+                ? ctx.dataType().stream().map(this::castType).toList()
+                : List.of();
+        Optional<Identifier> cascade = ctx.identifier().size() > 1
+                ? Optional.of(ident(ctx.identifier(ctx.identifier().size() - 1)))
+                : Optional.empty();
+        return support.dropViewOrRoutine(ident(ctx.identifier(0)), qname(ctx.qualifiedName()),
+                ctx.IF() != null, hasSignature, argTypes, cascade, pos(ctx));
+    }
+
+    @Override
+    public Object visitTruncateStatement(PostgreSqlParser.TruncateStatementContext ctx) {
+        return support.truncate(ident(ctx.identifier()), qname(ctx.qualifiedName()), pos(ctx));
+    }
+
+    @Override
     public Object visitAlterTableStatement(PostgreSqlParser.AlterTableStatementContext ctx) {
-        AlterAction action = ctx.ADD() != null
-                ? new AddColumn((ColumnDefinition) visit(ctx.columnDefinition()), pos(ctx))
-                : new DropColumn(ident(ctx.identifier()), pos(ctx));
-        return new AlterTableStatement(qname(ctx.qualifiedName()), action, pos(ctx));
+        return new AlterTableStatement(qname(ctx.qualifiedName()),
+                (AlterAction) visit(ctx.alterTableAction()), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterAddColumn(PostgreSqlParser.AlterAddColumnContext ctx) {
+        return new AddColumn((ColumnDefinition) visit(ctx.columnDefinition()), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterDropColumn(PostgreSqlParser.AlterDropColumnContext ctx) {
+        return new DropColumn(ident(ctx.identifier()), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterChangeColumnType(PostgreSqlParser.AlterChangeColumnTypeContext ctx) {
+        @SuppressWarnings("unchecked")
+        TypeChange change = (TypeChange) visit(ctx.alterColumnTypeSpec());
+        return support.alterColumnType(ident(ctx.identifier()), change.type(), change.using(), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterModifyColumn(PostgreSqlParser.AlterModifyColumnContext ctx) {
+        support.requireModifyKeyword(ident(ctx.identifier(0)));
+        return support.alterColumnType(ident(ctx.identifier(1)), castType(ctx.dataType()),
+                Optional.empty(), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterTypeKeyword(PostgreSqlParser.AlterTypeKeywordContext ctx) {
+        support.requireTypeKeyword(ident(ctx.identifier()));
+        Optional<Expression> using = Optional.empty();
+        if (ctx.usingClause() != null) {
+            @SuppressWarnings("unchecked")
+            Optional<Expression> u = (Optional<Expression>) visit(ctx.usingClause());
+            using = u;
+        }
+        return new TypeChange(castAlterType(ctx.alterDataType()), using);
+    }
+
+    @Override
+    public Object visitAlterSetDataType(PostgreSqlParser.AlterSetDataTypeContext ctx) {
+        support.requireDataTypeKeywords(ident(ctx.identifier(0)), ident(ctx.identifier(1)));
+        Optional<Expression> using = Optional.empty();
+        if (ctx.usingClause() != null) {
+            @SuppressWarnings("unchecked")
+            Optional<Expression> u = (Optional<Expression>) visit(ctx.usingClause());
+            using = u;
+        }
+        return new TypeChange(castAlterType(ctx.alterDataType()), using);
+    }
+
+    @Override
+    public Object visitAlterBareType(PostgreSqlParser.AlterBareTypeContext ctx) {
+        Optional<Expression> using = Optional.empty();
+        if (ctx.usingClause() != null) {
+            @SuppressWarnings("unchecked")
+            Optional<Expression> u = (Optional<Expression>) visit(ctx.usingClause());
+            using = u;
+        }
+        return new TypeChange(castAlterType(ctx.alterDataType()), using);
+    }
+
+    @Override
+    public Object visitUsingClause(PostgreSqlParser.UsingClauseContext ctx) {
+        return Optional.of(expr(ctx.expression()));
+    }
+
+    private record TypeChange(DataType type, Optional<Expression> using) {
     }
 
     // --- expression ladder ---
@@ -707,6 +804,13 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
                 AstBuilderSupport.arrayDims(ctx));
     }
 
+    private DataType castAlterType(PostgreSqlParser.AlterDataTypeContext ctx) {
+        return AstBuilderSupport.withArrayDims(
+                support.foldCastType(alterTypeWord(ctx), null, alterArgTexts(ctx),
+                        pos(ctx)),
+                AstBuilderSupport.arrayDims(ctx));
+    }
+
     private String typeWord(PostgreSqlParser.DataTypeContext ctx, int index) {
         return support.identifier(ctx.identifier(index).getStart()).value();
     }
@@ -716,6 +820,14 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     }
 
     private List<String> argTexts(PostgreSqlParser.DataTypeContext ctx) {
+        return ctx.dataTypeArg().stream().map(ParserRuleContext::getText).toList();
+    }
+
+    private String alterTypeWord(PostgreSqlParser.AlterDataTypeContext ctx) {
+        return support.identifier(ctx.identifier().getStart()).value();
+    }
+
+    private List<String> alterArgTexts(PostgreSqlParser.AlterDataTypeContext ctx) {
         return ctx.dataTypeArg().stream().map(ParserRuleContext::getText).toList();
     }
 

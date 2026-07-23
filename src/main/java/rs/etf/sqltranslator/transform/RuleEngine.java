@@ -28,6 +28,8 @@ public final class RuleEngine {
                 new NormalizeSourceFunctionsRule(),
                 new ReshapeOrderedAggregatesRule(),
                 new RewriteFilteredAggregatesRule(),
+                new ReshapeDropDdlRule(),
+                new DropAlterUsingRule(),
                 new ResolveConcatRule(),
                 new InsertCastsRule(),
                 new RewriteBooleanSemanticsRule(),

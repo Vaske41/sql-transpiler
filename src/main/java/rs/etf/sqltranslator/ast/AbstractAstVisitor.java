@@ -193,6 +193,26 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitDropViewStatement(DropViewStatement node) {
+        return defaultResult();
+    }
+
+    @Override
+    public R visitDropRoutineStatement(DropRoutineStatement node) {
+        return defaultResult();
+    }
+
+    @Override
+    public R visitDropIndexStatement(DropIndexStatement node) {
+        return defaultResult();
+    }
+
+    @Override
+    public R visitTruncateStatement(TruncateStatement node) {
+        return defaultResult();
+    }
+
+    @Override
     public R visitAlterTableStatement(AlterTableStatement node) {
         return defaultResult();
     }
@@ -204,6 +224,11 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitDropColumn(DropColumn node) {
+        return defaultResult();
+    }
+
+    @Override
+    public R visitAlterColumnType(AlterColumnType node) {
         return defaultResult();
     }
 

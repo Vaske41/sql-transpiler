@@ -14,7 +14,10 @@ statement
     | createTableStatement
     | createIndexStatement
     | dropTableStatement
+    | dropIndexStatement
+    | dropViewOrRoutineStatement
     | alterTableStatement
+    | truncateStatement
     ;
 
 // MySQL: INTO is optional.
@@ -73,12 +76,43 @@ columnList : '(' identifier (',' identifier)* ')' ;
 
 dropTableStatement : DROP TABLE (IF EXISTS)? qualifiedName ;
 
-alterTableStatement
-    : ALTER TABLE qualifiedName
-      ( ADD COLUMN? columnDefinition
-      | DROP COLUMN identifier
-      )
+dropIndexStatement
+    : DROP INDEX (IF EXISTS)? identifier (ON qualifiedName)?
     ;
+
+// VIEW / FUNCTION + optional CASCADE are contextual identifiers (keyword-block free).
+dropViewOrRoutineStatement
+    : DROP identifier (IF EXISTS)? qualifiedName
+      ( '(' (dataType (',' dataType)*)? ')' )?
+      identifier?
+    ;
+
+truncateStatement : identifier TABLE? qualifiedName ;
+
+alterTableStatement
+    : ALTER TABLE qualifiedName alterTableAction
+    ;
+
+alterTableAction
+    : ADD COLUMN? columnDefinition                         # alterAddColumn
+    | DROP COLUMN identifier                               # alterDropColumn
+    | ALTER COLUMN identifier alterColumnTypeSpec          # alterChangeColumnType
+    | identifier COLUMN? identifier dataType               # alterModifyColumn
+    ;
+
+alterColumnTypeSpec
+    : identifier alterDataType usingClause?                # alterTypeKeyword
+    | SET identifier identifier alterDataType usingClause? # alterSetDataType
+    | alterDataType usingClause?                           # alterBareType
+    ;
+
+// Single-word (+ args/arrays) only — avoids USING being eaten as a second type word.
+// DOUBLE PRECISION in ALTER COLUMN is out of scope for this task.
+alterDataType
+    : identifier ('(' dataTypeArg (',' dataTypeArg)? ')')? ('[' ']')*
+    ;
+
+usingClause : USING expression ;
 
 selectStatement : queryExpression ;
 

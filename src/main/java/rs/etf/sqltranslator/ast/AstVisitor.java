@@ -60,11 +60,21 @@ public interface AstVisitor<R> {
 
     R visitDropTableStatement(DropTableStatement node);
 
+    R visitDropViewStatement(DropViewStatement node);
+
+    R visitDropRoutineStatement(DropRoutineStatement node);
+
+    R visitDropIndexStatement(DropIndexStatement node);
+
+    R visitTruncateStatement(TruncateStatement node);
+
     R visitAlterTableStatement(AlterTableStatement node);
 
     R visitAddColumn(AddColumn node);
 
     R visitDropColumn(DropColumn node);
+
+    R visitAlterColumnType(AlterColumnType node);
 
     R visitCreateIndexStatement(CreateIndexStatement node);
 

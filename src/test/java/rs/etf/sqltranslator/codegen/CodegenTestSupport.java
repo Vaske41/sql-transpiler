@@ -38,7 +38,11 @@ public final class CodegenTestSupport {
             "interval/mysql-numeric/input.mysql.sql|TSQL",
             "interval/mysql-string-unit/input.mysql.sql|TSQL",
             "interval/interval-compound/input.postgresql.sql|MYSQL",
-            "interval/interval-compound/input.postgresql.sql|TSQL");
+            "interval/interval-compound/input.postgresql.sql|TSQL",
+            "ddl-misc/drop-index-no-table/input.postgresql.sql|MYSQL",
+            "ddl-misc/drop-index-no-table/input.postgresql.sql|TSQL",
+            "ddl-misc/drop-function-args/input.postgresql.sql|MYSQL",
+            "ddl-misc/drop-function-args/input.postgresql.sql|TSQL");
 
     private CodegenTestSupport() {
     }

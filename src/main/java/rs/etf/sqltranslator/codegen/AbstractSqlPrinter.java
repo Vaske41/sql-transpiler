@@ -789,6 +789,61 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     }
 
     @Override
+    public Void visitDropViewStatement(DropViewStatement node) {
+        out.token("DROP VIEW");
+        if (node.ifExists()) {
+            out.token("IF EXISTS");
+        }
+        out.token(dotted(node.name()));
+        if (node.cascade()) {
+            out.token("CASCADE");
+        }
+        return null;
+    }
+
+    @Override
+    public Void visitDropRoutineStatement(DropRoutineStatement node) {
+        out.token("DROP FUNCTION");
+        if (node.ifExists()) {
+            out.token("IF EXISTS");
+        }
+        out.token(dotted(node.name()));
+        if (node.hasSignature()) {
+            out.raw("(");
+            boolean first = true;
+            for (DataType arg : node.argTypes()) {
+                if (!first) {
+                    out.raw(",");
+                }
+                first = false;
+                renderDataType(arg);
+            }
+            out.raw(")");
+        }
+        if (node.cascade()) {
+            out.token("CASCADE");
+        }
+        return null;
+    }
+
+    @Override
+    public Void visitDropIndexStatement(DropIndexStatement node) {
+        out.token("DROP INDEX");
+        if (node.ifExists()) {
+            out.token("IF EXISTS");
+        }
+        out.token(identifier(node.name()));
+        node.table().ifPresent(table -> out.token("ON").token(dotted(table)));
+        return null;
+    }
+
+    @Override
+    public Void visitTruncateStatement(TruncateStatement node) {
+        out.token("TRUNCATE TABLE").token(dotted(node.table()));
+        return null;
+    }
+
+    @Override
     public Void visitAlterTableStatement(AlterTableStatement node) {
         out.token("ALTER TABLE").token(dotted(node.table()));
         node.action().accept(this);
@@ -806,6 +861,22 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     public Void visitDropColumn(DropColumn node) {
         out.token("DROP COLUMN").token(identifier(node.column()));
         return null;
+    }
+
+    @Override
+    public Void visitAlterColumnType(AlterColumnType node) {
+        renderAlterColumnType(node);
+        return null;
+    }
+
+    /** PostgreSQL spelling; MySQL / T-SQL printers override. */
+    protected void renderAlterColumnType(AlterColumnType node) {
+        out.token("ALTER COLUMN").token(identifier(node.column())).token("TYPE");
+        renderDataType(node.type());
+        node.using().ifPresent(expr -> {
+            out.token("USING");
+            expr.accept(this);
+        });
     }
 
     @Override

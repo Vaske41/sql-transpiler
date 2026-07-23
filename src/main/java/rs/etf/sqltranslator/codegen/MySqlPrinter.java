@@ -104,4 +104,14 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
         throw new IllegalStateException(
                 "NULLS ordering must be dropped by DropNullsOrderingRule before printing");
     }
+
+    @Override
+    protected void renderAlterColumnType(rs.etf.sqltranslator.ast.AlterColumnType node) {
+        out.token("MODIFY COLUMN").token(identifier(node.column()));
+        renderDataType(node.type());
+        if (node.using().isPresent()) {
+            throw new IllegalStateException(
+                    "rule engine contract: USING must be dropped before MySQL print");
+        }
+    }
 }

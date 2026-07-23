@@ -240,6 +240,38 @@ public final class AstDumper implements AstVisitor<String> {
     }
 
     @Override
+    public String visitDropViewStatement(DropViewStatement node) {
+        return node("DropViewStatement ifExists=" + node.ifExists() + " cascade=" + node.cascade())
+                .child("name", node.name())
+                .done();
+    }
+
+    @Override
+    public String visitDropRoutineStatement(DropRoutineStatement node) {
+        return node("DropRoutineStatement ifExists=" + node.ifExists()
+                        + " cascade=" + node.cascade()
+                        + " hasSignature=" + node.hasSignature())
+                .child("name", node.name())
+                .children("argTypes", node.argTypes())
+                .done();
+    }
+
+    @Override
+    public String visitDropIndexStatement(DropIndexStatement node) {
+        return node("DropIndexStatement ifExists=" + node.ifExists())
+                .child("name", node.name())
+                .child("table", node.table())
+                .done();
+    }
+
+    @Override
+    public String visitTruncateStatement(TruncateStatement node) {
+        return node("TruncateStatement")
+                .child("table", node.table())
+                .done();
+    }
+
+    @Override
     public String visitAlterTableStatement(AlterTableStatement node) {
         return node("AlterTableStatement")
                 .child("table", node.table())
@@ -255,6 +287,15 @@ public final class AstDumper implements AstVisitor<String> {
     @Override
     public String visitDropColumn(DropColumn node) {
         return node("DropColumn").child("column", node.column()).done();
+    }
+
+    @Override
+    public String visitAlterColumnType(AlterColumnType node) {
+        return node("AlterColumnType")
+                .child("column", node.column())
+                .child("type", node.type())
+                .child("using", node.using())
+                .done();
     }
 
     @Override
