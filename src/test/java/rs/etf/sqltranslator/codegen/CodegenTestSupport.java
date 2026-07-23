@@ -31,7 +31,9 @@ public final class CodegenTestSupport {
             "aggregates-ordered/array-agg-ordered/input.postgresql.sql|TSQL",
             "aggregates-ordered/group-concat-ordered/input.mysql.sql|TSQL",
             "casts/pg-array-cast/input.postgresql.sql|MYSQL",
-            "casts/pg-array-cast/input.postgresql.sql|TSQL");
+            "casts/pg-array-cast/input.postgresql.sql|TSQL",
+            "json-access/json-containment/input.postgresql.sql|MYSQL",
+            "json-access/json-containment/input.postgresql.sql|TSQL");
 
     private CodegenTestSupport() {
     }

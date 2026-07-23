@@ -1,5 +1,7 @@
 package rs.etf.sqltranslator.codegen;
 
+import rs.etf.sqltranslator.ast.BinaryOp;
+import rs.etf.sqltranslator.ast.BinaryOperator;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.NullsOrder;
 import rs.etf.sqltranslator.ast.StringLiteral;
@@ -28,6 +30,18 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
     protected String concatOperator() {
         throw new IllegalStateException(
                 "rule engine contract: CONCAT operator is lowered to CONCAT() for MySQL");
+    }
+
+    @Override
+    public Void visitBinaryOp(BinaryOp node) {
+        BinaryOperator op = node.op();
+        if (op == BinaryOperator.JSON_PATH
+                || op == BinaryOperator.JSON_PATH_TEXT
+                || op == BinaryOperator.JSON_CONTAINS) {
+            throw new IllegalStateException(
+                    "rule engine contract: PG-only JSON ops must be rewritten/refused before MySQL print");
+        }
+        return super.visitBinaryOp(node);
     }
 
     @Override

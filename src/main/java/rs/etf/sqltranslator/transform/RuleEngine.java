@@ -32,6 +32,7 @@ public final class RuleEngine {
                 new InsertCastsRule(),
                 new RewriteBooleanSemanticsRule(),
                 new NarrowTypesRule(),
+                new RenderJsonRule(),
                 new RenderTargetFunctionsRule(),
                 new PreserveNullsOrderingRule(),
                 new DropNullsOrderingRule()));

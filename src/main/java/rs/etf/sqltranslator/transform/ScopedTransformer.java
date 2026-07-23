@@ -194,8 +194,8 @@ public abstract class ScopedTransformer extends rs.etf.sqltranslator.ast.AstTran
         if (expr instanceof rs.etf.sqltranslator.ast.BinaryOp op) {
             return Optional.of(switch (op.op()) {
                 case ADD, SUB, MUL, DIV, MOD -> TypeFamily.NUMERIC;
-                case CONCAT -> TypeFamily.STRING;
-                case OR, AND, EQ, NEQ, LT, LTE, GT, GTE -> TypeFamily.BOOLEAN;
+                case CONCAT, JSON_GET, JSON_GET_TEXT, JSON_PATH, JSON_PATH_TEXT -> TypeFamily.STRING;
+                case OR, AND, EQ, NEQ, LT, LTE, GT, GTE, JSON_CONTAINS -> TypeFamily.BOOLEAN;
             });
         }
         if (expr instanceof rs.etf.sqltranslator.ast.UnaryOp op) {

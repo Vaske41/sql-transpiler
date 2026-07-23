@@ -420,6 +420,11 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitJsonExpression(PostgreSqlParser.JsonExpressionContext ctx) {
+        return support.foldBinaryChain(ctx, this);
+    }
+
+    @Override
     public Object visitAdditiveExpression(PostgreSqlParser.AdditiveExpressionContext ctx) {
         return support.foldBinaryChain(ctx, this);
     }

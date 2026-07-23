@@ -122,6 +122,8 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
                 case CONCAT -> concatPrecedence();
                 case ADD, SUB -> 6;
                 case MUL, DIV, MOD -> 7;
+                // JSON access: tighter than ||, same band as additive for paren decisions.
+                case JSON_GET, JSON_GET_TEXT, JSON_PATH, JSON_PATH_TEXT, JSON_CONTAINS -> 6;
             };
         }
         if (e instanceof UnaryOp op) {
@@ -169,6 +171,11 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             case ADD -> "+"; case SUB -> "-"; case MUL -> "*"; case DIV -> "/";
             case MOD -> "%";
             case CONCAT -> concatOperator();
+            case JSON_GET -> "->";
+            case JSON_GET_TEXT -> "->>";
+            case JSON_PATH -> "#>";
+            case JSON_PATH_TEXT -> "#>>";
+            case JSON_CONTAINS -> "@>";
         };
     }
 

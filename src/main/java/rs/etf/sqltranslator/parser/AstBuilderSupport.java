@@ -308,6 +308,11 @@ final class AstBuilderSupport {
             case "%" -> BinaryOperator.MOD;
             // MySQL under default sql_mode: logical OR; PostgreSQL: string concat.
             case "||" -> dialect == Dialect.MYSQL ? BinaryOperator.OR : BinaryOperator.CONCAT;
+            case "->" -> BinaryOperator.JSON_GET;
+            case "->>" -> BinaryOperator.JSON_GET_TEXT;
+            case "#>" -> BinaryOperator.JSON_PATH;
+            case "#>>" -> BinaryOperator.JSON_PATH_TEXT;
+            case "@>" -> BinaryOperator.JSON_CONTAINS;
             default -> throw new IllegalStateException("Unmapped binary operator: " + text);
         };
     }

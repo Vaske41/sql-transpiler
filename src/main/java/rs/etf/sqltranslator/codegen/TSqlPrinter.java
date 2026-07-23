@@ -1,5 +1,7 @@
 package rs.etf.sqltranslator.codegen;
 
+import rs.etf.sqltranslator.ast.BinaryOp;
+import rs.etf.sqltranslator.ast.BinaryOperator;
 import rs.etf.sqltranslator.ast.BooleanLiteral;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.FunctionCall;
@@ -42,6 +44,20 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
     public Void visitBooleanLiteral(BooleanLiteral node) {
         throw new IllegalStateException(
                 "rule engine contract: boolean literals are rewritten to 1/0 for T-SQL");
+    }
+
+    @Override
+    public Void visitBinaryOp(BinaryOp node) {
+        BinaryOperator op = node.op();
+        if (op == BinaryOperator.JSON_GET
+                || op == BinaryOperator.JSON_GET_TEXT
+                || op == BinaryOperator.JSON_PATH
+                || op == BinaryOperator.JSON_PATH_TEXT
+                || op == BinaryOperator.JSON_CONTAINS) {
+            throw new IllegalStateException(
+                    "rule engine contract: JSON operators must be rewritten before T-SQL print");
+        }
+        return super.visitBinaryOp(node);
     }
 
     @Override

@@ -168,7 +168,13 @@ predicate
 
 comparisonOperator : '=' | '<>' | '!=' | '<' | '<=' | '>' | '>=' ;
 
-concatExpression : additiveExpression ;
+// JSON access binds tighter than concat, looser than arithmetic (canonical ladder).
+concatExpression : jsonExpression ;
+
+jsonExpression
+    : additiveExpression
+      ( (ARROW | ARROW2 | HASH_ARROW | HASH_ARROW2 | AT_GT) additiveExpression )*
+    ;
 
 additiveExpression : multiplicativeExpression (('+' | '-') multiplicativeExpression)* ;
 
@@ -302,6 +308,13 @@ USING:U S I N G; VALUES:V A L U E S; WHEN:W H E N; WHERE:W H E R E; WITH:W I T H
 // =====================================================================
 
 PIPES : '||' ;
+
+// Longer arrow forms first so ->> / #>> win over -> / #>.
+ARROW2 : '->>' ;
+ARROW : '->' ;
+HASH_ARROW2 : '#>>' ;
+HASH_ARROW : '#>' ;
+AT_GT : '@>' ;
 
 INTEGER_LITERAL : [0-9]+ ;
 

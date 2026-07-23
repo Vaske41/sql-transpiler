@@ -434,6 +434,11 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitJsonExpression(TSqlParser.JsonExpressionContext ctx) {
+        return support.foldBinaryChain(ctx, this);
+    }
+
+    @Override
     public Object visitAdditiveExpression(TSqlParser.AdditiveExpressionContext ctx) {
         return support.foldBinaryChain(ctx, this);
     }
