@@ -150,7 +150,10 @@ grows before the day-14 milestones are green.
 ### CTE policy (Wave 1)
 
 Non-recursive `WITH` is supported end-to-end (parse → AST → rules → print). Nested
-`WITH` inside a CTE body is supported via recursive `Query.ctes`.
+`WITH` inside a CTE body is supported via recursive `Query.ctes` for MySQL and
+PostgreSQL. When the **target is T-SQL**, nested CTE lists are **flattened** into
+a single top-level `WITH` list (`FlattenNestedCtesForTsqlRule`) — SQL Server does
+not allow a nested `WITH` inside a CTE body.
 
 **Refused** (parse OK, build throws `UnsupportedFeatureException` `"recursive CTE"`):
 
@@ -159,7 +162,8 @@ Non-recursive `WITH` is supported end-to-end (parse → AST → rules → print)
   recursion that omits the `RECURSIVE` keyword)
 
 CTE names are visible to `ScopedTransformer.relationScope` as empty-schema
-relations (catalog lookup first, then CTE map). Column types are never invented.
+relations and **shadow** catalog base tables of the same name (CTE map before
+catalog). Column types are never invented.
 
 ### Window function policy (Wave 1)
 

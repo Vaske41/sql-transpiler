@@ -42,8 +42,8 @@ import java.util.Optional;
  * references to enclosing FROM columns systematically return empty.
  *
  * <p>CTE names are tracked in a separate {@code cteFrames} stack consulted from
- * {@link #relationScope(Relation)} after catalog lookup misses — never buried
- * under the FROM frame.
+ * {@link #relationScope(Relation)} <em>before</em> catalog lookup (SQL shadowing)
+ * — never buried under the FROM frame.
  *
  * <p>Subclasses override the {@code afterX} hooks (called with scope still pushed)
  * instead of the corresponding {@code visitX} methods, which are final here.
@@ -242,10 +242,7 @@ public abstract class ScopedTransformer extends rs.etf.sqltranslator.ast.AstTran
 
     private List<ScopedTable> relationScope(Relation relation) {
         if (relation instanceof TableRef ref) {
-            List<ScopedTable> catalogHit = tableScope(ref);
-            if (!catalogHit.isEmpty()) {
-                return catalogHit;
-            }
+            // SQL shadowing: active CTE names win over catalog base tables.
             String key = ref.alias().map(Identifier::value)
                     .orElse(ref.table().last().value())
                     .toLowerCase(Locale.ROOT);
@@ -255,7 +252,7 @@ public abstract class ScopedTransformer extends rs.etf.sqltranslator.ast.AstTran
             if (cte != null) {
                 return List.of(new ScopedTable(key, cte));
             }
-            return List.of();
+            return tableScope(ref);
         }
         if (relation instanceof DerivedTable derived) {
             String key = derived.alias().value().toLowerCase(Locale.ROOT);

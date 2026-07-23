@@ -24,6 +24,7 @@ public final class RuleEngine {
     public static RuleEngine standard() {
         return new RuleEngine(List.of(
                 new ValidateTargetCapabilitiesRule(),
+                new FlattenNestedCtesForTsqlRule(),
                 new NormalizeSourceFunctionsRule(),
                 new ResolveConcatRule(),
                 new InsertCastsRule(),
