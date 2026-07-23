@@ -98,6 +98,44 @@ class ScopedTransformerTest {
     }
 
     @Test
+    void cteNamesVisibleInRelationScopeForMainQuery() {
+        class CteProbe extends ScopedTransformer {
+            boolean sawCte;
+
+            CteProbe(TranslationContext c) {
+                super(c);
+            }
+
+            @Override
+            protected Object afterQuerySpecification(
+                    rs.etf.sqltranslator.ast.QuerySpecification rebuilt) {
+                if (rebuilt.from().isPresent()) {
+                    sawCte = cteSchemas().containsKey("c");
+                }
+                return rebuilt;
+            }
+        }
+        Script script = AstBuilderFacade.buildScript(
+                "WITH c AS (SELECT 1 AS x) SELECT c.x FROM c;", Dialect.POSTGRESQL);
+        TranslationContext ctx = new TranslationContext(Dialect.POSTGRESQL, Dialect.MYSQL,
+                CatalogBuilder.build(script), new TranslationReport());
+        CteProbe probe = new CteProbe(ctx);
+        probe.transform(script);
+        assertThat(probe.sawCte).isTrue();
+    }
+
+    @Test
+    void cteNameShadowsCatalogTable() {
+        // Catalog has table `c` with VARCHAR name; CTE `c` has empty schema.
+        // SQL shadowing: CTE must win → name stays unresolved (no invented types).
+        Probe p = probe(
+                "CREATE TABLE c (id INT, name VARCHAR(50));"
+                        + "WITH c AS (SELECT 1 AS x) SELECT c.name FROM c;",
+                Dialect.MYSQL);
+        assertThat(p.resolved).contains("name->UNRESOLVED");
+    }
+
+    @Test
     void familyOfDoesNotInferThroughCoalesce() {
         Script script = AstBuilderFacade.buildScript(
                 DDL + "SELECT COALESCE(name, 'x') FROM products;", Dialect.MYSQL);

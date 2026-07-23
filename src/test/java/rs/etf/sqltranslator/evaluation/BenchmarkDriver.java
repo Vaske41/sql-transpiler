@@ -113,6 +113,22 @@ final class BenchmarkDriver {
     static BenchmarkDriver parrotDiverseOffline(
             Path jar, Path csvOut, Path casesRoot, boolean includeSqlGlot, int caseLimit)
             throws Exception {
+        return parrotDiverseOffline(
+                jar, csvOut, casesRoot, includeSqlGlot, caseLimit, LOCAL_LATENCY_RUNS);
+    }
+
+    /**
+     * @param localLatencyRuns use {@code 1} for bulk outcome sweeps ({@code EVAL_FAST=1});
+     *     {@link #LOCAL_LATENCY_RUNS} for thesis latency medians
+     */
+    static BenchmarkDriver parrotDiverseOffline(
+            Path jar,
+            Path csvOut,
+            Path casesRoot,
+            boolean includeSqlGlot,
+            int caseLimit,
+            int localLatencyRuns)
+            throws Exception {
         Objects.requireNonNull(casesRoot, "casesRoot");
         List<TranslatorAdapter> adapters = new ArrayList<>();
         adapters.add(new SqlTranslateJarAdapter(jar));
@@ -121,7 +137,7 @@ final class BenchmarkDriver {
         }
         adapters.addAll(fixtureLlmAdapters());
         return new BenchmarkDriver(
-                adapters, csvOut, List.of(), true, LOCAL_LATENCY_RUNS, caseLimit, casesRoot);
+                adapters, csvOut, List.of(), true, localLatencyRuns, caseLimit, casesRoot);
     }
 
     /**
@@ -329,6 +345,9 @@ final class BenchmarkDriver {
         }
 
         OutcomeKind scored = OutcomeScorer.score(system, caseDir, last);
+        if (last.outcome() == OutcomeKind.PARSE || last.outcome() == OutcomeKind.REFUSED) {
+            notes = appendStderr(notes, last.stderr());
+        }
         return new ScoreRow(
                 system.name().toLowerCase(Locale.ROOT),
                 display,
@@ -341,6 +360,19 @@ final class BenchmarkDriver {
                 determinism,
                 String.valueOf(latencyMedian),
                 notes);
+    }
+
+    static String appendStderr(String notes, String stderr) {
+        if (stderr == null || stderr.isBlank()) {
+            return notes == null ? "" : notes;
+        }
+        String oneLine = stderr.replace('\r', ' ').replace('\n', ' ').trim();
+        if (oneLine.length() > 240) {
+            oneLine = oneLine.substring(0, 240);
+        }
+        String base = notes == null || notes.isBlank() ? "" : notes;
+        String fragment = "stderr=" + oneLine;
+        return base.isEmpty() ? fragment : base + ";" + fragment;
     }
 
     static boolean isEvalInput(Path path) {

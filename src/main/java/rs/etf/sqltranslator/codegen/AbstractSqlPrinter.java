@@ -279,7 +279,39 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             csv(node.args());
         }
         out.raw(")");
+        node.window().ifPresent(w -> {
+            out.token("OVER").raw("(");
+            w.accept(this);
+            out.raw(")");
+        });
         return null;
+    }
+
+    @Override
+    public Void visitWindowSpec(WindowSpec node) {
+        if (!node.partitionBy().isEmpty()) {
+            out.token("PARTITION").token("BY");
+            csv(node.partitionBy());
+        }
+        if (!node.orderBy().isEmpty()) {
+            out.token("ORDER").token("BY");
+            csv(node.orderBy());
+        }
+        if (node.frame().isPresent()) {
+            throw new IllegalStateException(
+                    "window frames must be refused before print");
+        }
+        return null;
+    }
+
+    @Override
+    public Void visitWindowFrame(WindowFrame node) {
+        throw new IllegalStateException("window frames must be refused before print");
+    }
+
+    @Override
+    public Void visitFrameBound(FrameBound node) {
+        throw new IllegalStateException("window frames must be refused before print");
     }
 
     @Override
@@ -387,6 +419,17 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
 
     @Override
     public Void visitQuery(Query node) {
+        if (!node.ctes().isEmpty()) {
+            out.token("WITH");
+            boolean first = true;
+            for (Cte cte : node.ctes()) {
+                if (!first) {
+                    out.raw(",");
+                }
+                first = false;
+                cte.accept(this);
+            }
+        }
         renderSpec(node.first(), node);
         for (UnionArm arm : node.unionArms()) {
             arm.accept(this);
@@ -396,6 +439,19 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             csv(node.orderBy());
         }
         renderRowLimit(node);
+        return null;
+    }
+
+    @Override
+    public Void visitCte(Cte node) {
+        out.token(identifier(node.name()));
+        node.columns().ifPresent(cols -> {
+            out.raw("(");
+            csv(cols);
+            out.raw(")");
+        });
+        out.token("AS");
+        subquery(node.query());
         return null;
     }
 
@@ -506,6 +562,18 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     public Void visitTableRef(TableRef node) {
         out.token(dotted(node.table()));
         node.alias().ifPresent(alias -> out.token("AS").token(identifier(alias)));
+        return null;
+    }
+
+    @Override
+    public Void visitDerivedTable(DerivedTable node) {
+        subquery(node.query());
+        out.token("AS").token(identifier(node.alias()));
+        node.columnAliases().ifPresent(cols -> {
+            out.raw("(");
+            csv(cols);
+            out.raw(")");
+        });
         return null;
     }
 

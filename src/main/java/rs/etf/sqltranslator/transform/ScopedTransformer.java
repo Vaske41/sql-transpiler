@@ -5,13 +5,18 @@ import rs.etf.sqltranslator.analysis.TableSchema;
 import rs.etf.sqltranslator.ast.BooleanLiteral;
 import rs.etf.sqltranslator.ast.CastExpression;
 import rs.etf.sqltranslator.ast.ColumnRef;
+import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.DeleteStatement;
+import rs.etf.sqltranslator.ast.DerivedTable;
 import rs.etf.sqltranslator.ast.Expression;
+import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.InsertStatement;
 import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.NumericLiteral;
 import rs.etf.sqltranslator.ast.QualifiedName;
+import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.QuerySpecification;
+import rs.etf.sqltranslator.ast.Relation;
 import rs.etf.sqltranslator.ast.StringLiteral;
 import rs.etf.sqltranslator.ast.TableRef;
 import rs.etf.sqltranslator.ast.TableSource;
@@ -20,8 +25,10 @@ import rs.etf.sqltranslator.ast.UpdateStatement;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -34,9 +41,14 @@ import java.util.Optional;
  * outer-scope correlation through expression-position subqueries. Correlated
  * references to enclosing FROM columns systematically return empty.
  *
+ * <p>CTE names are tracked in a separate {@code cteFrames} stack consulted from
+ * {@link #relationScope(Relation)} <em>before</em> catalog lookup (SQL shadowing)
+ * — never buried under the FROM frame.
+ *
  * <p>Subclasses override the {@code afterX} hooks (called with scope still pushed)
  * instead of the corresponding {@code visitX} methods, which are final here.
- */public abstract class ScopedTransformer extends rs.etf.sqltranslator.ast.AstTransformer {
+ */
+public abstract class ScopedTransformer extends rs.etf.sqltranslator.ast.AstTransformer {
 
     /** One table visible in the current scope, under its alias or its own name. */
     private record ScopedTable(String key, TableSchema schema) {
@@ -44,12 +56,41 @@ import java.util.Optional;
 
     protected final TranslationContext ctx;
     private final Deque<List<ScopedTable>> scopes = new ArrayDeque<>();
+    private final Deque<Map<String, TableSchema>> cteFrames = new ArrayDeque<>();
 
     protected ScopedTransformer(TranslationContext ctx) {
         this.ctx = ctx;
     }
 
     // --- scope lifecycle (final: subclasses use the afterX hooks) ---
+
+    @Override
+    public final Object visitQuery(Query node) {
+        boolean pushed = !node.ctes().isEmpty();
+        if (pushed) {
+            pushCteFrame();
+        }
+        try {
+            List<Cte> rebuiltCtes = new ArrayList<>(node.ctes().size());
+            for (Cte cte : node.ctes()) {
+                Cte rebuilt = (Cte) cte.accept(this);
+                rebuiltCtes.add(rebuilt);
+                String name = rebuilt.name().value().toLowerCase(Locale.ROOT);
+                cteSchemas().put(name, emptySchema(rebuilt.name()));
+            }
+            return new Query(
+                    rebuiltCtes,
+                    rebuild(node.first()),
+                    rebuildList(node.unionArms()),
+                    rebuildList(node.orderBy()),
+                    rebuildOptional(node.limit()),
+                    node.pos());
+        } finally {
+            if (pushed) {
+                popCteFrame();
+            }
+        }
+    }
 
     @Override
     public final Object visitQuerySpecification(QuerySpecification node) {
@@ -166,14 +207,61 @@ import java.util.Optional;
         return Optional.empty();
     }
 
+    // --- CTE frames ---
+
+    private void pushCteFrame() {
+        Map<String, TableSchema> parent = cteFrames.isEmpty() ? Map.of() : cteFrames.peek();
+        cteFrames.push(new HashMap<>(parent));
+    }
+
+    private void popCteFrame() {
+        cteFrames.pop();
+    }
+
+    /** Top CTE map (mutable), or empty when no frame is pushed. */
+    protected final Map<String, TableSchema> cteSchemas() {
+        return cteFrames.isEmpty() ? Map.of() : cteFrames.peek();
+    }
+
+    private static TableSchema emptySchema(Identifier name) {
+        QualifiedName qn = new QualifiedName(
+                List.of(new Identifier(name.value(), false, name.pos())),
+                name.pos());
+        return new TableSchema(qn, List.of());
+    }
+
     // --- scope construction ---
 
     private List<ScopedTable> tablesOf(TableSource from) {
-        List<ScopedTable> tables = new ArrayList<>(tableScope(from.first()));
+        List<ScopedTable> tables = new ArrayList<>(relationScope(from.first()));
         for (Join join : from.joins()) {
-            tables.addAll(tableScope(join.table()));
+            tables.addAll(relationScope(join.table()));
         }
         return tables;
+    }
+
+    private List<ScopedTable> relationScope(Relation relation) {
+        if (relation instanceof TableRef ref) {
+            // SQL shadowing: active CTE names win over catalog base tables.
+            String key = ref.alias().map(Identifier::value)
+                    .orElse(ref.table().last().value())
+                    .toLowerCase(Locale.ROOT);
+            String cteKey = ref.table().last().value().toLowerCase(Locale.ROOT);
+            Map<String, TableSchema> ctes = cteSchemas();
+            TableSchema cte = ctes.get(cteKey);
+            if (cte != null) {
+                return List.of(new ScopedTable(key, cte));
+            }
+            return tableScope(ref);
+        }
+        if (relation instanceof DerivedTable derived) {
+            String key = derived.alias().value().toLowerCase(Locale.ROOT);
+            QualifiedName qn = new QualifiedName(
+                    List.of(new Identifier(derived.alias().value(), false, derived.alias().pos())),
+                    derived.alias().pos());
+            return List.of(new ScopedTable(key, new TableSchema(qn, List.of())));
+        }
+        throw new IllegalStateException("unknown Relation: " + relation.getClass());
     }
 
     private List<ScopedTable> tableScope(TableRef ref) {

@@ -78,7 +78,7 @@ public final class RenderTargetFunctionsRule implements Rule {
                 String renamed = TSQL_RENAMES.getOrDefault(name, name);
                 if (!renamed.equals(name)) {
                     return new FunctionCall(renamed, call.args(), false,
-                            call.quantifier(), call.pos());
+                            call.quantifier(), call.window(), call.pos());
                 }
                 return call;
             }
@@ -88,7 +88,7 @@ public final class RenderTargetFunctionsRule implements Rule {
                         new StringLiteral(name.toLowerCase(Locale.ROOT), false, call.pos()),
                         call.args().get(0));
                 return new FunctionCall("DATE_PART", args, false,
-                        call.quantifier(), call.pos());
+                        call.quantifier(), call.window(), call.pos());
             }
             return call;             // MySQL: every canonical spelling is native
         }
@@ -97,8 +97,9 @@ public final class RenderTargetFunctionsRule implements Rule {
         private static FunctionCall substringAdapter(FunctionCall call) {
             List<Expression> args = new ArrayList<>(call.args());
             args.add(new FunctionCall("LEN", List.of(call.args().get(0)), false,
-                    Optional.empty(), call.pos()));
-            return new FunctionCall("SUBSTRING", args, false, call.quantifier(), call.pos());
+                    Optional.empty(), Optional.empty(), call.pos()));
+            return new FunctionCall("SUBSTRING", args, false, call.quantifier(),
+                    call.window(), call.pos());
         }
 
         @Override
@@ -112,7 +113,8 @@ public final class RenderTargetFunctionsRule implements Rule {
                 List<Expression> args = new ArrayList<>();
                 flatten(op.left(), args);
                 flatten(op.right(), args);
-                return new FunctionCall("CONCAT", args, false, Optional.empty(), op.pos());
+                return new FunctionCall("CONCAT", args, false, Optional.empty(),
+                        Optional.empty(), op.pos());
             }
             if (ctx.target() == Dialect.TSQL) {
                 return new BinaryOp(BinaryOperator.CONCAT,

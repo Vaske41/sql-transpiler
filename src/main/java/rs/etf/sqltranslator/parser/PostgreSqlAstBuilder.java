@@ -15,14 +15,19 @@ import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.ColumnRef;
 import rs.etf.sqltranslator.ast.CreateIndexStatement;
 import rs.etf.sqltranslator.ast.CreateTableStatement;
+import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.DeleteStatement;
+import rs.etf.sqltranslator.ast.DerivedTable;
 import rs.etf.sqltranslator.ast.DropColumn;
 import rs.etf.sqltranslator.ast.DropTableStatement;
 import rs.etf.sqltranslator.ast.ExistsPredicate;
 import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.ForeignKeyConstraint;
 import rs.etf.sqltranslator.ast.ForeignKeyRef;
+import rs.etf.sqltranslator.ast.FrameBound;
+import rs.etf.sqltranslator.ast.FrameBoundKind;
+import rs.etf.sqltranslator.ast.FrameMode;
 import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.InListPredicate;
@@ -40,6 +45,7 @@ import rs.etf.sqltranslator.ast.PrimaryKeyConstraint;
 import rs.etf.sqltranslator.ast.QualifiedName;
 import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.QuerySpecification;
+import rs.etf.sqltranslator.ast.Relation;
 import rs.etf.sqltranslator.ast.RowLimit;
 import rs.etf.sqltranslator.ast.Script;
 import rs.etf.sqltranslator.ast.SelectExpr;
@@ -58,6 +64,8 @@ import rs.etf.sqltranslator.ast.UnaryOperator;
 import rs.etf.sqltranslator.ast.UnionArm;
 import rs.etf.sqltranslator.ast.UniqueConstraint;
 import rs.etf.sqltranslator.ast.UpdateStatement;
+import rs.etf.sqltranslator.ast.WindowFrame;
+import rs.etf.sqltranslator.ast.WindowSpec;
 import rs.etf.sqltranslator.core.Dialect;
 import rs.etf.sqltranslator.core.SourcePosition;
 import rs.etf.sqltranslator.grammar.PostgreSqlBaseVisitor;
@@ -94,6 +102,15 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
 
     @Override
     public Object visitQueryExpression(PostgreSqlParser.QueryExpressionContext ctx) {
+        List<Cte> ctes = List.of();
+        if (ctx.withClause() != null) {
+            var w = ctx.withClause();
+            support.refuseIfRecursiveKeyword(w, w.RECURSIVE() != null);
+            ctes = w.commonTableExpression().stream().map(c -> (Cte) visit(c)).toList();
+            for (Cte cte : ctes) {
+                support.refuseIfCteSelfReference(cte);
+            }
+        }
         QuerySpecification first = (QuerySpecification) visit(ctx.querySpecification(0));
         List<UnionArm> arms = support.unionArms(ctx, PostgreSqlParser.UNION, PostgreSqlParser.ALL,
                 this);
@@ -101,18 +118,32 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
                 ? List.of()
                 : ctx.orderByClause().orderItem().stream()
                         .map(i -> (OrderItem) visit(i)).toList();
-        return new Query(first, arms, orderBy, rowLimit(ctx.rowLimitClause()), pos(ctx));
+        return new Query(ctes, first, arms, orderBy, rowLimit(ctx.rowLimitClause()), pos(ctx));
     }
 
-    /** PostgreSQL: LIMIT and OFFSET in either order. */
+    @Override
+    public Object visitCommonTableExpression(PostgreSqlParser.CommonTableExpressionContext ctx) {
+        Identifier name = ident(ctx.identifier(0));
+        Optional<List<Identifier>> cols = Optional.empty();
+        if (ctx.identifier().size() > 1) {
+            cols = Optional.of(ctx.identifier().stream().skip(1).map(this::ident).toList());
+        }
+        Query query = (Query) visit(ctx.queryExpression());
+        return new Cte(name, cols, query, pos(ctx));
+    }
+
+    /** PostgreSQL: LIMIT/OFFSET either order, plus OFFSET/FETCH and bare FETCH. */
     private Optional<RowLimit> rowLimit(PostgreSqlParser.RowLimitClauseContext ctx) {
         if (ctx == null) {
             return Optional.empty();
         }
         Expression first = expr(ctx.expression(0));
         Expression second = ctx.expression().size() > 1 ? expr(ctx.expression(1)) : null;
-        boolean limitFirst = ctx.getStart().getType() == PostgreSqlParser.LIMIT;
-        return Optional.of(support.pgRowLimit(first, second, limitFirst, pos(ctx)));
+        int start = ctx.getStart().getType();
+        // LIMIT n [OFFSET m] and FETCH FIRST/NEXT n fold count-first.
+        // OFFSET … (LIMIT | FETCH) folds offset-first.
+        boolean countFirst = start == PostgreSqlParser.LIMIT || start == PostgreSqlParser.FETCH;
+        return Optional.of(support.pgRowLimit(first, second, countFirst, pos(ctx)));
     }
 
     @Override
@@ -159,19 +190,30 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     @Override
     public Object visitTableSource(PostgreSqlParser.TableSourceContext ctx) {
         List<Join> joins = ctx.joinedTable().stream().map(j -> (Join) visit(j)).toList();
-        return new TableSource((TableRef) visit(ctx.tablePrimary()), joins, pos(ctx));
+        return new TableSource((Relation) visit(ctx.tablePrimary()), joins, pos(ctx));
     }
 
     @Override
-    public Object visitTablePrimary(PostgreSqlParser.TablePrimaryContext ctx) {
+    public Object visitNamedTablePrimary(PostgreSqlParser.NamedTablePrimaryContext ctx) {
         Optional<Identifier> alias = ctx.identifier() == null
                 ? Optional.empty() : Optional.of(ident(ctx.identifier()));
         return new TableRef(qname(ctx.qualifiedName()), alias, pos(ctx));
     }
 
     @Override
+    public Object visitDerivedTablePrimary(PostgreSqlParser.DerivedTablePrimaryContext ctx) {
+        Query query = (Query) visit(ctx.queryExpression());
+        Identifier alias = ident(ctx.identifier(0));
+        Optional<List<Identifier>> cols = Optional.empty();
+        if (ctx.identifier().size() > 1) {
+            cols = Optional.of(ctx.identifier().stream().skip(1).map(this::ident).toList());
+        }
+        return new DerivedTable(query, alias, cols, pos(ctx));
+    }
+
+    @Override
     public Object visitJoinedTable(PostgreSqlParser.JoinedTableContext ctx) {
-        TableRef table = (TableRef) visit(ctx.tablePrimary());
+        Relation table = (Relation) visit(ctx.tablePrimary());
         if (ctx.CROSS() != null) {
             return new Join(JoinKind.CROSS, table, Optional.empty(), pos(ctx));
         }
@@ -450,8 +492,44 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     // --- primary expressions ---
 
     @Override
-    public Object visitLiteralExpr(PostgreSqlParser.LiteralExprContext ctx) {
-        return visit(ctx.literal());
+    public Object visitPgColonCastChain(PostgreSqlParser.PgColonCastChainContext ctx) {
+        Expression value = (Expression) visit(ctx.primaryBase());
+        for (PostgreSqlParser.DataTypeContext typeCtx : ctx.dataType()) {
+            value = new CastExpression(value, castType(typeCtx), pos(ctx));
+        }
+        return value;
+    }
+
+    @Override
+    public Object visitPrimaryBase(PostgreSqlParser.PrimaryBaseContext ctx) {
+        if (ctx.literal() != null) {
+            return visit(ctx.literal());
+        }
+        if (ctx.caseExpression() != null) {
+            return visit(ctx.caseExpression());
+        }
+        if (ctx.CAST() != null) {
+            return new CastExpression(expr(ctx.expression()), castType(ctx.dataType()), pos(ctx));
+        }
+        if (ctx.functionCall() != null) {
+            FunctionCall call = (FunctionCall) visit(ctx.functionCall());
+            if (ctx.windowOverlay() != null) {
+                WindowSpec spec = (WindowSpec) visit(ctx.windowOverlay().windowSpecification());
+                if (spec.frame().isPresent()) {
+                    throw support.refuse("window frame", spec.frame().get().pos());
+                }
+                call = new FunctionCall(call.name(), call.args(), call.star(), call.quantifier(),
+                        Optional.of(spec), call.pos());
+            }
+            return call;
+        }
+        if (ctx.qualifiedName() != null) {
+            return new ColumnRef(qname(ctx.qualifiedName()), pos(ctx));
+        }
+        if (ctx.subquery() != null) {
+            return new SubqueryExpression((Query) visit(ctx.subquery()), pos(ctx));
+        }
+        return visit(ctx.expression());
     }
 
     @Override
@@ -475,32 +553,12 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     }
 
     @Override
-    public Object visitCaseExpr(PostgreSqlParser.CaseExprContext ctx) {
-        return visit(ctx.caseExpression());
-    }
-
-    @Override
     public Object visitCaseExpression(PostgreSqlParser.CaseExpressionContext ctx) {
         List<Expression> expressions = ctx.expression().stream().map(this::expr).toList();
         List<SourcePosition> whenPositions = ctx.WHEN().stream()
                 .map(w -> AstBuilderSupport.pos(w.getSymbol())).toList();
         return support.caseExpression(expressions, whenPositions, ctx.ELSE() != null,
                 pos(ctx));
-    }
-
-    @Override
-    public Object visitCastExpr(PostgreSqlParser.CastExprContext ctx) {
-        return visit(ctx.castExpression());
-    }
-
-    @Override
-    public Object visitCastExpression(PostgreSqlParser.CastExpressionContext ctx) {
-        return new CastExpression(expr(ctx.expression()), castType(ctx.dataType()), pos(ctx));
-    }
-
-    @Override
-    public Object visitFunctionExpr(PostgreSqlParser.FunctionExprContext ctx) {
-        return visit(ctx.functionCall());
     }
 
     @Override
@@ -513,28 +571,53 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
             }
         }
         List<Expression> args = ctx.expression().stream().map(this::expr).toList();
-        return new FunctionCall(name, args, star, quantifier(ctx.setQuantifier()), pos(ctx));
+        return new FunctionCall(name, args, star, quantifier(ctx.setQuantifier()),
+                Optional.empty(), pos(ctx));
+    }
+
+    @Override
+    public Object visitWindowSpecification(PostgreSqlParser.WindowSpecificationContext ctx) {
+        List<Expression> partitionBy = ctx.expression().stream().map(this::expr).toList();
+        List<OrderItem> orderBy = ctx.orderItem().stream()
+                .map(item -> (OrderItem) visit(item)).toList();
+        Optional<WindowFrame> frame = ctx.windowFrame() == null
+                ? Optional.empty()
+                : Optional.of((WindowFrame) visit(ctx.windowFrame()));
+        return new WindowSpec(partitionBy, orderBy, frame, pos(ctx));
+    }
+
+    @Override
+    public Object visitWindowFrame(PostgreSqlParser.WindowFrameContext ctx) {
+        FrameMode mode = ctx.ROWS() != null ? FrameMode.ROWS : FrameMode.RANGE;
+        List<PostgreSqlParser.FrameBoundContext> bounds = ctx.frameBound();
+        FrameBound start = (FrameBound) visit(bounds.get(0));
+        Optional<FrameBound> end = bounds.size() > 1
+                ? Optional.of((FrameBound) visit(bounds.get(1)))
+                : Optional.empty();
+        return new WindowFrame(mode, start, end, pos(ctx));
+    }
+
+    @Override
+    public Object visitFrameBound(PostgreSqlParser.FrameBoundContext ctx) {
+        if (ctx.CURRENT_ROW() != null) {
+            return new FrameBound(FrameBoundKind.CURRENT_ROW, Optional.empty(), pos(ctx));
+        }
+        if (ctx.UNBOUNDED() != null) {
+            FrameBoundKind kind = ctx.PRECEDING() != null
+                    ? FrameBoundKind.UNBOUNDED_PRECEDING
+                    : FrameBoundKind.UNBOUNDED_FOLLOWING;
+            return new FrameBound(kind, Optional.empty(), pos(ctx));
+        }
+        FrameBoundKind kind = ctx.PRECEDING() != null
+                ? FrameBoundKind.PRECEDING
+                : FrameBoundKind.FOLLOWING;
+        return new FrameBound(kind, Optional.of(expr(ctx.expression())), pos(ctx));
     }
 
     private Identifier functionNameIdentifier(PostgreSqlParser.FunctionNameContext ctx) {
         return ctx.identifier() != null
                 ? ident(ctx.identifier())
                 : new Identifier(ctx.getText(), false, AstBuilderSupport.pos(ctx));
-    }
-
-    @Override
-    public Object visitColumnRefExpr(PostgreSqlParser.ColumnRefExprContext ctx) {
-        return new ColumnRef(qname(ctx.qualifiedName()), pos(ctx));
-    }
-
-    @Override
-    public Object visitScalarSubqueryExpr(PostgreSqlParser.ScalarSubqueryExprContext ctx) {
-        return new SubqueryExpression((Query) visit(ctx.subquery()), pos(ctx));
-    }
-
-    @Override
-    public Object visitParenExpr(PostgreSqlParser.ParenExprContext ctx) {
-        return visit(ctx.expression());
     }
 
     // --- shared extraction helpers ---

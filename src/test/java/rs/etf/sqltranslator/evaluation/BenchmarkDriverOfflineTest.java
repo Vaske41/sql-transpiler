@@ -72,4 +72,26 @@ class BenchmarkDriverOfflineTest {
         assertThat(OutcomeScorer.isSingleStatement("SELECT 1;\nSELECT 2;")).isFalse();
         assertThat(OutcomeScorer.isSingleStatement("")).isTrue();
     }
+
+    @Test
+    void notesIncludeTruncatedStderrOnParse() throws Exception {
+        Path dir = java.nio.file.Files.createTempDirectory("eval-stderr");
+        Path csv = dir.resolve("out.csv");
+        ScoreRow row = new ScoreRow(
+                "sqltranslate", "case-x", "postgresql", "mysql",
+                "PARSE", "1", "n/a", "n/a", "n/a", "1",
+                "single_run_latency;stderr=error: parse: mismatched input 'WITH'");
+        CsvResultsWriter.write(csv, java.util.List.of(row));
+        String text = java.nio.file.Files.readString(csv);
+        assertThat(text).contains("stderr=error: parse:");
+    }
+
+    @Test
+    void appendStderrTruncatesAndStripsNewlines() {
+        String notes = BenchmarkDriver.appendStderr("single_run_latency",
+                "error: parse: 1 syntax error(s)\nsecond line");
+        assertThat(notes).startsWith("single_run_latency;stderr=");
+        assertThat(notes).doesNotContain("\n");
+        assertThat(notes.length()).isLessThanOrEqualTo("single_run_latency;stderr=".length() + 240);
+    }
 }

@@ -15,14 +15,19 @@ import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.ColumnRef;
 import rs.etf.sqltranslator.ast.CreateIndexStatement;
 import rs.etf.sqltranslator.ast.CreateTableStatement;
+import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.DeleteStatement;
+import rs.etf.sqltranslator.ast.DerivedTable;
 import rs.etf.sqltranslator.ast.DropColumn;
 import rs.etf.sqltranslator.ast.DropTableStatement;
 import rs.etf.sqltranslator.ast.ExistsPredicate;
 import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.ForeignKeyConstraint;
 import rs.etf.sqltranslator.ast.ForeignKeyRef;
+import rs.etf.sqltranslator.ast.FrameBound;
+import rs.etf.sqltranslator.ast.FrameBoundKind;
+import rs.etf.sqltranslator.ast.FrameMode;
 import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.InListPredicate;
@@ -39,6 +44,7 @@ import rs.etf.sqltranslator.ast.PrimaryKeyConstraint;
 import rs.etf.sqltranslator.ast.QualifiedName;
 import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.QuerySpecification;
+import rs.etf.sqltranslator.ast.Relation;
 import rs.etf.sqltranslator.ast.RowLimit;
 import rs.etf.sqltranslator.ast.Script;
 import rs.etf.sqltranslator.ast.SelectExpr;
@@ -57,6 +63,8 @@ import rs.etf.sqltranslator.ast.UnaryOperator;
 import rs.etf.sqltranslator.ast.UnionArm;
 import rs.etf.sqltranslator.ast.UniqueConstraint;
 import rs.etf.sqltranslator.ast.UpdateStatement;
+import rs.etf.sqltranslator.ast.WindowFrame;
+import rs.etf.sqltranslator.ast.WindowSpec;
 import rs.etf.sqltranslator.core.Dialect;
 import rs.etf.sqltranslator.core.SourcePosition;
 import rs.etf.sqltranslator.grammar.MySqlBaseVisitor;
@@ -93,13 +101,33 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
 
     @Override
     public Object visitQueryExpression(MySqlParser.QueryExpressionContext ctx) {
+        List<Cte> ctes = List.of();
+        if (ctx.withClause() != null) {
+            var w = ctx.withClause();
+            support.refuseIfRecursiveKeyword(w, w.RECURSIVE() != null);
+            ctes = w.commonTableExpression().stream().map(c -> (Cte) visit(c)).toList();
+            for (Cte cte : ctes) {
+                support.refuseIfCteSelfReference(cte);
+            }
+        }
         QuerySpecification first = (QuerySpecification) visit(ctx.querySpecification(0));
         List<UnionArm> arms = support.unionArms(ctx, MySqlParser.UNION, MySqlParser.ALL, this);
         List<OrderItem> orderBy = ctx.orderByClause() == null
                 ? List.of()
                 : ctx.orderByClause().orderItem().stream()
                         .map(i -> (OrderItem) visit(i)).toList();
-        return new Query(first, arms, orderBy, rowLimit(ctx.rowLimitClause()), pos(ctx));
+        return new Query(ctes, first, arms, orderBy, rowLimit(ctx.rowLimitClause()), pos(ctx));
+    }
+
+    @Override
+    public Object visitCommonTableExpression(MySqlParser.CommonTableExpressionContext ctx) {
+        Identifier name = ident(ctx.identifier(0));
+        Optional<List<Identifier>> cols = Optional.empty();
+        if (ctx.identifier().size() > 1) {
+            cols = Optional.of(ctx.identifier().stream().skip(1).map(this::ident).toList());
+        }
+        Query query = (Query) visit(ctx.queryExpression());
+        return new Cte(name, cols, query, pos(ctx));
     }
 
     /** MySQL: LIMIT n [OFFSET m] | LIMIT m, n — the comma form swaps operands (§2.2). */
@@ -157,19 +185,30 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     @Override
     public Object visitTableSource(MySqlParser.TableSourceContext ctx) {
         List<Join> joins = ctx.joinedTable().stream().map(j -> (Join) visit(j)).toList();
-        return new TableSource((TableRef) visit(ctx.tablePrimary()), joins, pos(ctx));
+        return new TableSource((Relation) visit(ctx.tablePrimary()), joins, pos(ctx));
     }
 
     @Override
-    public Object visitTablePrimary(MySqlParser.TablePrimaryContext ctx) {
+    public Object visitNamedTablePrimary(MySqlParser.NamedTablePrimaryContext ctx) {
         Optional<Identifier> alias = ctx.identifier() == null
                 ? Optional.empty() : Optional.of(ident(ctx.identifier()));
         return new TableRef(qname(ctx.qualifiedName()), alias, pos(ctx));
     }
 
     @Override
+    public Object visitDerivedTablePrimary(MySqlParser.DerivedTablePrimaryContext ctx) {
+        Query query = (Query) visit(ctx.queryExpression());
+        Identifier alias = ident(ctx.identifier(0));
+        Optional<List<Identifier>> cols = Optional.empty();
+        if (ctx.identifier().size() > 1) {
+            cols = Optional.of(ctx.identifier().stream().skip(1).map(this::ident).toList());
+        }
+        return new DerivedTable(query, alias, cols, pos(ctx));
+    }
+
+    @Override
     public Object visitJoinedTable(MySqlParser.JoinedTableContext ctx) {
-        TableRef table = (TableRef) visit(ctx.tablePrimary());
+        Relation table = (Relation) visit(ctx.tablePrimary());
         if (ctx.CROSS() != null) {
             return new Join(JoinKind.CROSS, table, Optional.empty(), pos(ctx));
         }
@@ -488,7 +527,16 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
 
     @Override
     public Object visitFunctionExpr(MySqlParser.FunctionExprContext ctx) {
-        return visit(ctx.functionCall());
+        FunctionCall call = (FunctionCall) visit(ctx.functionCall());
+        if (ctx.windowOverlay() != null) {
+            WindowSpec spec = (WindowSpec) visit(ctx.windowOverlay().windowSpecification());
+            if (spec.frame().isPresent()) {
+                throw support.refuse("window frame", spec.frame().get().pos());
+            }
+            call = new FunctionCall(call.name(), call.args(), call.star(), call.quantifier(),
+                    Optional.of(spec), call.pos());
+        }
+        return call;
     }
 
     @Override
@@ -501,7 +549,47 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
             }
         }
         List<Expression> args = ctx.expression().stream().map(this::expr).toList();
-        return new FunctionCall(name, args, star, quantifier(ctx.setQuantifier()), pos(ctx));
+        return new FunctionCall(name, args, star, quantifier(ctx.setQuantifier()),
+                Optional.empty(), pos(ctx));
+    }
+
+    @Override
+    public Object visitWindowSpecification(MySqlParser.WindowSpecificationContext ctx) {
+        List<Expression> partitionBy = ctx.expression().stream().map(this::expr).toList();
+        List<OrderItem> orderBy = ctx.orderItem().stream()
+                .map(item -> (OrderItem) visit(item)).toList();
+        Optional<WindowFrame> frame = ctx.windowFrame() == null
+                ? Optional.empty()
+                : Optional.of((WindowFrame) visit(ctx.windowFrame()));
+        return new WindowSpec(partitionBy, orderBy, frame, pos(ctx));
+    }
+
+    @Override
+    public Object visitWindowFrame(MySqlParser.WindowFrameContext ctx) {
+        FrameMode mode = ctx.ROWS() != null ? FrameMode.ROWS : FrameMode.RANGE;
+        List<MySqlParser.FrameBoundContext> bounds = ctx.frameBound();
+        FrameBound start = (FrameBound) visit(bounds.get(0));
+        Optional<FrameBound> end = bounds.size() > 1
+                ? Optional.of((FrameBound) visit(bounds.get(1)))
+                : Optional.empty();
+        return new WindowFrame(mode, start, end, pos(ctx));
+    }
+
+    @Override
+    public Object visitFrameBound(MySqlParser.FrameBoundContext ctx) {
+        if (ctx.CURRENT_ROW() != null) {
+            return new FrameBound(FrameBoundKind.CURRENT_ROW, Optional.empty(), pos(ctx));
+        }
+        if (ctx.UNBOUNDED() != null) {
+            FrameBoundKind kind = ctx.PRECEDING() != null
+                    ? FrameBoundKind.UNBOUNDED_PRECEDING
+                    : FrameBoundKind.UNBOUNDED_FOLLOWING;
+            return new FrameBound(kind, Optional.empty(), pos(ctx));
+        }
+        FrameBoundKind kind = ctx.PRECEDING() != null
+                ? FrameBoundKind.PRECEDING
+                : FrameBoundKind.FOLLOWING;
+        return new FrameBound(kind, Optional.of(expr(ctx.expression())), pos(ctx));
     }
 
     private Identifier functionNameIdentifier(MySqlParser.FunctionNameContext ctx) {

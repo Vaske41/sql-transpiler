@@ -8,11 +8,13 @@ import java.util.Optional;
 /**
  * A function call. {@code name} is uppercased at build time (function names are
  * case-insensitive in all three dialects); {@code star} marks {@code COUNT(*)} and
- * {@code quantifier} carries {@code COUNT(DISTINCT x)}.
+ * {@code quantifier} carries {@code COUNT(DISTINCT x)}. Optional {@code window}
+ * holds a frameless {@code OVER (…)} overlay when present.
  */
 public record FunctionCall(String name, List<Expression> args, boolean star,
-                           Optional<SetQuantifier> quantifier, SourcePosition pos)
-        implements Expression {
+                           Optional<SetQuantifier> quantifier,
+                           Optional<WindowSpec> window,
+                           SourcePosition pos) implements Expression {
 
     public FunctionCall {
         args = List.copyOf(args);

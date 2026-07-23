@@ -49,6 +49,10 @@ class CrossDialectAstEqualityTest {
             "constraints/drop-alter",
             "constraints/pk-fk-unique",
             "create-table-types/double-precision",
+            "cte/nested-with",
+            "cte/simple-cte",
+            "derived-tables/from-subquery",
+            "derived-tables/join-subquery",
             "functions/count-star-distinct",
             "functions/left-right",
             "functions/max-aggregate",
@@ -79,7 +83,9 @@ class CrossDialectAstEqualityTest {
             "set-ops/union-all-ordered",
             "subqueries/exists-subquery",
             "subqueries/in-subquery",
-            "subqueries/scalar-subquery");
+            "subqueries/scalar-subquery",
+            "windows/rank-over-partition",
+            "windows/sum-over-order");
 
     @TestFactory
     Stream<DynamicTest> threeDialectInputsBuildIdenticalAsts() {

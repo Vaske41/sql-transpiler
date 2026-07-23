@@ -4,8 +4,8 @@ import rs.etf.sqltranslator.core.SourcePosition;
 
 import java.util.List;
 
-/** The FROM clause: a first table reference plus zero or more joins. */
-public record TableSource(TableRef first, List<Join> joins, SourcePosition pos)
+/** The FROM clause: a first relation plus zero or more joins. */
+public record TableSource(Relation first, List<Join> joins, SourcePosition pos)
         implements AstNode {
 
     public TableSource {

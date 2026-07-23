@@ -5,7 +5,7 @@ import rs.etf.sqltranslator.core.SourcePosition;
 import java.util.Optional;
 
 /** One join step; {@code on} is empty exactly for {@link JoinKind#CROSS}. */
-public record Join(JoinKind kind, TableRef table, Optional<Expression> on, SourcePosition pos)
+public record Join(JoinKind kind, Relation table, Optional<Expression> on, SourcePosition pos)
         implements AstNode {
 
     @Override

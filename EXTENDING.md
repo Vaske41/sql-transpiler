@@ -135,12 +135,47 @@ the documented rollback if the ladder proves incomplete.
 
 1. ~~`INSERT ... SELECT`~~ — shipped (2026-07) — one grammar alternative + one AST field reusing `Query`
 2. ~~`CREATE INDEX`~~ — shipped (2026-07) — small grammar surface, high practical relevance
-3. **CTEs (`WITH`)** — near-identical syntax in all three dialects; mostly plumbing
-4. **Derived tables in `FROM`** — unlocks the subquery scope line
-5. **Window functions** — large expression-grammar surface; last
+3. ~~CTEs (`WITH`)~~ — shipped (Wave 1) — `WITH RECURSIVE` and CTE self-reference refused (T-SQL recursion without keyword included)
+4. ~~Derived tables in `FROM`~~ — shipped (Wave 1)
+5. ~~Window functions~~ — shipped (Wave 1) — frames refused
+
+**D9 amended for Extension Queue items 3–5** (Wave 1): `Cte` on `Query`,
+`Relation`/`DerivedTable`, and frameless `WindowSpec` on `FunctionCall` are in
+the frozen AST. Engine-backed `cases/semantic/` for CTE/window is **deferred**
+(follow-up plan).
 
 The queue is the first thing sacrificed when behind schedule: v1 scope never
 grows before the day-14 milestones are green.
+
+### CTE policy (Wave 1)
+
+Non-recursive `WITH` is supported end-to-end (parse → AST → rules → print). Nested
+`WITH` inside a CTE body is supported via recursive `Query.ctes` for MySQL and
+PostgreSQL. When the **target is T-SQL**, nested CTE lists are **flattened** into
+a single top-level `WITH` list (`FlattenNestedCtesForTsqlRule`) — SQL Server does
+not allow a nested `WITH` inside a CTE body.
+
+**Refused** (parse OK, build throws `UnsupportedFeatureException` `"recursive CTE"`):
+
+- `WITH RECURSIVE` on all three dialects
+- Any CTE whose body references its own name as a `TableRef` (covers T-SQL
+  recursion that omits the `RECURSIVE` keyword)
+
+CTE names are visible to `ScopedTransformer.relationScope` as empty-schema
+relations and **shadow** catalog base tables of the same name (CTE map before
+catalog). Column types are never invented.
+
+### Window function policy (Wave 1)
+
+Frameless window functions are supported end-to-end: `fn(...) OVER (PARTITION BY …
+ORDER BY …)`. Frames are parsed so the failure is a clean build refusal (not a
+syntax error).
+
+**Refused** (parse OK, build throws `UnsupportedFeatureException` `"window frame"`):
+
+- Any `ROWS` / `RANGE` frame clause (including `BETWEEN … AND …`)
+
+`CURRENT_ROW` is one keyword; bare `CURRENT` is not reserved.
 
 ## Adding a transformation rule (Phase 4)
 
@@ -210,6 +245,8 @@ error) and throw `UnsupportedFeatureException` at build with a `SourcePosition`:
 | Partial index (`WHERE`) | PostgreSQL | `partial index (WHERE)` |
 | `NULLS` ordering in index columns | PostgreSQL | `NULLS ordering in index columns` |
 | Index column prefix length | MySQL | `index column prefix length` |
+| Recursive CTE (`WITH RECURSIVE` or self-`TableRef`) | all | `recursive CTE` |
+| Window frame (`ROWS`/`RANGE`) | all | `window frame` |
 
 T-SQL `NONCLUSTERED` folds away (canonical index shape has no clustered flag).
 

@@ -37,11 +37,21 @@ public final class AstDumper implements AstVisitor<String> {
     @Override
     public String visitQuery(Query node) {
         return node("Query")
+                .children("ctes", node.ctes())
                 .child("first", node.first())
                 .children("unionArms", node.unionArms())
                 .children("orderBy", node.orderBy())
                 .child("limit", node.limit())
                 .done();
+    }
+
+    @Override
+    public String visitCte(Cte node) {
+        Dump dump = node("Cte")
+                .child("name", node.name())
+                .child("query", node.query());
+        node.columns().ifPresent(cols -> dump.children("columns", cols));
+        return dump.done();
     }
 
     @Override
@@ -102,6 +112,14 @@ public final class AstDumper implements AstVisitor<String> {
                 .child("table", node.table())
                 .child("alias", node.alias())
                 .done();
+    }
+
+    @Override
+    public String visitDerivedTable(DerivedTable node) {
+        Dump dump = node("DerivedTable alias=" + quote(node.alias().value()))
+                .child("query", node.query());
+        node.columnAliases().ifPresent(cols -> dump.children("columnAliases", cols));
+        return dump.done();
     }
 
     @Override
@@ -320,6 +338,31 @@ public final class AstDumper implements AstVisitor<String> {
         return node("FunctionCall name=" + node.name() + " star=" + node.star()
                 + optional("quantifier", node.quantifier()))
                 .children("args", node.args())
+                .child("window", node.window())
+                .done();
+    }
+
+    @Override
+    public String visitWindowSpec(WindowSpec node) {
+        return node("WindowSpec")
+                .children("partitionBy", node.partitionBy())
+                .children("orderBy", node.orderBy())
+                .child("frame", node.frame())
+                .done();
+    }
+
+    @Override
+    public String visitWindowFrame(WindowFrame node) {
+        return node("WindowFrame mode=" + node.mode())
+                .child("start", node.start())
+                .child("end", node.end())
+                .done();
+    }
+
+    @Override
+    public String visitFrameBound(FrameBound node) {
+        return node("FrameBound kind=" + node.kind())
+                .child("offset", node.offset())
                 .done();
     }
 

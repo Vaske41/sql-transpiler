@@ -100,7 +100,7 @@ public final class NormalizeSourceFunctionsRule implements Rule {
 
         private static FunctionCall renamed(FunctionCall call, String canonical) {
             return new FunctionCall(canonical, call.args(), call.star(),
-                    call.quantifier(), call.pos());
+                    call.quantifier(), call.window(), call.pos());
         }
 
         /** CONCAT(a, b, c) → ((a || b) || c) as BinaryOp(CONCAT) — the canonical form. */
@@ -123,7 +123,7 @@ public final class NormalizeSourceFunctionsRule implements Rule {
                 };
                 if (canonical != null) {
                     return new FunctionCall(canonical, List.of(call.args().get(1)),
-                            false, call.quantifier(), call.pos());
+                            false, call.quantifier(), call.window(), call.pos());
                 }
             }
             return call;

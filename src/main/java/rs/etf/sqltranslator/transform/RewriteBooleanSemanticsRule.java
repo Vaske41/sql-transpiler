@@ -225,7 +225,7 @@ public final class RewriteBooleanSemanticsRule implements Rule {
                     .map(arm -> new UnionArm(arm.all(),
                             harmonizeSelectList(arm.spec(), namedColumns, schema), arm.pos()))
                     .toList();
-            return new Query(first, arms, query.orderBy(), query.limit(), query.pos());
+            return new Query(query.ctes(), first, arms, query.orderBy(), query.limit(), query.pos());
         }
 
         private QuerySpecification harmonizeSelectList(QuerySpecification spec,

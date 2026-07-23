@@ -49,8 +49,22 @@ public class AstTransformer implements AstVisitor<Object> {
 
     @Override
     public Object visitQuery(Query node) {
-        return new Query(rebuild(node.first()), rebuildList(node.unionArms()),
-                rebuildList(node.orderBy()), rebuildOptional(node.limit()), node.pos());
+        return new Query(
+                rebuildList(node.ctes()),
+                rebuild(node.first()),
+                rebuildList(node.unionArms()),
+                rebuildList(node.orderBy()),
+                rebuildOptional(node.limit()),
+                node.pos());
+    }
+
+    @Override
+    public Object visitCte(Cte node) {
+        return new Cte(
+                rebuild(node.name()),
+                node.columns().map(this::rebuildList),
+                rebuild(node.query()),
+                node.pos());
     }
 
     @Override
@@ -94,6 +108,15 @@ public class AstTransformer implements AstVisitor<Object> {
     @Override
     public Object visitTableRef(TableRef node) {
         return new TableRef(rebuild(node.table()), rebuildOptional(node.alias()), node.pos());
+    }
+
+    @Override
+    public Object visitDerivedTable(DerivedTable node) {
+        return new DerivedTable(
+                rebuild(node.query()),
+                rebuild(node.alias()),
+                node.columnAliases().map(this::rebuildList),
+                node.pos());
     }
 
     @Override
@@ -251,7 +274,24 @@ public class AstTransformer implements AstVisitor<Object> {
     @Override
     public Object visitFunctionCall(FunctionCall node) {
         return new FunctionCall(node.name(), rebuildList(node.args()), node.star(),
-                node.quantifier(), node.pos());
+                node.quantifier(), rebuildOptional(node.window()), node.pos());
+    }
+
+    @Override
+    public Object visitWindowSpec(WindowSpec node) {
+        return new WindowSpec(rebuildList(node.partitionBy()), rebuildList(node.orderBy()),
+                rebuildOptional(node.frame()), node.pos());
+    }
+
+    @Override
+    public Object visitWindowFrame(WindowFrame node) {
+        return new WindowFrame(node.mode(), rebuild(node.start()),
+                rebuildOptional(node.end()), node.pos());
+    }
+
+    @Override
+    public Object visitFrameBound(FrameBound node) {
+        return new FrameBound(node.kind(), rebuildOptional(node.offset()), node.pos());
     }
 
     @Override

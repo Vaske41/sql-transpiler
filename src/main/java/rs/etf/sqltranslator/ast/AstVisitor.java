@@ -14,6 +14,8 @@ public interface AstVisitor<R> {
 
     R visitQuery(Query node);
 
+    R visitCte(Cte node);
+
     R visitUnionArm(UnionArm node);
 
     R visitQuerySpecification(QuerySpecification node);
@@ -29,6 +31,8 @@ public interface AstVisitor<R> {
     R visitTableSource(TableSource node);
 
     R visitTableRef(TableRef node);
+
+    R visitDerivedTable(DerivedTable node);
 
     R visitJoin(Join node);
 
@@ -84,6 +88,12 @@ public interface AstVisitor<R> {
     R visitExistsPredicate(ExistsPredicate node);
 
     R visitFunctionCall(FunctionCall node);
+
+    R visitWindowSpec(WindowSpec node);
+
+    R visitWindowFrame(WindowFrame node);
+
+    R visitFrameBound(FrameBound node);
 
     R visitCaseExpression(CaseExpression node);
 

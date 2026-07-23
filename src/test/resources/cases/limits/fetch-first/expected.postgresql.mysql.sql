@@ -1,0 +1,1 @@
+SELECT id FROM t ORDER BY id LIMIT 10;

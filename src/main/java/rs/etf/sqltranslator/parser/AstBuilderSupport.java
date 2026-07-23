@@ -5,10 +5,12 @@ import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.ParseTreeVisitor;
 import org.antlr.v4.runtime.tree.TerminalNode;
+import rs.etf.sqltranslator.ast.AbstractAstVisitor;
 import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.BinaryOperator;
 import rs.etf.sqltranslator.ast.CaseExpression;
 import rs.etf.sqltranslator.ast.ColumnDefinition;
+import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.FixedLength;
@@ -18,9 +20,11 @@ import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.MaxLength;
 import rs.etf.sqltranslator.ast.NumericLiteral;
 import rs.etf.sqltranslator.ast.QualifiedName;
+import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.QuerySpecification;
 import rs.etf.sqltranslator.ast.RowLimit;
 import rs.etf.sqltranslator.ast.StringLiteral;
+import rs.etf.sqltranslator.ast.TableRef;
 import rs.etf.sqltranslator.ast.TypeLength;
 import rs.etf.sqltranslator.ast.UnionArm;
 import rs.etf.sqltranslator.ast.WhenClause;
@@ -81,6 +85,34 @@ final class AstBuilderSupport {
         if (condition) {
             throw refuse(construct, position);
         }
+    }
+
+    void refuseIfRecursiveKeyword(ParserRuleContext withClause, boolean recursive) {
+        if (recursive) {
+            refuse("recursive CTE", pos(withClause));
+        }
+    }
+
+    /** T-SQL (and others) may omit RECURSIVE; refuse self-reference in the CTE body. */
+    void refuseIfCteSelfReference(Cte cte) {
+        String name = cte.name().value().toLowerCase(Locale.ROOT);
+        if (referencesTableName(cte.query(), name)) {
+            refuse("recursive CTE", cte.pos());
+        }
+    }
+
+    private boolean referencesTableName(Query query, String lowerName) {
+        boolean[] hit = {false};
+        query.accept(new AbstractAstVisitor<Void>() {
+            @Override
+            public Void visitTableRef(TableRef ref) {
+                if (ref.table().last().value().equalsIgnoreCase(lowerName)) {
+                    hit[0] = true;
+                }
+                return null;
+            }
+        });
+        return hit[0];
     }
 
     // ------------------------------------------------------------------
