@@ -340,6 +340,11 @@ public class AstTransformer implements AstVisitor<Object> {
     }
 
     @Override
+    public Object visitIntervalLiteral(IntervalLiteral node) {
+        return node;
+    }
+
+    @Override
     public Object visitIdentifier(Identifier node) {
         return node;
     }

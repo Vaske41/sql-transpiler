@@ -55,6 +55,7 @@ import rs.etf.sqltranslator.ast.SelectStatement;
 import rs.etf.sqltranslator.ast.SetQuantifier;
 import rs.etf.sqltranslator.ast.SortDirection;
 import rs.etf.sqltranslator.ast.Statement;
+import rs.etf.sqltranslator.ast.StringLiteral;
 import rs.etf.sqltranslator.ast.SubqueryExpression;
 import rs.etf.sqltranslator.ast.TableConstraint;
 import rs.etf.sqltranslator.ast.TableRef;
@@ -516,6 +517,9 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
         if (ctx.CAST() != null) {
             return new CastExpression(expr(ctx.expression()), castType(ctx.dataType()), pos(ctx));
         }
+        if (ctx.intervalLiteral() != null) {
+            return visit(ctx.intervalLiteral());
+        }
         if (ctx.functionCall() != null) {
             FunctionCall call = (FunctionCall) visit(ctx.functionCall());
             if (ctx.windowOverlay() != null) {
@@ -555,6 +559,21 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
             return new NullLiteral(pos(ctx));
         }
         return new BooleanLiteral(ctx.TRUE() != null, pos(ctx));
+    }
+
+    @Override
+    public Object visitIntervalLiteral(PostgreSqlParser.IntervalLiteralContext ctx) {
+        if (ctx.STRING_LITERAL() != null && ctx.expression() == null) {
+            StringLiteral lit = support.stringLiteral(ctx.STRING_LITERAL().getSymbol());
+            Optional<String> unit = ctx.identifier() == null
+                    ? Optional.empty()
+                    : Optional.of(ident(ctx.identifier()).value());
+            return support.intervalFromString(lit.value(), unit, pos(ctx));
+        }
+        return support.intervalFromExpression(
+                expr(ctx.expression()),
+                ident(ctx.datePartKeyword().identifier()).value(),
+                pos(ctx));
     }
 
     @Override

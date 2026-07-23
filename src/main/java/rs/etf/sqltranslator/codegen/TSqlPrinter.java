@@ -5,6 +5,7 @@ import rs.etf.sqltranslator.ast.BinaryOperator;
 import rs.etf.sqltranslator.ast.BooleanLiteral;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.FunctionCall;
+import rs.etf.sqltranslator.ast.IntervalLiteral;
 import rs.etf.sqltranslator.ast.NullsOrder;
 import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.QuerySpecification;
@@ -58,6 +59,12 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
                     "rule engine contract: JSON operators must be rewritten before T-SQL print");
         }
         return super.visitBinaryOp(node);
+    }
+
+    @Override
+    protected void renderIntervalLiteral(IntervalLiteral node) {
+        throw new IllegalStateException(
+                "rule engine contract: INTERVAL must be rewritten to DATEADD or refused before T-SQL print");
     }
 
     @Override

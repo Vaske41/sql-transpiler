@@ -112,6 +112,8 @@ public interface AstVisitor<R> {
 
     R visitNullLiteral(NullLiteral node);
 
+    R visitIntervalLiteral(IntervalLiteral node);
+
     R visitIdentifier(Identifier node);
 
     R visitQualifiedName(QualifiedName node);

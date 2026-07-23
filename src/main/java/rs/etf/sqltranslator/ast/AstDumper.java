@@ -421,6 +421,12 @@ public final class AstDumper implements AstVisitor<String> {
     }
 
     @Override
+    public String visitIntervalLiteral(IntervalLiteral node) {
+        return "IntervalLiteral raw=" + quote(node.raw())
+                + " unit=" + node.unit().map(AstDumper::quote).orElse("<none>");
+    }
+
+    @Override
     public String visitIdentifier(Identifier node) {
         return "Identifier value=" + quote(node.value()) + " quoted=" + node.quoted();
     }

@@ -340,6 +340,11 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitIntervalLiteral(IntervalLiteral node) {
+        return defaultResult();
+    }
+
+    @Override
     public R visitIdentifier(Identifier node) {
         return defaultResult();
     }

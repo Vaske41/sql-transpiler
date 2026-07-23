@@ -111,6 +111,25 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         return null;
     }
 
+    @Override
+    public Void visitIntervalLiteral(IntervalLiteral node) {
+        renderIntervalLiteral(node);
+        return null;
+    }
+
+    /**
+     * Dialect-native INTERVAL rendering. T-SQL overrides with a contract guard —
+     * additive intervals must become {@code DATEADD} before print.
+     */
+    protected void renderIntervalLiteral(IntervalLiteral node) {
+        out.token("INTERVAL");
+        if (node.unit().isPresent()) {
+            out.token("'" + node.raw() + " " + node.unit().get() + "'");
+        } else {
+            out.token("'" + node.raw().replace("'", "''") + "'");
+        }
+    }
+
     // --- operators, precedence-driven minimal parentheses ---
 
     protected int precedence(Expression e) {

@@ -3,6 +3,7 @@ package rs.etf.sqltranslator.codegen;
 import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.BinaryOperator;
 import rs.etf.sqltranslator.ast.DataType;
+import rs.etf.sqltranslator.ast.IntervalLiteral;
 import rs.etf.sqltranslator.ast.NullsOrder;
 import rs.etf.sqltranslator.ast.StringLiteral;
 
@@ -42,6 +43,22 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
                     "rule engine contract: PG-only JSON ops must be rewritten/refused before MySQL print");
         }
         return super.visitBinaryOp(node);
+    }
+
+    @Override
+    protected void renderIntervalLiteral(IntervalLiteral node) {
+        if (node.unit().isEmpty()) {
+            throw new IllegalStateException(
+                    "rule engine contract: compound INTERVAL must be refused before MySQL print");
+        }
+        out.token("INTERVAL");
+        String raw = node.raw();
+        if (raw.matches("-?\\d+(\\.\\d+)?")) {
+            out.token(raw);
+        } else {
+            out.token("'" + raw.replace("\\", "\\\\").replace("'", "''") + "'");
+        }
+        out.token(node.unit().get().toUpperCase(java.util.Locale.ROOT));
     }
 
     @Override

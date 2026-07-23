@@ -33,7 +33,12 @@ public final class CodegenTestSupport {
             "casts/pg-array-cast/input.postgresql.sql|MYSQL",
             "casts/pg-array-cast/input.postgresql.sql|TSQL",
             "json-access/json-containment/input.postgresql.sql|MYSQL",
-            "json-access/json-containment/input.postgresql.sql|TSQL");
+            "json-access/json-containment/input.postgresql.sql|TSQL",
+            "interval/pg-string/input.postgresql.sql|TSQL",
+            "interval/mysql-numeric/input.mysql.sql|TSQL",
+            "interval/mysql-string-unit/input.mysql.sql|TSQL",
+            "interval/interval-compound/input.postgresql.sql|MYSQL",
+            "interval/interval-compound/input.postgresql.sql|TSQL");
 
     private CodegenTestSupport() {
     }

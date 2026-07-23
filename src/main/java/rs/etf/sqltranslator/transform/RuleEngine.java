@@ -33,6 +33,7 @@ public final class RuleEngine {
                 new RewriteBooleanSemanticsRule(),
                 new NarrowTypesRule(),
                 new RenderJsonRule(),
+                new RewriteIntervalArithmeticRule(),
                 new RenderTargetFunctionsRule(),
                 new PreserveNullsOrderingRule(),
                 new DropNullsOrderingRule()));

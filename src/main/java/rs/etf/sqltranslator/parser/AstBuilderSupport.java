@@ -17,6 +17,7 @@ import rs.etf.sqltranslator.ast.FixedLength;
 import rs.etf.sqltranslator.ast.ForeignKeyRef;
 import rs.etf.sqltranslator.ast.GenericType;
 import rs.etf.sqltranslator.ast.Identifier;
+import rs.etf.sqltranslator.ast.IntervalLiteral;
 import rs.etf.sqltranslator.ast.MaxLength;
 import rs.etf.sqltranslator.ast.NumericLiteral;
 import rs.etf.sqltranslator.ast.QualifiedName;
@@ -191,6 +192,61 @@ final class AstBuilderSupport {
                                 : undouble(body(text, 1), '\''),
                         false, p);
             }
+        };
+    }
+
+    /**
+     * Builds an {@link IntervalLiteral} from {@code INTERVAL '…'} [unit], normalizing
+     * simple {@code 'N unit'} strings to {@code {value, unit}}.
+     */
+    IntervalLiteral intervalFromString(String content, Optional<String> explicitUnit,
+                                       SourcePosition position) {
+        if (explicitUnit.isPresent()) {
+            return new IntervalLiteral(content.trim(),
+                    Optional.of(normalizeIntervalUnit(explicitUnit.get())), position);
+        }
+        java.util.regex.Matcher m = SIMPLE_INTERVAL.matcher(content.trim());
+        if (m.matches()) {
+            return new IntervalLiteral(m.group(1),
+                    Optional.of(normalizeIntervalUnit(m.group(2))), position);
+        }
+        return new IntervalLiteral(content, Optional.empty(), position);
+    }
+
+    /**
+     * Builds an {@link IntervalLiteral} from MySQL-style {@code INTERVAL expr unit}.
+     * Non-literal values are refused — the AST carries only a string value.
+     */
+    IntervalLiteral intervalFromExpression(Expression value, String unit,
+                                           SourcePosition position) {
+        if (value instanceof NumericLiteral num) {
+            return new IntervalLiteral(num.text(),
+                    Optional.of(normalizeIntervalUnit(unit)), position);
+        }
+        if (value instanceof StringLiteral str) {
+            return new IntervalLiteral(str.value(),
+                    Optional.of(normalizeIntervalUnit(unit)), position);
+        }
+        throw refuse("INTERVAL with non-literal value", position);
+    }
+
+    private static final java.util.regex.Pattern SIMPLE_INTERVAL =
+            java.util.regex.Pattern.compile(
+                    "^([+-]?\\d+(?:\\.\\d+)?)\\s+([A-Za-z]+)$");
+
+    static String normalizeIntervalUnit(String unit) {
+        String u = unit.toLowerCase(Locale.ROOT);
+        return switch (u) {
+            case "years", "year" -> "year";
+            case "months", "month" -> "month";
+            case "days", "day" -> "day";
+            case "hours", "hour" -> "hour";
+            case "minutes", "minute" -> "minute";
+            case "seconds", "second" -> "second";
+            case "weeks", "week" -> "week";
+            case "quarters", "quarter" -> "quarter";
+            case "milliseconds", "millisecond", "ms" -> "millisecond";
+            default -> u;
         };
     }
 

@@ -190,11 +190,20 @@ primaryBase
     : literal
     | caseExpression
     | CAST '(' expression AS dataType ')'
+    | intervalLiteral
     | functionCall windowOverlay?
     | qualifiedName
     | subquery
     | '(' expression ')'
     ;
+
+// PG string form + MySQL expr+unit form (shared shape for cross-dialect AST).
+intervalLiteral
+    : INTERVAL STRING_LITERAL identifier?
+    | INTERVAL expression datePartKeyword
+    ;
+
+datePartKeyword : identifier ;
 
 functionCall
     : functionName '(' functionArgs? ')' withinGroupClause? aggFilter?
@@ -299,7 +308,7 @@ EXISTS:E X I S T S; FALSE:F A L S E; FETCH:F E T C H; FIRST:F I R S T;
 FOLLOWING:F O L L O W I N G; FOREIGN:F O R E I G N; FROM:F R O M; FULL:F U L L;
 GENERATED:G E N E R A T E D; GROUP:G R O U P; HAVING:H A V I N G;
 IDENTITY:I D E N T I T Y; IF:I F; IN:I N; INDEX:I N D E X;
-INNER:I N N E R; INSERT:I N S E R T; INTO:I N T O; IS:I S; JOIN:J O I N;
+INNER:I N N E R; INSERT:I N S E R T; INTERVAL:I N T E R V A L; INTO:I N T O; IS:I S; JOIN:J O I N;
 KEY:K E Y; LAST:L A S T; LEFT:L E F T; LIKE:L I K E; LIMIT:L I M I T;
 MAX:M A X; NEXT:N E X T; NONCLUSTERED:N O N C L U S T E R E D; NOT:N O T;
 NULL:N U L L; NULLS:N U L L S; OFFSET:O F F S E T; ON:O N; ONLY:O N L Y;
