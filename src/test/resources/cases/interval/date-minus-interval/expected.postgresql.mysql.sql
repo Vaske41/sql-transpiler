@@ -1,0 +1,1 @@
+SELECT ts - INTERVAL 1 MINUTE FROM events;
