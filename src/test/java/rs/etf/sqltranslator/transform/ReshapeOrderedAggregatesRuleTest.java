@@ -61,4 +61,22 @@ class ReshapeOrderedAggregatesRuleTest {
                 .isInstanceOf(UnsupportedFeatureException.class)
                 .hasMessageContaining("ordered aggregate MAX");
     }
+
+    @Test
+    void distinctGroupConcatToTsqlIsRefused() {
+        assertThatThrownBy(() -> runRule(rule,
+                "SELECT GROUP_CONCAT(DISTINCT id2 ORDER BY id2) FROM t;",
+                Dialect.MYSQL, Dialect.TSQL))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("STRING_AGG DISTINCT");
+    }
+
+    @Test
+    void distinctStringAggToTsqlIsRefused() {
+        assertThatThrownBy(() -> runRule(rule,
+                "SELECT STRING_AGG(DISTINCT name, ',' ORDER BY name) FROM t;",
+                Dialect.POSTGRESQL, Dialect.TSQL))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("STRING_AGG DISTINCT");
+    }
 }

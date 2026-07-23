@@ -4,6 +4,7 @@ import rs.etf.sqltranslator.ast.AstTransformer;
 import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.Script;
+import rs.etf.sqltranslator.ast.SetQuantifier;
 import rs.etf.sqltranslator.ast.StringLiteral;
 import rs.etf.sqltranslator.core.Dialect;
 import rs.etf.sqltranslator.core.UnsupportedFeatureException;
@@ -13,6 +14,7 @@ import java.util.List;
 /**
  * Reshape ordered string aggregates across dialects:
  * {@code STRING_AGG(x, sep [ORDER BY …])} ↔ {@code GROUP_CONCAT(x [ORDER BY …] SEPARATOR sep)},
+ * refuse {@code DISTINCT} string aggregates toward T-SQL (no {@code STRING_AGG(DISTINCT)}),
  * and refuse in-arg {@code ORDER BY} on aggregates T-SQL cannot express as
  * {@code WITHIN GROUP}.
  */
@@ -40,6 +42,7 @@ public final class ReshapeOrderedAggregatesRule implements Rule {
         public Object visitFunctionCall(FunctionCall node) {
             FunctionCall call = (FunctionCall) super.visitFunctionCall(node);
             call = reshapeName(call);
+            refuseDistinctStringAggToTsql(call);
             refuseUnsupportedOrderedAggregate(call);
             return call;
         }
@@ -69,6 +72,23 @@ public final class ReshapeOrderedAggregatesRule implements Rule {
                         new StringLiteral(",", false, call.pos()));
             }
             return call.args();
+        }
+
+        /**
+         * SQL Server {@code STRING_AGG} rejects {@code DISTINCT}; refuse rather than
+         * emit invalid T-SQL from {@code GROUP_CONCAT(DISTINCT …)} / {@code STRING_AGG(DISTINCT …)}.
+         */
+        private void refuseDistinctStringAggToTsql(FunctionCall call) {
+            if (ctx.target() != Dialect.TSQL) {
+                return;
+            }
+            if (!call.name().equals("STRING_AGG") && !call.name().equals("GROUP_CONCAT")) {
+                return;
+            }
+            if (call.quantifier().orElse(null) != SetQuantifier.DISTINCT) {
+                return;
+            }
+            throw new UnsupportedFeatureException("STRING_AGG DISTINCT", call.pos());
         }
 
         private void refuseUnsupportedOrderedAggregate(FunctionCall call) {
