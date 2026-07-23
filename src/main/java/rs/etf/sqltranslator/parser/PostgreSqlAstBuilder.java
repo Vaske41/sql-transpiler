@@ -132,15 +132,18 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
         return new Cte(name, cols, query, pos(ctx));
     }
 
-    /** PostgreSQL: LIMIT and OFFSET in either order. */
+    /** PostgreSQL: LIMIT/OFFSET either order, plus OFFSET/FETCH and bare FETCH. */
     private Optional<RowLimit> rowLimit(PostgreSqlParser.RowLimitClauseContext ctx) {
         if (ctx == null) {
             return Optional.empty();
         }
         Expression first = expr(ctx.expression(0));
         Expression second = ctx.expression().size() > 1 ? expr(ctx.expression(1)) : null;
-        boolean limitFirst = ctx.getStart().getType() == PostgreSqlParser.LIMIT;
-        return Optional.of(support.pgRowLimit(first, second, limitFirst, pos(ctx)));
+        int start = ctx.getStart().getType();
+        // LIMIT n [OFFSET m] and FETCH FIRST/NEXT n fold count-first.
+        // OFFSET … (LIMIT | FETCH) folds offset-first.
+        boolean countFirst = start == PostgreSqlParser.LIMIT || start == PostgreSqlParser.FETCH;
+        return Optional.of(support.pgRowLimit(first, second, countFirst, pos(ctx)));
     }
 
     @Override
@@ -489,8 +492,44 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     // --- primary expressions ---
 
     @Override
-    public Object visitLiteralExpr(PostgreSqlParser.LiteralExprContext ctx) {
-        return visit(ctx.literal());
+    public Object visitPgColonCastChain(PostgreSqlParser.PgColonCastChainContext ctx) {
+        Expression value = (Expression) visit(ctx.primaryBase());
+        for (PostgreSqlParser.DataTypeContext typeCtx : ctx.dataType()) {
+            value = new CastExpression(value, castType(typeCtx), pos(ctx));
+        }
+        return value;
+    }
+
+    @Override
+    public Object visitPrimaryBase(PostgreSqlParser.PrimaryBaseContext ctx) {
+        if (ctx.literal() != null) {
+            return visit(ctx.literal());
+        }
+        if (ctx.caseExpression() != null) {
+            return visit(ctx.caseExpression());
+        }
+        if (ctx.CAST() != null) {
+            return new CastExpression(expr(ctx.expression()), castType(ctx.dataType()), pos(ctx));
+        }
+        if (ctx.functionCall() != null) {
+            FunctionCall call = (FunctionCall) visit(ctx.functionCall());
+            if (ctx.windowOverlay() != null) {
+                WindowSpec spec = (WindowSpec) visit(ctx.windowOverlay().windowSpecification());
+                if (spec.frame().isPresent()) {
+                    throw support.refuse("window frame", spec.frame().get().pos());
+                }
+                call = new FunctionCall(call.name(), call.args(), call.star(), call.quantifier(),
+                        Optional.of(spec), call.pos());
+            }
+            return call;
+        }
+        if (ctx.qualifiedName() != null) {
+            return new ColumnRef(qname(ctx.qualifiedName()), pos(ctx));
+        }
+        if (ctx.subquery() != null) {
+            return new SubqueryExpression((Query) visit(ctx.subquery()), pos(ctx));
+        }
+        return visit(ctx.expression());
     }
 
     @Override
@@ -514,41 +553,12 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     }
 
     @Override
-    public Object visitCaseExpr(PostgreSqlParser.CaseExprContext ctx) {
-        return visit(ctx.caseExpression());
-    }
-
-    @Override
     public Object visitCaseExpression(PostgreSqlParser.CaseExpressionContext ctx) {
         List<Expression> expressions = ctx.expression().stream().map(this::expr).toList();
         List<SourcePosition> whenPositions = ctx.WHEN().stream()
                 .map(w -> AstBuilderSupport.pos(w.getSymbol())).toList();
         return support.caseExpression(expressions, whenPositions, ctx.ELSE() != null,
                 pos(ctx));
-    }
-
-    @Override
-    public Object visitCastExpr(PostgreSqlParser.CastExprContext ctx) {
-        return visit(ctx.castExpression());
-    }
-
-    @Override
-    public Object visitCastExpression(PostgreSqlParser.CastExpressionContext ctx) {
-        return new CastExpression(expr(ctx.expression()), castType(ctx.dataType()), pos(ctx));
-    }
-
-    @Override
-    public Object visitFunctionExpr(PostgreSqlParser.FunctionExprContext ctx) {
-        FunctionCall call = (FunctionCall) visit(ctx.functionCall());
-        if (ctx.windowOverlay() != null) {
-            WindowSpec spec = (WindowSpec) visit(ctx.windowOverlay().windowSpecification());
-            if (spec.frame().isPresent()) {
-                throw support.refuse("window frame", spec.frame().get().pos());
-            }
-            call = new FunctionCall(call.name(), call.args(), call.star(), call.quantifier(),
-                    Optional.of(spec), call.pos());
-        }
-        return call;
     }
 
     @Override
@@ -608,21 +618,6 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
         return ctx.identifier() != null
                 ? ident(ctx.identifier())
                 : new Identifier(ctx.getText(), false, AstBuilderSupport.pos(ctx));
-    }
-
-    @Override
-    public Object visitColumnRefExpr(PostgreSqlParser.ColumnRefExprContext ctx) {
-        return new ColumnRef(qname(ctx.qualifiedName()), pos(ctx));
-    }
-
-    @Override
-    public Object visitScalarSubqueryExpr(PostgreSqlParser.ScalarSubqueryExprContext ctx) {
-        return new SubqueryExpression((Query) visit(ctx.subquery()), pos(ctx));
-    }
-
-    @Override
-    public Object visitParenExpr(PostgreSqlParser.ParenExprContext ctx) {
-        return visit(ctx.expression());
     }
 
     // --- shared extraction helpers ---

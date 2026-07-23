@@ -363,6 +363,8 @@ Adding statement N+1 is this ordered touch-list — a ~30-minute checklist, not 
 4. **Derived tables in `FROM`** — unlocks the subquery scope line drawn in the scope table
 5. **Window functions** — large expression-grammar surface; last
 
+**Wave 1 PG quick wins (PARSE coverage):** PostgreSQL `FETCH FIRST`/`NEXT … ROWS ONLY` folds into existing `RowLimit`; postfix `expr::type` folds into `CastExpression`.
+
 ---
 
 ## Two-Week Schedule at a Glance

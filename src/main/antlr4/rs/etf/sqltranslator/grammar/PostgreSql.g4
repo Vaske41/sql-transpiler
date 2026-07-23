@@ -175,14 +175,19 @@ multiplicativeExpression : unaryExpression (('*' | '/' | '%') unaryExpression)* 
 
 unaryExpression : ('-' | '+') unaryExpression | primaryExpression ;
 
+// Postfix :: casts are non-left-recursive: base then zero-or-more COLON_CAST.
 primaryExpression
-    : literal                               # literalExpr
-    | caseExpression                        # caseExpr
-    | castExpression                        # castExpr
-    | functionCall windowOverlay?           # functionExpr
-    | qualifiedName                         # columnRefExpr
-    | subquery                              # scalarSubqueryExpr
-    | '(' expression ')'                    # parenExpr
+    : primaryBase (COLON_CAST dataType)*   # pgColonCastChain
+    ;
+
+primaryBase
+    : literal
+    | caseExpression
+    | CAST '(' expression AS dataType ')'
+    | functionCall windowOverlay?
+    | qualifiedName
+    | subquery
+    | '(' expression ')'
     ;
 
 functionCall : functionName '(' (setQuantifier? expression (',' expression)* | '*')? ')' ;
@@ -217,8 +222,6 @@ caseExpression
     : CASE expression? (WHEN expression THEN expression)+ (ELSE expression)? END
     ;
 
-castExpression : CAST '(' expression AS dataType ')' ;
-
 // Two-word form exists only for DOUBLE PRECISION — the builder whitelists it.
 dataType : identifier identifier? ('(' dataTypeArg (',' dataTypeArg)? ')')? ;
 
@@ -244,10 +247,12 @@ identifier : ID | QUOTED_IDENTIFIER ;
 
 dataTypeArg : INTEGER_LITERAL ;
 
-// PG: LIMIT and OFFSET in either order.
+// PG: LIMIT/OFFSET in either order, plus SQL-standard OFFSET/FETCH.
 rowLimitClause
     : LIMIT expression (OFFSET expression)?
     | OFFSET expression (LIMIT expression)?
+    | OFFSET expression (ROW | ROWS) (FETCH (FIRST | NEXT) expression (ROW | ROWS) ONLY)?
+    | FETCH (FIRST | NEXT) expression (ROW | ROWS) ONLY
     ;
 
 autoIncrement : GENERATED (ALWAYS | BY DEFAULT) AS IDENTITY ;
@@ -285,6 +290,8 @@ USING:U S I N G; VALUES:V A L U E S; WHEN:W H E N; WHERE:W H E R E; WITH:W I T H
 // =====================================================================
 
 PIPES : '||' ;
+
+COLON_CAST : '::' ;
 
 INTEGER_LITERAL : [0-9]+ ;
 

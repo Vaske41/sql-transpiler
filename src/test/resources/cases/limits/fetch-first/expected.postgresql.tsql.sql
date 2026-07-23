@@ -1,0 +1,1 @@
+SELECT TOP (10) id FROM t ORDER BY id;
