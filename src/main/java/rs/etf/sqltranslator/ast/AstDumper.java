@@ -338,6 +338,8 @@ public final class AstDumper implements AstVisitor<String> {
         return node("FunctionCall name=" + node.name() + " star=" + node.star()
                 + optional("quantifier", node.quantifier()))
                 .children("args", node.args())
+                .children("orderBy", node.orderBy())
+                .child("filter", node.filter())
                 .child("window", node.window())
                 .done();
     }

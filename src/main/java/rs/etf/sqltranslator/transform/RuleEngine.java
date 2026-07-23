@@ -26,6 +26,7 @@ public final class RuleEngine {
                 new ValidateTargetCapabilitiesRule(),
                 new FlattenNestedCtesForTsqlRule(),
                 new NormalizeSourceFunctionsRule(),
+                new ReshapeOrderedAggregatesRule(),
                 new ResolveConcatRule(),
                 new InsertCastsRule(),
                 new RewriteBooleanSemanticsRule(),

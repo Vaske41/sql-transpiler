@@ -26,7 +26,9 @@ public final class CodegenTestSupport {
             "joins/full-join/input.postgresql.sql|MYSQL",
             "limits/limit-offset/input.mysql.sql|TSQL",
             "limits/union-limit-no-order/input.postgresql.sql|TSQL",
-            "limits/union-limit-no-order/input.mysql.sql|TSQL");
+            "limits/union-limit-no-order/input.mysql.sql|TSQL",
+            "aggregates-ordered/array-agg-ordered/input.postgresql.sql|MYSQL",
+            "aggregates-ordered/array-agg-ordered/input.postgresql.sql|TSQL");
 
     private CodegenTestSupport() {
     }

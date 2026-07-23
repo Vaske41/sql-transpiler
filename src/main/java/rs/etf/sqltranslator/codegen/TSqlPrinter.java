@@ -2,6 +2,7 @@ package rs.etf.sqltranslator.codegen;
 
 import rs.etf.sqltranslator.ast.BooleanLiteral;
 import rs.etf.sqltranslator.ast.DataType;
+import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.NullsOrder;
 import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.QuerySpecification;
@@ -76,6 +77,32 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
                 .filter(limit -> limit.offset().isEmpty() && limit.count().isPresent())
                 .isPresent()
                 && query.unionArms().isEmpty();
+    }
+
+    @Override
+    public Void visitFunctionCall(FunctionCall node) {
+        if (!node.orderBy().isEmpty()) {
+            if (!node.name().equals("STRING_AGG") || node.star()) {
+                throw new IllegalStateException(
+                        "in-arg ORDER BY must be reshaped or refused before T-SQL print: "
+                                + node.name());
+            }
+            out.token(node.name()).raw("(");
+            node.quantifier().ifPresent(q -> out.token(q.name()));
+            csv(node.args());
+            out.raw(")");
+            out.token("WITHIN").token("GROUP").raw("(");
+            out.token("ORDER").token("BY");
+            csv(node.orderBy());
+            out.raw(")");
+            node.window().ifPresent(w -> {
+                out.token("OVER").raw("(");
+                w.accept(this);
+                out.raw(")");
+            });
+            return null;
+        }
+        return super.visitFunctionCall(node);
     }
 
     @Override

@@ -274,7 +274,8 @@ public class AstTransformer implements AstVisitor<Object> {
     @Override
     public Object visitFunctionCall(FunctionCall node) {
         return new FunctionCall(node.name(), rebuildList(node.args()), node.star(),
-                node.quantifier(), rebuildOptional(node.window()), node.pos());
+                node.quantifier(), rebuildList(node.orderBy()),
+                rebuildOptional(node.filter()), rebuildOptional(node.window()), node.pos());
     }
 
     @Override

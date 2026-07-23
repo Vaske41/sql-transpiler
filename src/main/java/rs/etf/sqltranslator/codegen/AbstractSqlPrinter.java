@@ -274,9 +274,22 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         out.token(node.name()).raw("(");
         if (node.star()) {
             out.raw("*");
+        } else if (isGroupConcatWithSeparator(node)) {
+            node.quantifier().ifPresent(q -> out.token(q.name()));
+            node.args().get(0).accept(this);
+            if (!node.orderBy().isEmpty()) {
+                out.token("ORDER").token("BY");
+                csv(node.orderBy());
+            }
+            out.token("SEPARATOR");
+            node.args().get(1).accept(this);
         } else {
             node.quantifier().ifPresent(q -> out.token(q.name()));
             csv(node.args());
+            if (!node.orderBy().isEmpty()) {
+                out.token("ORDER").token("BY");
+                csv(node.orderBy());
+            }
         }
         out.raw(")");
         node.window().ifPresent(w -> {
@@ -285,6 +298,11 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             out.raw(")");
         });
         return null;
+    }
+
+    /** MySQL {@code GROUP_CONCAT(expr [ORDER BY …] SEPARATOR sep)} — sep is the 2nd arg. */
+    private static boolean isGroupConcatWithSeparator(FunctionCall node) {
+        return node.name().equals("GROUP_CONCAT") && node.args().size() == 2 && !node.star();
     }
 
     @Override

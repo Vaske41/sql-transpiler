@@ -265,6 +265,10 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
         for (Expression arg : node.args()) {
             arg.accept(this);
         }
+        for (OrderItem item : node.orderBy()) {
+            item.accept(this);
+        }
+        node.filter().ifPresent(f -> f.accept(this));
         node.window().ifPresent(w -> w.accept(this));
         return defaultResult();
     }

@@ -187,7 +187,20 @@ primaryExpression
     | '(' expression ')'                    # parenExpr
     ;
 
-functionCall : functionName '(' (setQuantifier? expression (',' expression)* | '*')? ')' ;
+functionCall
+    : functionName '(' functionArgs? ')' withinGroupClause?
+    ;
+
+functionArgs
+    : setQuantifier? expression (',' expression)*
+      (ORDER BY orderItem (',' orderItem)*)?
+      (SEPARATOR expression)?
+    | '*'
+    ;
+
+withinGroupClause
+    : WITHIN GROUP '(' ORDER BY orderItem (',' orderItem)* ')'
+    ;
 
 windowOverlay
     : OVER '(' windowSpecification ')'
@@ -274,9 +287,9 @@ NULL:N U L L; NULLS:N U L L S; OFFSET:O F F S E T; ON:O N; ONLY:O N L Y;
 OR:O R; ORDER:O R D E R; OUTER:O U T E R; OVER:O V E R;
 PARTITION:P A R T I T I O N; PRECEDING:P R E C E D I N G; PRIMARY:P R I M A R Y;
 RANGE:R A N G E; RECURSIVE:R E C U R S I V E; REFERENCES:R E F E R E N C E S; RIGHT:R I G H T; ROW:R O W; ROWS:R O W S;
-SELECT:S E L E C T; SET:S E T; TABLE:T A B L E; THEN:T H E N; TOP:T O P;
+SELECT:S E L E C T; SEPARATOR:S E P A R A T O R; SET:S E T; TABLE:T A B L E; THEN:T H E N; TOP:T O P;
 TRUE:T R U E; UNBOUNDED:U N B O U N D E D; UNION:U N I O N; UNIQUE:U N I Q U E; UPDATE:U P D A T E;
-USING:U S I N G; VALUES:V A L U E S; WHEN:W H E N; WHERE:W H E R E; WITH:W I T H;
+USING:U S I N G; VALUES:V A L U E S; WHEN:W H E N; WHERE:W H E R E; WITH:W I T H; WITHIN:W I T H I N;
 
 // =====================================================================
 // 4. Operators, literals, identifiers (dialect-specific lexing)

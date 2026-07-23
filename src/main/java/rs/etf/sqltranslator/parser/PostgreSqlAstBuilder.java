@@ -519,7 +519,7 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
                     throw support.refuse("window frame", spec.frame().get().pos());
                 }
                 call = new FunctionCall(call.name(), call.args(), call.star(), call.quantifier(),
-                        Optional.of(spec), call.pos());
+                        call.orderBy(), call.filter(), Optional.of(spec), call.pos());
             }
             return call;
         }
@@ -565,14 +565,29 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     public Object visitFunctionCall(PostgreSqlParser.FunctionCallContext ctx) {
         String name = support.functionName(functionNameIdentifier(ctx.functionName()));
         boolean star = false;
-        for (ParseTree child : ctx.children) {
-            if (child instanceof TerminalNode terminal && terminal.getText().equals("*")) {
-                star = true;
+        List<Expression> args = List.of();
+        List<OrderItem> orderBy = List.of();
+        Optional<SetQuantifier> quantifier = Optional.empty();
+        if (ctx.functionArgs() != null) {
+            PostgreSqlParser.FunctionArgsContext fa = ctx.functionArgs();
+            for (ParseTree child : fa.children) {
+                if (child instanceof TerminalNode terminal && terminal.getText().equals("*")) {
+                    star = true;
+                }
+            }
+            if (!star) {
+                args = fa.expression().stream().map(this::expr).toList();
+                orderBy = fa.orderItem().stream()
+                        .map(item -> (OrderItem) visit(item)).toList();
+                quantifier = quantifier(fa.setQuantifier());
             }
         }
-        List<Expression> args = ctx.expression().stream().map(this::expr).toList();
-        return new FunctionCall(name, args, star, quantifier(ctx.setQuantifier()),
-                Optional.empty(), pos(ctx));
+        if (ctx.withinGroupClause() != null) {
+            orderBy = ctx.withinGroupClause().orderItem().stream()
+                    .map(item -> (OrderItem) visit(item)).toList();
+        }
+        return new FunctionCall(name, args, star, quantifier, orderBy,
+                Optional.empty(), Optional.empty(), pos(ctx));
     }
 
     @Override

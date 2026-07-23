@@ -82,4 +82,21 @@ class ValidateTargetCapabilitiesRuleTest {
                 .isInstanceOf(UnsupportedFeatureException.class)
                 .hasMessageContaining("UNION requires ORDER BY");
     }
+
+    @Test
+    void arrayAggToMysqlIsRefused() {
+        assertThatThrownBy(() -> runRule(rule,
+                "SELECT ARRAY_AGG(x ORDER BY x) FROM t;",
+                Dialect.POSTGRESQL, Dialect.MYSQL))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("ARRAY_AGG");
+    }
+
+    @Test
+    void arrayAggToPostgresIsFine() {
+        assertThatCode(() -> runRule(rule,
+                "SELECT ARRAY_AGG(x ORDER BY x) FROM t;",
+                Dialect.POSTGRESQL, Dialect.POSTGRESQL))
+                .doesNotThrowAnyException();
+    }
 }

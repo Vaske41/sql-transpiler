@@ -3,6 +3,7 @@ package rs.etf.sqltranslator.transform;
 import rs.etf.sqltranslator.ast.AstTransformer;
 import rs.etf.sqltranslator.ast.ColumnRef;
 import rs.etf.sqltranslator.ast.Expression;
+import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.JoinKind;
 import rs.etf.sqltranslator.ast.Query;
@@ -26,6 +27,9 @@ import java.util.stream.Collectors;
  */
 public final class ValidateTargetCapabilitiesRule implements Rule {
 
+    private static final Set<String> ARRAY_AGGREGATES =
+            Set.of("ARRAY_AGG", "JSON_AGG", "JSONB_AGG");
+
     @Override
     public String name() {
         return "validate-target-capabilities";
@@ -42,6 +46,17 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
 
         private Validator(TranslationContext ctx) {
             this.ctx = ctx;
+        }
+
+        @Override
+        public Object visitFunctionCall(FunctionCall node) {
+            if ((ctx.target() == Dialect.MYSQL || ctx.target() == Dialect.TSQL)
+                    && ARRAY_AGGREGATES.contains(node.name())) {
+                throw new UnsupportedFeatureException(
+                        "aggregate " + node.name() + " (no array type in target)",
+                        node.pos());
+            }
+            return super.visitFunctionCall(node);
         }
 
         @Override
