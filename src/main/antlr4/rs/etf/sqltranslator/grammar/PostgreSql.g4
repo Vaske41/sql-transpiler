@@ -241,7 +241,8 @@ caseExpression
     ;
 
 // Two-word form exists only for DOUBLE PRECISION — the builder whitelists it.
-dataType : identifier identifier? ('(' dataTypeArg (',' dataTypeArg)? ')')? ;
+// Array suffixes (PG): text[], integer[][], …
+dataType : identifier identifier? ('(' dataTypeArg (',' dataTypeArg)? ')')? ('[' ']')* ;
 
 qualifiedName : identifier ('.' identifier)* ;   // >3 parts refused in Phase 3 builder
 

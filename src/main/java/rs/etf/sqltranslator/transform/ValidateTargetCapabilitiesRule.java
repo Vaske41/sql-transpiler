@@ -1,7 +1,10 @@
 package rs.etf.sqltranslator.transform;
 
 import rs.etf.sqltranslator.ast.AstTransformer;
+import rs.etf.sqltranslator.ast.CastExpression;
+import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.ColumnRef;
+import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.Join;
@@ -13,6 +16,7 @@ import rs.etf.sqltranslator.ast.Script;
 import rs.etf.sqltranslator.ast.SelectExpr;
 import rs.etf.sqltranslator.ast.SelectItem;
 import rs.etf.sqltranslator.core.Dialect;
+import rs.etf.sqltranslator.core.SourcePosition;
 import rs.etf.sqltranslator.core.UnsupportedFeatureException;
 
 import java.util.Locale;
@@ -57,6 +61,26 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
                         node.pos());
             }
             return super.visitFunctionCall(node);
+        }
+
+        @Override
+        public Object visitCastExpression(CastExpression node) {
+            refuseArrayType(node.targetType(), node.pos());
+            return super.visitCastExpression(node);
+        }
+
+        @Override
+        public Object visitColumnDefinition(ColumnDefinition node) {
+            refuseArrayType(node.type(), node.pos());
+            return super.visitColumnDefinition(node);
+        }
+
+        private void refuseArrayType(DataType type, SourcePosition pos) {
+            if (type.arrayDims() > 0
+                    && (ctx.target() == Dialect.MYSQL || ctx.target() == Dialect.TSQL)) {
+                throw new UnsupportedFeatureException(
+                        "array type (no array type in target)", pos);
+            }
         }
 
         @Override

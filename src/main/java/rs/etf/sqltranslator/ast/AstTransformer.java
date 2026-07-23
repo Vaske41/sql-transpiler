@@ -356,7 +356,8 @@ public class AstTransformer implements AstVisitor<Object> {
 
     @Override
     public Object visitDataType(DataType node) {
-        return new DataType(node.type(), rebuildOptional(node.length()), node.scale());
+        return new DataType(node.type(), rebuildOptional(node.length()), node.scale(),
+                node.arrayDims());
     }
 
     @Override

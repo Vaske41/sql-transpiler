@@ -239,7 +239,8 @@ caseExpression
 castExpression : CAST '(' expression AS dataType ')' ;
 
 // Two-word form exists only for DOUBLE PRECISION — the builder whitelists it.
-dataType : identifier identifier? ('(' dataTypeArg (',' dataTypeArg)? ')')? ;
+// Array suffixes kept for cross-dialect AST parity (PG ::type[]); non-PG refuses.
+dataType : identifier identifier? ('(' dataTypeArg (',' dataTypeArg)? ')')? ('[' ']')* ;
 
 qualifiedName : identifier ('.' identifier)* ;   // >3 parts refused in Phase 3 builder
 

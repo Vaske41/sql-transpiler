@@ -650,13 +650,17 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     }
 
     private AstBuilderSupport.FoldedType columnType(MySqlParser.DataTypeContext ctx) {
-        return support.foldColumnType(typeWord(ctx, 0), secondTypeWord(ctx), argTexts(ctx),
-                pos(ctx));
+        return AstBuilderSupport.withArrayDims(
+                support.foldColumnType(typeWord(ctx, 0), secondTypeWord(ctx), argTexts(ctx),
+                        pos(ctx)),
+                AstBuilderSupport.arrayDims(ctx));
     }
 
     private DataType castType(MySqlParser.DataTypeContext ctx) {
-        return support.foldCastType(typeWord(ctx, 0), secondTypeWord(ctx), argTexts(ctx),
-                pos(ctx));
+        return AstBuilderSupport.withArrayDims(
+                support.foldCastType(typeWord(ctx, 0), secondTypeWord(ctx), argTexts(ctx),
+                        pos(ctx)),
+                AstBuilderSupport.arrayDims(ctx));
     }
 
     private String typeWord(MySqlParser.DataTypeContext ctx, int index) {

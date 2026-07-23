@@ -61,7 +61,8 @@ public final class NarrowTypesRule implements Rule {
         private DataType narrowCastTarget(DataType type, SourcePosition pos) {
             DataType narrowed = narrow(type, pos);
             if (ctx.target() == Dialect.MYSQL && narrowed.type() == GenericType.VARCHAR) {
-                return new DataType(GenericType.CHAR, narrowed.length(), narrowed.scale());
+                return new DataType(GenericType.CHAR, narrowed.length(), narrowed.scale(),
+                        narrowed.arrayDims());
             }
             return narrowed;
         }
@@ -73,22 +74,25 @@ public final class NarrowTypesRule implements Rule {
 
             if (toMySqlOrPg && type.type() == GenericType.NVARCHAR) {
                 return maxLength
-                        ? new DataType(GenericType.TEXT, Optional.empty(), Optional.empty())
-                        : new DataType(GenericType.VARCHAR, type.length(), type.scale());
+                        ? new DataType(GenericType.TEXT, Optional.empty(), Optional.empty(),
+                        type.arrayDims())
+                        : new DataType(GenericType.VARCHAR, type.length(), type.scale(),
+                        type.arrayDims());
             }
             if (toMySqlOrPg && type.type() == GenericType.VARCHAR && maxLength) {
-                return new DataType(GenericType.TEXT, Optional.empty(), Optional.empty());
+                return new DataType(GenericType.TEXT, Optional.empty(), Optional.empty(),
+                        type.arrayDims());
             }
             if (ctx.target() == Dialect.TSQL && type.type() == GenericType.TEXT) {
                 return new DataType(GenericType.NVARCHAR,
-                        Optional.of(new MaxLength()), Optional.empty());
+                        Optional.of(new MaxLength()), Optional.empty(), type.arrayDims());
             }
             if (type.type() == GenericType.TINYINT) {
                 if (ctx.target() == Dialect.POSTGRESQL) {
                     ctx.report().warn("TINYINT_WIDENED",
                             "PostgreSQL has no TINYINT; widened to SMALLINT", pos);
                     return new DataType(GenericType.SMALLINT, Optional.empty(),
-                            Optional.empty());
+                            Optional.empty(), type.arrayDims());
                 }
                 boolean crossesSignedness =
                         (ctx.source() == Dialect.MYSQL && ctx.target() == Dialect.TSQL)

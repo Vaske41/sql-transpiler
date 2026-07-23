@@ -438,7 +438,8 @@ public final class AstDumper implements AstVisitor<String> {
     @Override
     public String visitDataType(DataType node) {
         return node("DataType type=" + node.type()
-                + node.scale().map(s -> " scale=" + s).orElse(""))
+                + node.scale().map(s -> " scale=" + s).orElse("")
+                + (node.arrayDims() > 0 ? " arrayDims=" + node.arrayDims() : ""))
                 .child("length", node.length())
                 .done();
     }

@@ -657,13 +657,17 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     }
 
     private AstBuilderSupport.FoldedType columnType(PostgreSqlParser.DataTypeContext ctx) {
-        return support.foldColumnType(typeWord(ctx, 0), secondTypeWord(ctx), argTexts(ctx),
-                pos(ctx));
+        return AstBuilderSupport.withArrayDims(
+                support.foldColumnType(typeWord(ctx, 0), secondTypeWord(ctx), argTexts(ctx),
+                        pos(ctx)),
+                AstBuilderSupport.arrayDims(ctx));
     }
 
     private DataType castType(PostgreSqlParser.DataTypeContext ctx) {
-        return support.foldCastType(typeWord(ctx, 0), secondTypeWord(ctx), argTexts(ctx),
-                pos(ctx));
+        return AstBuilderSupport.withArrayDims(
+                support.foldCastType(typeWord(ctx, 0), secondTypeWord(ctx), argTexts(ctx),
+                        pos(ctx)),
+                AstBuilderSupport.arrayDims(ctx));
     }
 
     private String typeWord(PostgreSqlParser.DataTypeContext ctx, int index) {

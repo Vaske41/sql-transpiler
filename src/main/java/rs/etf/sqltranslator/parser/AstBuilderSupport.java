@@ -517,6 +517,27 @@ final class AstBuilderSupport {
         return folded.dataType();
     }
 
+    /** Counts {@code []} suffixes on a {@code dataType} parse tree. */
+    static int arrayDims(ParserRuleContext ctx) {
+        int dims = 0;
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            if ("[".equals(ctx.getChild(i).getText())) {
+                dims++;
+            }
+        }
+        return dims;
+    }
+
+    static DataType withArrayDims(DataType type, int dims) {
+        return dims == 0 ? type
+                : new DataType(type.type(), type.length(), type.scale(), dims);
+    }
+
+    static FoldedType withArrayDims(FoldedType folded, int dims) {
+        return dims == 0 ? folded
+                : new FoldedType(withArrayDims(folded.dataType(), dims), folded.autoIncrement());
+    }
+
     private FoldedType fold(String word1, String word2, List<String> args,
                             SourcePosition position) {
         String name = word1.toUpperCase(Locale.ROOT);

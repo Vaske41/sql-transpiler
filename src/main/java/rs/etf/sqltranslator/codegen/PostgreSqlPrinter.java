@@ -47,6 +47,9 @@ public final class PostgreSqlPrinter extends AbstractSqlPrinter {
         };
         out.token(name);
         renderTypeArgs(type);
+        for (int i = 0; i < type.arrayDims(); i++) {
+            out.raw("[]");
+        }
     }
 
     @Override

@@ -32,6 +32,10 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
 
     @Override
     protected void renderDataType(DataType type) {
+        if (type.arrayDims() > 0) {
+            throw new IllegalStateException(
+                    "rule engine contract: array type must not reach the MySQL printer");
+        }
         if (type.type() == rs.etf.sqltranslator.ast.GenericType.BOOLEAN) {
             out.token("TINYINT(1)");                 // carries no args by construction
             return;

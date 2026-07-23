@@ -99,4 +99,30 @@ class ValidateTargetCapabilitiesRuleTest {
                 Dialect.POSTGRESQL, Dialect.POSTGRESQL))
                 .doesNotThrowAnyException();
     }
+
+    @Test
+    void arrayTypeColonCastToMysqlIsRefused() {
+        assertThatThrownBy(() -> runRule(rule,
+                "SELECT '{}'::text[] FROM t;",
+                Dialect.POSTGRESQL, Dialect.MYSQL))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("array type");
+    }
+
+    @Test
+    void arrayTypeColonCastToTsqlIsRefused() {
+        assertThatThrownBy(() -> runRule(rule,
+                "SELECT '{}'::text[] FROM t;",
+                Dialect.POSTGRESQL, Dialect.TSQL))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("array type");
+    }
+
+    @Test
+    void arrayTypeColonCastToPostgresIsFine() {
+        assertThatCode(() -> runRule(rule,
+                "SELECT '{}'::text[] FROM t;",
+                Dialect.POSTGRESQL, Dialect.POSTGRESQL))
+                .doesNotThrowAnyException();
+    }
 }

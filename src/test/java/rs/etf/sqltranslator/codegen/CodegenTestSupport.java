@@ -29,7 +29,9 @@ public final class CodegenTestSupport {
             "limits/union-limit-no-order/input.mysql.sql|TSQL",
             "aggregates-ordered/array-agg-ordered/input.postgresql.sql|MYSQL",
             "aggregates-ordered/array-agg-ordered/input.postgresql.sql|TSQL",
-            "aggregates-ordered/group-concat-ordered/input.mysql.sql|TSQL");
+            "aggregates-ordered/group-concat-ordered/input.mysql.sql|TSQL",
+            "casts/pg-array-cast/input.postgresql.sql|MYSQL",
+            "casts/pg-array-cast/input.postgresql.sql|TSQL");
 
     private CodegenTestSupport() {
     }

@@ -113,6 +113,10 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
 
     @Override
     protected void renderDataType(DataType type) {
+        if (type.arrayDims() > 0) {
+            throw new IllegalStateException(
+                    "rule engine contract: array type must not reach the T-SQL printer");
+        }
         if (type.type() == rs.etf.sqltranslator.ast.GenericType.BLOB) {
             out.token("VARBINARY(MAX)");             // carries no args by construction
             return;
