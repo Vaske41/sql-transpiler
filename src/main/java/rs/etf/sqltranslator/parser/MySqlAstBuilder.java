@@ -564,8 +564,14 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
             orderBy = ctx.withinGroupClause().orderItem().stream()
                     .map(item -> (OrderItem) visit(item)).toList();
         }
+        Optional<Expression> filter = Optional.empty();
+        if (ctx.aggFilter() != null) {
+            filter = Optional.of(support.aggregateFilterKeyword(
+                    ident(ctx.aggFilter().identifier()),
+                    expr(ctx.aggFilter().expression())));
+        }
         return new FunctionCall(name, args, star, quantifier, orderBy,
-                Optional.empty(), Optional.empty(), pos(ctx));
+                filter, Optional.empty(), pos(ctx));
     }
 
     @Override

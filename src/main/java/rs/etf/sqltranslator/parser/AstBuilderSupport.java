@@ -154,6 +154,16 @@ final class AstBuilderSupport {
         return name.value().toUpperCase(Locale.ROOT);
     }
 
+    /**
+     * Contextual {@code FILTER (WHERE …)} — {@code name} must be the unquoted identifier
+     * {@code FILTER}. Avoids reserving {@code FILTER} as a keyword in the shared block.
+     */
+    Expression aggregateFilterKeyword(Identifier name, Expression predicate) {
+        refuseIf(name.quoted() || !name.value().equalsIgnoreCase("FILTER"),
+                "aggregate filter keyword \"" + name.value() + "\"", name.pos());
+        return predicate;
+    }
+
     // ------------------------------------------------------------------
     // Literals
     // ------------------------------------------------------------------

@@ -187,7 +187,7 @@ primaryExpression
     ;
 
 functionCall
-    : functionName '(' functionArgs? ')' withinGroupClause?
+    : functionName '(' functionArgs? ')' withinGroupClause? aggFilter?
     ;
 
 functionArgs
@@ -199,6 +199,11 @@ functionArgs
 
 withinGroupClause
     : WITHIN GROUP '(' ORDER BY orderItem (',' orderItem)* ')'
+    ;
+
+// Contextual FILTER — builder requires identifier text FILTER (no new keyword).
+aggFilter
+    : identifier '(' WHERE expression ')'
     ;
 
 windowOverlay

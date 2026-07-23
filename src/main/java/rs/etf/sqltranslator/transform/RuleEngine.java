@@ -27,6 +27,7 @@ public final class RuleEngine {
                 new FlattenNestedCtesForTsqlRule(),
                 new NormalizeSourceFunctionsRule(),
                 new ReshapeOrderedAggregatesRule(),
+                new RewriteFilteredAggregatesRule(),
                 new ResolveConcatRule(),
                 new InsertCastsRule(),
                 new RewriteBooleanSemanticsRule(),

@@ -292,6 +292,12 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             }
         }
         out.raw(")");
+        node.filter().ifPresent(f -> {
+            out.token("FILTER").raw("(");
+            out.token("WHERE");
+            f.accept(this);
+            out.raw(")");
+        });
         node.window().ifPresent(w -> {
             out.token("OVER").raw("(");
             w.accept(this);
