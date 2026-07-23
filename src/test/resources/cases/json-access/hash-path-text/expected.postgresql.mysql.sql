@@ -1,1 +1,1 @@
-SELECT col -> 'a' ->> 'b' FROM t;
+SELECT col ->> '$.a.b' FROM t;

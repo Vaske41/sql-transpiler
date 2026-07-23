@@ -16,7 +16,18 @@ class RenderJsonRuleTest {
                 "SELECT data ->> 'id' FROM t;",
                 Dialect.POSTGRESQL, Dialect.MYSQL).sql())
                 .contains("->>")
-                .contains("'id'");
+                .contains("'$.id'")
+                .doesNotContain("->> 'id'");
+    }
+
+    @Test
+    void mysqlDollarPathNotDoublePrefixedTowardTsql() {
+        assertThat(CodegenTestSupport.printTranslated(
+                "SELECT data ->> '$.id' FROM t;",
+                Dialect.MYSQL, Dialect.TSQL).sql())
+                .contains("JSON_VALUE")
+                .contains("'$.id'")
+                .doesNotContain("'$.$.id'");
     }
 
     @Test
@@ -40,14 +51,14 @@ class RenderJsonRuleTest {
     }
 
     @Test
-    void hashPathExpandsTowardMysql() {
+    void hashPathCollapsesTowardMysql() {
         assertThat(CodegenTestSupport.printTranslated(
                 "SELECT col #> '{a,b}' FROM t;",
                 Dialect.POSTGRESQL, Dialect.MYSQL).sql())
                 .contains("->")
-                .contains("'a'")
-                .contains("'b'")
-                .doesNotContain("#>");
+                .contains("'$.a.b'")
+                .doesNotContain("#>")
+                .doesNotContain("-> 'a'");
     }
 
     @Test

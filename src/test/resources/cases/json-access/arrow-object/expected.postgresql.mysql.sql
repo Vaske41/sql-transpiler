@@ -1,1 +1,1 @@
-SELECT data -> 'k' FROM t;
+SELECT data -> '$.k' FROM t;

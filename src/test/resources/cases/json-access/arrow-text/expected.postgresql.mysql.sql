@@ -1,1 +1,1 @@
-SELECT data ->> 'id' FROM t;
+SELECT data ->> '$.id' FROM t;

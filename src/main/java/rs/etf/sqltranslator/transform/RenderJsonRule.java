@@ -20,8 +20,8 @@ import java.util.Optional;
  * Render JSON access operators for the target dialect.
  * <ul>
  *   <li>PostgreSQL — native ({@code ->}, {@code ->>}, {@code #>}, {@code #>>}, {@code @>}).</li>
- *   <li>MySQL — {@code ->}/{@code ->>} native; {@code #>}{@code #>>} rewritten to arrow
- *       chains when the path is a literal {@code '{a,b}'} array; containment refused.</li>
+ *   <li>MySQL — {@code ->}/{@code ->>} with {@code $.…} paths; {@code #>}{@code #>>}
+ *       collapsed to a single arrow with a combined path; containment refused.</li>
  *   <li>T-SQL — {@code ->}→{@code JSON_QUERY}, {@code ->>}→{@code JSON_VALUE} (and path
  *       forms) with {@code $.k} paths from literal keys; non-literal keys and
  *       containment refused.</li>
@@ -65,9 +65,9 @@ public final class RenderJsonRule implements Rule {
 
         private Expression towardMysql(BinaryOp op) {
             return switch (op.op()) {
-                case JSON_GET, JSON_GET_TEXT -> op;
-                case JSON_PATH -> expandPath(op, false);
-                case JSON_PATH_TEXT -> expandPath(op, true);
+                case JSON_GET, JSON_GET_TEXT -> withMysqlKeyPath(op);
+                case JSON_PATH -> collapsePath(op, false);
+                case JSON_PATH_TEXT -> collapsePath(op, true);
                 case JSON_CONTAINS -> refuseContains(op);
                 default -> op;
             };
@@ -84,18 +84,31 @@ public final class RenderJsonRule implements Rule {
             };
         }
 
-        private Expression expandPath(BinaryOp op, boolean asText) {
-            List<String> keys = pathKeys(op);
-            Expression chain = op.left();
-            for (int i = 0; i < keys.size(); i++) {
-                boolean last = i == keys.size() - 1;
-                BinaryOperator arrow = (asText && last)
-                        ? BinaryOperator.JSON_GET_TEXT
-                        : BinaryOperator.JSON_GET;
-                chain = new BinaryOp(arrow, chain,
-                        new StringLiteral(keys.get(i), false, op.pos()), op.pos());
+        /** Rewrite a single-key arrow so MySQL gets a {@code $.…} path literal. */
+        private Expression withMysqlKeyPath(BinaryOp op) {
+            if (!(op.right() instanceof StringLiteral lit)) {
+                throw new UnsupportedFeatureException(
+                        "JSON access with non-literal key toward MySQL", op.pos());
             }
-            return chain;
+            String path = toDollarPath(lit.value());
+            if (path.equals(lit.value())) {
+                return op;
+            }
+            return new BinaryOp(op.op(), op.left(),
+                    new StringLiteral(path, lit.national(), op.pos()), op.pos());
+        }
+
+        /**
+         * Collapse {@code #>} / {@code #>>} to a single MySQL {@code ->} / {@code ->>}
+         * with a combined {@code $.a.b} path (not a multi-arrow chain).
+         */
+        private Expression collapsePath(BinaryOp op, boolean asText) {
+            List<String> keys = pathKeys(op);
+            BinaryOperator arrow = asText
+                    ? BinaryOperator.JSON_GET_TEXT
+                    : BinaryOperator.JSON_GET;
+            return new BinaryOp(arrow, op.left(),
+                    new StringLiteral(multiDollarPath(keys), false, op.pos()), op.pos());
         }
 
         private String singleKeyPath(BinaryOp op) {
@@ -103,16 +116,49 @@ public final class RenderJsonRule implements Rule {
                 throw new UnsupportedFeatureException(
                         "JSON access with non-literal key toward T-SQL", op.pos());
             }
-            return "$." + lit.value();
+            return toDollarPath(lit.value());
         }
 
         private String multiKeyPath(BinaryOp op) {
-            List<String> keys = pathKeys(op);
+            return multiDollarPath(pathKeys(op));
+        }
+
+        /**
+         * Build a MySQL/T-SQL JSON path from a bare key, preserving an existing
+         * {@code $…} prefix (avoids {@code $.$.id} for MySQL-sourced paths).
+         */
+        private static String toDollarPath(String key) {
+            if (key.startsWith("$")) {
+                return key;
+            }
+            if (isNumericPathLeg(key)) {
+                return "$[" + key + "]";
+            }
+            return "$." + key;
+        }
+
+        private static String multiDollarPath(List<String> keys) {
             StringBuilder path = new StringBuilder("$");
             for (String key : keys) {
-                path.append('.').append(key);
+                if (isNumericPathLeg(key)) {
+                    path.append('[').append(key).append(']');
+                } else {
+                    path.append('.').append(key);
+                }
             }
             return path.toString();
+        }
+
+        private static boolean isNumericPathLeg(String key) {
+            if (key.isEmpty()) {
+                return false;
+            }
+            for (int i = 0; i < key.length(); i++) {
+                if (!Character.isDigit(key.charAt(i))) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         private List<String> pathKeys(BinaryOp op) {
