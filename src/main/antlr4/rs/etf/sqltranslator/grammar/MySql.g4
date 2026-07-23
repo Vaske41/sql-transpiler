@@ -109,15 +109,15 @@ setQuantifier : DISTINCT | ALL ;
 selectItem
     : '*'                                   # selectStar
     | qualifiedName '.' '*'                 # selectQualifiedStar
-    | expression (AS? identifier)?          # selectExpr
+    | expression (AS? aliasName)?           # selectExpr
     ;
 
 tableSource : tablePrimary joinedTable* ;
 
 tablePrimary
-    : qualifiedName (AS? identifier)?                          # namedTablePrimary
-    | '(' queryExpression ')' AS? identifier
-        ('(' identifier (',' identifier)* ')')?              # derivedTablePrimary
+    : qualifiedName (AS? aliasName)?                           # namedTablePrimary
+    | '(' queryExpression ')' AS? aliasName
+        ('(' columnName (',' columnName)* ')')?              # derivedTablePrimary
     ;
 
 joinedTable
@@ -188,7 +188,7 @@ primaryExpression
     | castExpression                        # castExpr
     | intervalLiteral                       # intervalExpr
     | functionCall windowOverlay?           # functionExpr
-    | qualifiedName                         # columnRefExpr
+    | columnReference                       # columnRefExpr
     | subquery                              # scalarSubqueryExpr
     | '(' expression ')'                    # parenExpr
     ;
@@ -258,6 +258,15 @@ castExpression : CAST '(' expression AS dataType ')' ;
 dataType : identifier identifier? ('(' dataTypeArg (',' dataTypeArg)? ')')? ('[' ']')* ;
 
 qualifiedName : identifier ('.' identifier)* ;   // >3 parts refused in Phase 3 builder
+
+// Column refs / aliases may use a curated keyword; table names stay identifier-only.
+columnReference : columnName ('.' columnName)* ;
+columnName : identifier | nonReservedWord ;
+aliasName  : identifier | nonReservedWord ;
+
+nonReservedWord
+    : KEY | FIRST | LAST | END
+    ;
 
 // MySQL: booleans are literals.
 literal

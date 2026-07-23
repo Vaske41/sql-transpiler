@@ -183,8 +183,8 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
 
     @Override
     public Object visitSelectExpr(PostgreSqlParser.SelectExprContext ctx) {
-        Optional<Identifier> alias = ctx.identifier() == null
-                ? Optional.empty() : Optional.of(ident(ctx.identifier()));
+        Optional<Identifier> alias = ctx.aliasName() == null
+                ? Optional.empty() : Optional.of(aliasName(ctx.aliasName()));
         return new SelectExpr(expr(ctx.expression()), alias, pos(ctx));
     }
 
@@ -196,18 +196,18 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
 
     @Override
     public Object visitNamedTablePrimary(PostgreSqlParser.NamedTablePrimaryContext ctx) {
-        Optional<Identifier> alias = ctx.identifier() == null
-                ? Optional.empty() : Optional.of(ident(ctx.identifier()));
+        Optional<Identifier> alias = ctx.aliasName() == null
+                ? Optional.empty() : Optional.of(aliasName(ctx.aliasName()));
         return new TableRef(qname(ctx.qualifiedName()), alias, pos(ctx));
     }
 
     @Override
     public Object visitDerivedTablePrimary(PostgreSqlParser.DerivedTablePrimaryContext ctx) {
         Query query = (Query) visit(ctx.queryExpression());
-        Identifier alias = ident(ctx.identifier(0));
+        Identifier alias = aliasName(ctx.aliasName());
         Optional<List<Identifier>> cols = Optional.empty();
-        if (ctx.identifier().size() > 1) {
-            cols = Optional.of(ctx.identifier().stream().skip(1).map(this::ident).toList());
+        if (!ctx.columnName().isEmpty()) {
+            cols = Optional.of(ctx.columnName().stream().map(this::columnName).toList());
         }
         return new DerivedTable(query, alias, cols, pos(ctx));
     }
@@ -532,8 +532,8 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
             }
             return call;
         }
-        if (ctx.qualifiedName() != null) {
-            return new ColumnRef(qname(ctx.qualifiedName()), pos(ctx));
+        if (ctx.columnReference() != null) {
+            return new ColumnRef(columnRef(ctx.columnReference()), pos(ctx));
         }
         if (ctx.subquery() != null) {
             return new SubqueryExpression((Query) visit(ctx.subquery()), pos(ctx));
@@ -675,8 +675,21 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
         return support.identifier(ctx.getStart());
     }
 
+    private Identifier columnName(PostgreSqlParser.ColumnNameContext ctx) {
+        return support.identifier(ctx.getStart());
+    }
+
+    private Identifier aliasName(PostgreSqlParser.AliasNameContext ctx) {
+        return support.identifier(ctx.getStart());
+    }
+
     private QualifiedName qname(PostgreSqlParser.QualifiedNameContext ctx) {
         return support.qualifiedName(ctx.identifier().stream().map(this::ident).toList(),
+                pos(ctx));
+    }
+
+    private QualifiedName columnRef(PostgreSqlParser.ColumnReferenceContext ctx) {
+        return support.qualifiedName(ctx.columnName().stream().map(this::columnName).toList(),
                 pos(ctx));
     }
 

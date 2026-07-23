@@ -56,6 +56,7 @@ class CrossDialectAstEqualityTest {
             "functions/count-star-distinct",
             "functions/left-right",
             "functions/max-aggregate",
+            "identifiers/reserved-word-columns",
             "indexes/create-index-basic",
             "indexes/create-unique-index-desc",
             "insert-update-delete/delete-where",

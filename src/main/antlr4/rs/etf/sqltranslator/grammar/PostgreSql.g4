@@ -107,15 +107,15 @@ setQuantifier : DISTINCT | ALL ;
 selectItem
     : '*'                                   # selectStar
     | qualifiedName '.' '*'                 # selectQualifiedStar
-    | expression (AS? identifier)?          # selectExpr
+    | expression (AS? aliasName)?           # selectExpr
     ;
 
 tableSource : tablePrimary joinedTable* ;
 
 tablePrimary
-    : qualifiedName (AS? identifier)?                          # namedTablePrimary
-    | '(' queryExpression ')' AS? identifier
-        ('(' identifier (',' identifier)* ')')?              # derivedTablePrimary
+    : qualifiedName (AS? aliasName)?                           # namedTablePrimary
+    | '(' queryExpression ')' AS? aliasName
+        ('(' columnName (',' columnName)* ')')?              # derivedTablePrimary
     ;
 
 joinedTable
@@ -192,7 +192,7 @@ primaryBase
     | CAST '(' expression AS dataType ')'
     | intervalLiteral
     | functionCall windowOverlay?
-    | qualifiedName
+    | columnReference
     | subquery
     | '(' expression ')'
     ;
@@ -260,6 +260,15 @@ caseExpression
 dataType : identifier identifier? ('(' dataTypeArg (',' dataTypeArg)? ')')? ('[' ']')* ;
 
 qualifiedName : identifier ('.' identifier)* ;   // >3 parts refused in Phase 3 builder
+
+// Column refs / aliases may use a curated keyword; table names stay identifier-only.
+columnReference : columnName ('.' columnName)* ;
+columnName : identifier | nonReservedWord ;
+aliasName  : identifier | nonReservedWord ;
+
+nonReservedWord
+    : KEY | FIRST | LAST | END
+    ;
 
 // PG: booleans are literals (bare boolean columns are valid predicates —
 // already covered by simplePredicate → columnRefExpr).

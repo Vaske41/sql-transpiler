@@ -178,8 +178,8 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
 
     @Override
     public Object visitSelectExpr(MySqlParser.SelectExprContext ctx) {
-        Optional<Identifier> alias = ctx.identifier() == null
-                ? Optional.empty() : Optional.of(ident(ctx.identifier()));
+        Optional<Identifier> alias = ctx.aliasName() == null
+                ? Optional.empty() : Optional.of(aliasName(ctx.aliasName()));
         return new SelectExpr(expr(ctx.expression()), alias, pos(ctx));
     }
 
@@ -191,18 +191,18 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
 
     @Override
     public Object visitNamedTablePrimary(MySqlParser.NamedTablePrimaryContext ctx) {
-        Optional<Identifier> alias = ctx.identifier() == null
-                ? Optional.empty() : Optional.of(ident(ctx.identifier()));
+        Optional<Identifier> alias = ctx.aliasName() == null
+                ? Optional.empty() : Optional.of(aliasName(ctx.aliasName()));
         return new TableRef(qname(ctx.qualifiedName()), alias, pos(ctx));
     }
 
     @Override
     public Object visitDerivedTablePrimary(MySqlParser.DerivedTablePrimaryContext ctx) {
         Query query = (Query) visit(ctx.queryExpression());
-        Identifier alias = ident(ctx.identifier(0));
+        Identifier alias = aliasName(ctx.aliasName());
         Optional<List<Identifier>> cols = Optional.empty();
-        if (ctx.identifier().size() > 1) {
-            cols = Optional.of(ctx.identifier().stream().skip(1).map(this::ident).toList());
+        if (!ctx.columnName().isEmpty()) {
+            cols = Optional.of(ctx.columnName().stream().map(this::columnName).toList());
         }
         return new DerivedTable(query, alias, cols, pos(ctx));
     }
@@ -647,7 +647,7 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
 
     @Override
     public Object visitColumnRefExpr(MySqlParser.ColumnRefExprContext ctx) {
-        return new ColumnRef(qname(ctx.qualifiedName()), pos(ctx));
+        return new ColumnRef(columnRef(ctx.columnReference()), pos(ctx));
     }
 
     @Override
@@ -670,8 +670,21 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
         return support.identifier(ctx.getStart());
     }
 
+    private Identifier columnName(MySqlParser.ColumnNameContext ctx) {
+        return support.identifier(ctx.getStart());
+    }
+
+    private Identifier aliasName(MySqlParser.AliasNameContext ctx) {
+        return support.identifier(ctx.getStart());
+    }
+
     private QualifiedName qname(MySqlParser.QualifiedNameContext ctx) {
         return support.qualifiedName(ctx.identifier().stream().map(this::ident).toList(),
+                pos(ctx));
+    }
+
+    private QualifiedName columnRef(MySqlParser.ColumnReferenceContext ctx) {
+        return support.qualifiedName(ctx.columnName().stream().map(this::columnName).toList(),
                 pos(ctx));
     }
 

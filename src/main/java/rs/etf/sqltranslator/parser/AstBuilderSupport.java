@@ -120,7 +120,9 @@ final class AstBuilderSupport {
     // Identifiers, names, function names
     // ------------------------------------------------------------------
 
-    /** Unquotes/unescapes one identifier token per this dialect's rules (D6). */
+    /** Unquotes/unescapes one identifier token per this dialect's rules (D6).
+     *  Also maps {@code nonReservedWord} tokens (KEY/FIRST/LAST/…) to plain Identifiers —
+     *  downstream is oblivious to how the name lexed. */
     Identifier identifier(Token token) {
         String text = token.getText();
         SourcePosition p = pos(token);
