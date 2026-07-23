@@ -19,6 +19,39 @@ Composer fixtures.
 **Forbidden captions / wording:** “PARROT accuracy,” AccEX, AccRES, leaderboard
 parity, or implying SUCCESS% equals translation accuracy vs PARROT gold.
 
+### Wave 1 reporting caption
+
+Wave 1 remeasures the **frozen 1,426-task** PARROT-Diverse cohort after shipping
+non-recursive CTEs, derived tables, frameless windows, and PostgreSQL
+`FETCH`/`::` (Extension Queue items 3–5 + PG quick wins).
+
+```text
+python evaluation/bin/remeasure_parrot_wave1.py
+```
+
+Gate args are exactly `EvaluationMain --corpus parrot-diverse` (**sqltranslate
+only**; no `--sqlglot`). Artifact:
+`evaluation/results-local/parrot-wave1-remeasure.csv` (gitignored).
+
+| | SUCCESS | PARSE | REFUSED | SUCCESS rate |
+|---|---:|---:|---:|---:|
+| Pre–Wave 1 baseline | 345 | 1057 | 24 | 24.2% |
+| Post–Wave 1 (remeasure) | **654** | 666 | 106 | **45.9%** |
+| Δ | **+309** | −391 | +82 | +21.7 pp |
+| Wave 1 bar (~65%) | ≥ ~927 | — | — | **not met** |
+
+Caption CSV `SUCCESS` as **parse→rules→print coverage** (process exit 0), **not**
+AccEX, gold_sql match, or catalog-semantic translation quality.
+
+**Bar honesty:** the Option B ~65% forecast assumed exclusive WITH/OVER/DERIVED
+primary slices convert when those constructs ship. Post-remeasure, Wave 1 token
+residuals among remaining PARSE are tiny (strict primary: WITH≈5, OVER≈8,
+FETCH≈1), while the bulk of remaining PARSE is out-of-scope long-tail
+(DDL/routines, vendor functions/intervals, JSON, vars/brackets, other syntax).
++82 REFUSED are mostly honest Wave 1 refusals (`recursive CTE`, `window frame`)
+plus type long-tail. **Do not silently lower the bar** — publish this remainder
+as the thesis finding; any bar revision needs this evidence table.
+
 Stratify thesis reporting by `hf_id` (benchmark family), not a single
 undifferentiated SUCCESS%. `case_id` embeds it as
 `{hf_row:05d}-{hf_id}-{source}-to-{target}` (see root README Python/Excel

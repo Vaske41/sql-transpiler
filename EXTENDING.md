@@ -135,9 +135,14 @@ the documented rollback if the ladder proves incomplete.
 
 1. ~~`INSERT ... SELECT`~~ — shipped (2026-07) — one grammar alternative + one AST field reusing `Query`
 2. ~~`CREATE INDEX`~~ — shipped (2026-07) — small grammar surface, high practical relevance
-3. ~~CTEs (`WITH`)~~ — shipped (2026-07) — non-recursive `WITH` / `Cte` on `Query`; refuse recursive
-4. ~~Derived tables in `FROM`~~ — shipped (2026-07) — `Relation` / `DerivedTable`
-5. ~~Window functions~~ — shipped (2026-07) — frameless `OVER` / `WindowSpec` on `FunctionCall`; refuse frames
+3. ~~CTEs (`WITH`)~~ — shipped (Wave 1) — `WITH RECURSIVE` and CTE self-reference refused (T-SQL recursion without keyword included)
+4. ~~Derived tables in `FROM`~~ — shipped (Wave 1)
+5. ~~Window functions~~ — shipped (Wave 1) — frames refused
+
+**D9 amended for Extension Queue items 3–5** (Wave 1): `Cte` on `Query`,
+`Relation`/`DerivedTable`, and frameless `WindowSpec` on `FunctionCall` are in
+the frozen AST. Engine-backed `cases/semantic/` for CTE/window is **deferred**
+(follow-up plan).
 
 The queue is the first thing sacrificed when behind schedule: v1 scope never
 grows before the day-14 milestones are green.
