@@ -7,6 +7,7 @@ import rs.etf.sqltranslator.ast.CastExpression;
 import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.ColumnRef;
 import rs.etf.sqltranslator.ast.DataType;
+import rs.etf.sqltranslator.ast.DeleteStatement;
 import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.FrameBound;
 import rs.etf.sqltranslator.ast.FrameBoundKind;
@@ -98,6 +99,15 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
                 throw new UnsupportedFeatureException(
                         "array type (no array type in target)", pos);
             }
+        }
+
+        @Override
+        public Object visitDeleteStatement(DeleteStatement node) {
+            if (ctx.target() == Dialect.TSQL && node.usingClause().isPresent()) {
+                throw new UnsupportedFeatureException(
+                        "DELETE USING is not supported by T-SQL", node.pos());
+            }
+            return super.visitDeleteStatement(node);
         }
 
         @Override

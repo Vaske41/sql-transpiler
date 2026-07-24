@@ -59,7 +59,9 @@ assignment
     | qualifiedName '=' expression
     ;
 
-deleteStatement : DELETE FROM qualifiedName whereClause? ;
+deleteStatement
+    : DELETE FROM qualifiedName (AS? identifier)? (USING tableSource)? whereClause?
+    ;
 
 createTableStatement : CREATE TABLE qualifiedName '(' tableElement (',' tableElement)* ')' ;
 
@@ -151,7 +153,8 @@ selectStatement : queryExpression ;
 queryExpression
     : withClause? querySpecification (UNION ALL? querySpecification)*
       orderByClause?
-      rowLimitClause?
+      rowLimitClause?                                              # queryExprSetOps
+    | '(' queryExpression ')'                                      # queryExprParen
     ;
 
 withClause

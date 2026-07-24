@@ -112,7 +112,12 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     // --- query shape ---
 
     @Override
-    public Object visitQueryExpression(TSqlParser.QueryExpressionContext ctx) {
+    public Object visitQueryExprParen(TSqlParser.QueryExprParenContext ctx) {
+        return visit(ctx.queryExpression());
+    }
+
+    @Override
+    public Object visitQueryExprSetOps(TSqlParser.QueryExprSetOpsContext ctx) {
         List<Cte> ctes = List.of();
         boolean recursive = false;
         if (ctx.withClause() != null) {
@@ -408,9 +413,13 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
 
     @Override
     public Object visitDeleteStatement(TSqlParser.DeleteStatementContext ctx) {
+        Optional<Identifier> alias = ctx.identifier() == null
+                ? Optional.empty() : Optional.of(ident(ctx.identifier()));
+        Optional<TableSource> using = ctx.tableSource() == null
+                ? Optional.empty() : Optional.of((TableSource) visit(ctx.tableSource()));
         Optional<Expression> where = ctx.whereClause() == null
                 ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
-        return new DeleteStatement(qname(ctx.qualifiedName()), where, pos(ctx));
+        return new DeleteStatement(qname(ctx.qualifiedName()), alias, using, where, pos(ctx));
     }
 
     // --- DDL ---

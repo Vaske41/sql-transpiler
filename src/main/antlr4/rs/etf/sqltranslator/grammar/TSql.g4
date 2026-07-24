@@ -59,7 +59,9 @@ assignment
     | qualifiedName '=' expression
     ;
 
-deleteStatement : DELETE FROM qualifiedName whereClause? ;
+deleteStatement
+    : DELETE FROM qualifiedName (AS? identifier)? (USING tableSource)? whereClause?
+    ;
 
 createTableStatement : CREATE TABLE qualifiedName '(' tableElement (',' tableElement)* ')' ;
 
@@ -150,7 +152,8 @@ selectStatement : queryExpression ;
 // T-SQL has no trailing rowLimitClause — OFFSET/FETCH folds into orderByClause.
 queryExpression
     : withClause? querySpecification (UNION ALL? querySpecification)*
-      orderByClause?
+      orderByClause?                                               # queryExprSetOps
+    | '(' queryExpression ')'                                      # queryExprParen
     ;
 
 withClause

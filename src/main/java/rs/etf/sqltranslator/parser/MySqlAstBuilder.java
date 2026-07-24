@@ -111,7 +111,12 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     // --- query shape ---
 
     @Override
-    public Object visitQueryExpression(MySqlParser.QueryExpressionContext ctx) {
+    public Object visitQueryExprParen(MySqlParser.QueryExprParenContext ctx) {
+        return visit(ctx.queryExpression());
+    }
+
+    @Override
+    public Object visitQueryExprSetOps(MySqlParser.QueryExprSetOpsContext ctx) {
         List<Cte> ctes = List.of();
         boolean recursive = false;
         if (ctx.withClause() != null) {
@@ -381,9 +386,13 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
 
     @Override
     public Object visitDeleteStatement(MySqlParser.DeleteStatementContext ctx) {
+        Optional<Identifier> alias = ctx.identifier() == null
+                ? Optional.empty() : Optional.of(ident(ctx.identifier()));
+        Optional<TableSource> using = ctx.tableSource() == null
+                ? Optional.empty() : Optional.of((TableSource) visit(ctx.tableSource()));
         Optional<Expression> where = ctx.whereClause() == null
                 ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
-        return new DeleteStatement(qname(ctx.qualifiedName()), where, pos(ctx));
+        return new DeleteStatement(qname(ctx.qualifiedName()), alias, using, where, pos(ctx));
     }
 
     // --- DDL ---

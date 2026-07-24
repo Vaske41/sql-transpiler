@@ -203,6 +203,8 @@ public final class AstDumper implements AstVisitor<String> {
     public String visitDeleteStatement(DeleteStatement node) {
         return node("DeleteStatement")
                 .child("table", node.table())
+                .child("alias", node.alias())
+                .child("using", node.usingClause())
                 .child("where", node.where())
                 .done();
     }

@@ -863,6 +863,11 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     @Override
     public Void visitDeleteStatement(DeleteStatement node) {
         out.token("DELETE FROM").token(dotted(node.table()));
+        node.alias().ifPresent(alias -> out.token("AS").token(identifier(alias)));
+        node.usingClause().ifPresent(using -> {
+            out.token("USING");
+            using.accept(this);
+        });
         node.where().ifPresent(where -> {
             out.token("WHERE");
             where.accept(this);

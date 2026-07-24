@@ -182,6 +182,8 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitDeleteStatement(DeleteStatement node) {
+        node.usingClause().ifPresent(using -> using.accept(this));
+        node.where().ifPresent(where -> where.accept(this));
         return defaultResult();
     }
 

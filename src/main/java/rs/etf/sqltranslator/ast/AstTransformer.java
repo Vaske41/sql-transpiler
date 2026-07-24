@@ -172,8 +172,8 @@ public class AstTransformer implements AstVisitor<Object> {
 
     @Override
     public Object visitDeleteStatement(DeleteStatement node) {
-        return new DeleteStatement(rebuild(node.table()), rebuildOptional(node.where()),
-                node.pos());
+        return new DeleteStatement(rebuild(node.table()), rebuildOptional(node.alias()),
+                rebuildOptional(node.usingClause()), rebuildOptional(node.where()), node.pos());
     }
 
     // --- DDL ---
