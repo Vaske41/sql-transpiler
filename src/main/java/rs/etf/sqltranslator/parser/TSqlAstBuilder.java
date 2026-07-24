@@ -289,11 +289,24 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     @Override
     public Object visitUpdateStatement(TSqlParser.UpdateStatementContext ctx) {
         List<Assignment> assignments = ctx.assignment().stream()
-                .map(a -> new Assignment(ident(a.identifier()), expr(a.expression()), pos(a)))
+                .map(a -> new Assignment(qname(a.qualifiedName()), expr(a.expression()), pos(a)))
                 .toList();
+        Optional<Identifier> alias = ctx.identifier() == null
+                ? Optional.empty() : Optional.of(ident(ctx.identifier()));
+        Optional<TableSource> from = updateFrom(ctx.tableSource(), ctx.FROM() != null);
         Optional<Expression> where = ctx.whereClause() == null
                 ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
-        return new UpdateStatement(qname(ctx.qualifiedName()), assignments, where, pos(ctx));
+        return new UpdateStatement(qname(ctx.qualifiedName()), alias, assignments, from, where,
+                pos(ctx));
+    }
+
+    private Optional<TableSource> updateFrom(
+            List<TSqlParser.TableSourceContext> sources, boolean hasFromKeyword) {
+        if (sources == null || sources.isEmpty()) {
+            return Optional.empty();
+        }
+        int index = hasFromKeyword ? sources.size() - 1 : 0;
+        return Optional.of((TableSource) visit(sources.get(index)));
     }
 
     @Override

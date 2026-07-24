@@ -272,11 +272,25 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     @Override
     public Object visitUpdateStatement(PostgreSqlParser.UpdateStatementContext ctx) {
         List<Assignment> assignments = ctx.assignment().stream()
-                .map(a -> new Assignment(ident(a.identifier()), expr(a.expression()), pos(a)))
+                .map(a -> new Assignment(qname(a.qualifiedName()), expr(a.expression()), pos(a)))
                 .toList();
+        Optional<Identifier> alias = ctx.identifier() == null
+                ? Optional.empty() : Optional.of(ident(ctx.identifier()));
+        Optional<TableSource> from = updateFrom(ctx.tableSource(), ctx.FROM() != null);
         Optional<Expression> where = ctx.whereClause() == null
                 ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
-        return new UpdateStatement(qname(ctx.qualifiedName()), assignments, where, pos(ctx));
+        return new UpdateStatement(qname(ctx.qualifiedName()), alias, assignments, from, where,
+                pos(ctx));
+    }
+
+    private Optional<TableSource> updateFrom(
+            List<PostgreSqlParser.TableSourceContext> sources, boolean hasFromKeyword) {
+        if (sources == null || sources.isEmpty()) {
+            return Optional.empty();
+        }
+        // Prefer FROM-clause source when both comma-target and FROM are present.
+        int index = hasFromKeyword ? sources.size() - 1 : 0;
+        return Optional.of((TableSource) visit(sources.get(index)));
     }
 
     @Override

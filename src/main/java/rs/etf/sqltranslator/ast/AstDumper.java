@@ -152,7 +152,9 @@ public final class AstDumper implements AstVisitor<String> {
     public String visitUpdateStatement(UpdateStatement node) {
         return node("UpdateStatement")
                 .child("table", node.table())
+                .child("alias", node.alias())
                 .children("assignments", node.assignments())
+                .child("from", node.from())
                 .child("where", node.where())
                 .done();
     }

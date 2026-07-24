@@ -292,10 +292,9 @@ public final class RewriteBooleanSemanticsRule implements Rule {
                     .filter(c -> c.type().type() == GenericType.BOOLEAN).isPresent();
         }
 
-        /** Wraps an assignment's bare Identifier as a ColumnRef so resolve() applies. */
-        private static ColumnRef syntheticRef(Identifier column) {
-            SourcePosition pos = column.pos();
-            return new ColumnRef(new QualifiedName(List.of(column), pos), pos);
+        /** Assignment column is already a {@link QualifiedName} — wrap as ColumnRef. */
+        private static ColumnRef syntheticRef(QualifiedName column) {
+            return new ColumnRef(column, column.pos());
         }
 
         private static SourcePosition exprPos(Expression expr) {

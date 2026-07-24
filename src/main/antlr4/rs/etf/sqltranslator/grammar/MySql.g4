@@ -33,9 +33,13 @@ insertSource
 
 rowValue : '(' expression (',' expression)* ')' ;
 
-updateStatement : UPDATE qualifiedName SET assignment (',' assignment)* whereClause? ;
+updateStatement
+    : UPDATE qualifiedName (AS? identifier)? (',' tableSource)?
+      SET assignment (',' assignment)*
+      (FROM tableSource)? whereClause?
+    ;
 
-assignment : identifier '=' expression ;
+assignment : qualifiedName '=' expression ;
 
 deleteStatement : DELETE FROM qualifiedName whereClause? ;
 

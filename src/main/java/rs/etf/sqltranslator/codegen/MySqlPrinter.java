@@ -114,4 +114,27 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
                     "rule engine contract: USING must be dropped before MySQL print");
         }
     }
+
+    /**
+     * MySQL has no {@code UPDATE … FROM}. When a FROM clause is present (after
+     * {@code RewriteUpdateFromForMysqlRule} qualifies SET LHS), emit the multi-table
+     * comma-join form: {@code UPDATE t [AS a], src SET t.c = … WHERE …}.
+     */
+    @Override
+    public Void visitUpdateStatement(rs.etf.sqltranslator.ast.UpdateStatement node) {
+        if (node.from().isEmpty()) {
+            return super.visitUpdateStatement(node);
+        }
+        out.token("UPDATE").token(dotted(node.table()));
+        node.alias().ifPresent(alias -> out.token("AS").token(identifier(alias)));
+        out.raw(",");
+        node.from().get().accept(this);
+        out.token("SET");
+        csv(node.assignments());
+        node.where().ifPresent(where -> {
+            out.token("WHERE");
+            where.accept(this);
+        });
+        return null;
+    }
 }

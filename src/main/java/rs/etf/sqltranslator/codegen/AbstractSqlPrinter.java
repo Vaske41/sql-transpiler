@@ -672,8 +672,14 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
 
     @Override
     public Void visitUpdateStatement(UpdateStatement node) {
-        out.token("UPDATE").token(dotted(node.table())).token("SET");
+        out.token("UPDATE").token(dotted(node.table()));
+        node.alias().ifPresent(alias -> out.token("AS").token(identifier(alias)));
+        out.token("SET");
         csv(node.assignments());
+        node.from().ifPresent(from -> {
+            out.token("FROM");
+            from.accept(this);
+        });
         node.where().ifPresent(where -> {
             out.token("WHERE");
             where.accept(this);
@@ -683,7 +689,7 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
 
     @Override
     public Void visitAssignment(Assignment node) {
-        out.token(identifier(node.column())).token("=");
+        out.token(dotted(node.column())).token("=");
         node.value().accept(this);
         return null;
     }

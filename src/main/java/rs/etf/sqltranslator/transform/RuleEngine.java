@@ -30,6 +30,7 @@ public final class RuleEngine {
                 new RewriteFilteredAggregatesRule(),
                 new ReshapeDropDdlRule(),
                 new DropAlterUsingRule(),
+                new RewriteUpdateFromForMysqlRule(),
                 new ResolveConcatRule(),
                 new InsertCastsRule(),
                 new RewriteBooleanSemanticsRule(),

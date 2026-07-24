@@ -42,7 +42,10 @@ public final class CodegenTestSupport {
             "ddl-misc/drop-index-no-table/input.postgresql.sql|MYSQL",
             "ddl-misc/drop-index-no-table/input.postgresql.sql|TSQL",
             "ddl-misc/drop-function-args/input.postgresql.sql|MYSQL",
-            "ddl-misc/drop-function-args/input.postgresql.sql|TSQL");
+            "ddl-misc/drop-function-args/input.postgresql.sql|TSQL",
+            "update-from/self-join/input.postgresql.sql|MYSQL",
+            "update-from/self-join/input.tsql.sql|MYSQL",
+            "update-from/self-join/input.mysql.sql|MYSQL");
 
     private CodegenTestSupport() {
     }
