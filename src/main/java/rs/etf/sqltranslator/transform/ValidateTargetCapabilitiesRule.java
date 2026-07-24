@@ -21,6 +21,8 @@ import rs.etf.sqltranslator.ast.RowLimit;
 import rs.etf.sqltranslator.ast.Script;
 import rs.etf.sqltranslator.ast.SelectExpr;
 import rs.etf.sqltranslator.ast.SelectItem;
+import rs.etf.sqltranslator.ast.SetOperator;
+import rs.etf.sqltranslator.ast.UnionArm;
 import rs.etf.sqltranslator.ast.WindowFrame;
 import rs.etf.sqltranslator.core.Dialect;
 import rs.etf.sqltranslator.core.SourcePosition;
@@ -108,6 +110,17 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
                         "DELETE USING is not supported by T-SQL", node.pos());
             }
             return super.visitDeleteStatement(node);
+        }
+
+        @Override
+        public Object visitUnionArm(UnionArm node) {
+            if (ctx.target() == Dialect.TSQL && node.all()
+                    && (node.operator() == SetOperator.EXCEPT
+                    || node.operator() == SetOperator.INTERSECT)) {
+                throw new UnsupportedFeatureException(
+                        node.operator() + " ALL is not supported by T-SQL", node.pos());
+            }
+            return super.visitUnionArm(node);
         }
 
         @Override

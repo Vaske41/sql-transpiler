@@ -125,7 +125,8 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
             recursive = support.isRecursiveWith(w.RECURSIVE() != null, ctes);
         }
         QuerySpecification first = (QuerySpecification) visit(ctx.querySpecification(0));
-        List<UnionArm> arms = support.unionArms(ctx, MySqlParser.UNION, MySqlParser.ALL, this);
+        List<UnionArm> arms = support.unionArms(ctx, MySqlParser.UNION, MySqlParser.EXCEPT,
+                MySqlParser.INTERSECT, MySqlParser.ALL, this);
         List<OrderItem> orderBy = ctx.orderByClause() == null
                 ? List.of()
                 : ctx.orderByClause().orderItem().stream()

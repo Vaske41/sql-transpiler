@@ -139,7 +139,8 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
                 .toList();
         AstBuilderSupport.ExtractedTop top = support.extractTsqlTop(tops, hasArms);
         QuerySpecification first = (QuerySpecification) visit(specs.get(0));
-        List<UnionArm> arms = support.unionArms(ctx, TSqlParser.UNION, TSqlParser.ALL, this);
+        List<UnionArm> arms = support.unionArms(ctx, TSqlParser.UNION, TSqlParser.EXCEPT,
+                TSqlParser.INTERSECT, TSqlParser.ALL, this);
         List<OrderItem> orderBy = new ArrayList<>();
         Expression offset = null;
         Expression fetch = null;

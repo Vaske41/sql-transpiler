@@ -70,7 +70,7 @@ public class AstTransformer implements AstVisitor<Object> {
 
     @Override
     public Object visitUnionArm(UnionArm node) {
-        return new UnionArm(node.all(), rebuild(node.spec()), node.pos());
+        return new UnionArm(node.operator(), node.all(), rebuild(node.spec()), node.pos());
     }
 
     @Override

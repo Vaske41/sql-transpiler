@@ -583,7 +583,11 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
 
     @Override
     public Void visitUnionArm(UnionArm node) {
-        out.token("UNION");
+        out.token(switch (node.operator()) {
+            case UNION -> "UNION";
+            case EXCEPT -> "EXCEPT";
+            case INTERSECT -> "INTERSECT";
+        });
         if (node.all()) {
             out.token("ALL");
         }

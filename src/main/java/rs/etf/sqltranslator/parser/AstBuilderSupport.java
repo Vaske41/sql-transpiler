@@ -41,6 +41,7 @@ import rs.etf.sqltranslator.ast.SelectItem;
 import rs.etf.sqltranslator.ast.TruncateStatement;
 import rs.etf.sqltranslator.ast.TypeLength;
 import rs.etf.sqltranslator.ast.UnionArm;
+import rs.etf.sqltranslator.ast.SetOperator;
 import rs.etf.sqltranslator.ast.UpdateStatement;
 import rs.etf.sqltranslator.ast.Upsert;
 import rs.etf.sqltranslator.ast.UpsertKind;
@@ -553,26 +554,34 @@ final class AstBuilderSupport {
 
     /**
      * Walks a {@code queryExpression} child list and builds {@link UnionArm}s after
-     * each {@code UNION [ALL]}. Token type ids differ per dialect grammar; the
-     * structural walk is shared.
+     * each {@code UNION|EXCEPT|INTERSECT [ALL]}. Token type ids differ per dialect
+     * grammar; the structural walk is shared.
      */
-    List<UnionArm> unionArms(ParserRuleContext ctx, int unionTokenType, int allTokenType,
-                             ParseTreeVisitor<Object> builder) {
+    List<UnionArm> unionArms(ParserRuleContext ctx,
+                             int unionTokenType, int exceptTokenType, int intersectTokenType,
+                             int allTokenType, ParseTreeVisitor<Object> builder) {
         List<UnionArm> arms = new ArrayList<>();
-        boolean afterUnion = false;
+        SetOperator op = null;
         boolean all = false;
         for (ParseTree child : ctx.children) {
             if (child instanceof TerminalNode terminal) {
-                if (terminal.getSymbol().getType() == unionTokenType) {
-                    afterUnion = true;
+                int type = terminal.getSymbol().getType();
+                if (type == unionTokenType) {
+                    op = SetOperator.UNION;
                     all = false;
-                } else if (afterUnion && terminal.getSymbol().getType() == allTokenType) {
+                } else if (type == exceptTokenType) {
+                    op = SetOperator.EXCEPT;
+                    all = false;
+                } else if (type == intersectTokenType) {
+                    op = SetOperator.INTERSECT;
+                    all = false;
+                } else if (op != null && type == allTokenType) {
                     all = true;
                 }
-            } else if (afterUnion && child instanceof ParserRuleContext spec) {
-                arms.add(new UnionArm(all, (QuerySpecification) spec.accept(builder),
+            } else if (op != null && child instanceof ParserRuleContext spec) {
+                arms.add(new UnionArm(op, all, (QuerySpecification) spec.accept(builder),
                         pos(spec)));
-                afterUnion = false;
+                op = null;
             }
         }
         return arms;

@@ -126,8 +126,8 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
             recursive = support.isRecursiveWith(w.RECURSIVE() != null, ctes);
         }
         QuerySpecification first = (QuerySpecification) visit(ctx.querySpecification(0));
-        List<UnionArm> arms = support.unionArms(ctx, PostgreSqlParser.UNION, PostgreSqlParser.ALL,
-                this);
+        List<UnionArm> arms = support.unionArms(ctx, PostgreSqlParser.UNION,
+                PostgreSqlParser.EXCEPT, PostgreSqlParser.INTERSECT, PostgreSqlParser.ALL, this);
         List<OrderItem> orderBy = ctx.orderByClause() == null
                 ? List.of()
                 : ctx.orderByClause().orderItem().stream()

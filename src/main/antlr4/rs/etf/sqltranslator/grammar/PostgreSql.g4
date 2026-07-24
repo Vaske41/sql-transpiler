@@ -151,7 +151,7 @@ usingClause : USING expression ;
 selectStatement : queryExpression ;
 
 queryExpression
-    : withClause? querySpecification (UNION ALL? querySpecification)*
+    : withClause? querySpecification ((UNION | EXCEPT | INTERSECT) ALL? querySpecification)*
       orderByClause?
       rowLimitClause?                                              # queryExprSetOps
     | '(' queryExpression ')'                                      # queryExprParen
@@ -412,11 +412,11 @@ CLUSTERED:C L U S T E R E D; COLUMN:C O L U M N;
 CONSTRAINT:C O N S T R A I N T; CONVERT:C O N V E R T; CREATE:C R E A T E;
 CROSS:C R O S S; CURRENT_ROW:C U R R E N T [ \t\r\n]+ R O W; DEFAULT:D E F A U L T; DELETE:D E L E T E; DESC:D E S C;
 DISTINCT:D I S T I N C T; DROP:D R O P; ELSE:E L S E; END:E N D;
-EXISTS:E X I S T S; FALSE:F A L S E; FETCH:F E T C H; FIRST:F I R S T;
+EXCEPT:E X C E P T; EXISTS:E X I S T S; FALSE:F A L S E; FETCH:F E T C H; FIRST:F I R S T;
 FOLLOWING:F O L L O W I N G; FOREIGN:F O R E I G N; FROM:F R O M; FULL:F U L L;
 GENERATED:G E N E R A T E D; GROUP:G R O U P; HAVING:H A V I N G;
 IDENTITY:I D E N T I T Y; IF:I F; IN:I N; INDEX:I N D E X;
-INNER:I N N E R; INSERT:I N S E R T; INTERVAL:I N T E R V A L; INTO:I N T O; IS:I S; JOIN:J O I N;
+INNER:I N N E R; INSERT:I N S E R T; INTERSECT:I N T E R S E C T; INTERVAL:I N T E R V A L; INTO:I N T O; IS:I S; JOIN:J O I N;
 KEY:K E Y; LAST:L A S T; LATERAL:L A T E R A L; LEFT:L E F T; LIKE:L I K E; LIMIT:L I M I T;
 MAX:M A X; NEXT:N E X T; NONCLUSTERED:N O N C L U S T E R E D; NOT:N O T;
 NULL:N U L L; NULLS:N U L L S; OFFSET:O F F S E T; ON:O N; ONLY:O N L Y;
