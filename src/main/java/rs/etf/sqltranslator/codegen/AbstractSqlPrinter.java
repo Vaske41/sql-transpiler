@@ -638,6 +638,11 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     /** Trailing row limit. Base shape: LIMIT n [OFFSET m] / bare OFFSET (PG). */
     protected void renderRowLimit(Query query) {
         query.limit().ifPresent(limit -> {
+            // WITH TIES is not valid after LIMIT — PG overrides to FETCH; MySQL refuses.
+            if (limit.withTies()) {
+                throw new IllegalStateException(
+                        "rule engine contract: WITH TIES must not print as LIMIT");
+            }
             limit.count().ifPresent(count -> {
                 out.token("LIMIT");
                 count.accept(this);

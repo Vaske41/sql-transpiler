@@ -398,12 +398,18 @@ identifier : ID | QUOTED_IDENTIFIER ;
 
 dataTypeArg : INTEGER_LITERAL ;
 
-// PG: LIMIT/OFFSET in either order, plus SQL-standard OFFSET/FETCH.
+// PG: LIMIT/OFFSET in either order, plus SQL-standard OFFSET/FETCH [WITH TIES].
+fetchRestriction
+    : ONLY
+    | WITH identifier
+    ;
+
 rowLimitClause
-    : LIMIT expression (OFFSET expression)?
+    : LIMIT expression (OFFSET expression)? (WITH identifier)?
     | OFFSET expression (LIMIT expression)?
-    | OFFSET expression (ROW | ROWS) (FETCH (FIRST | NEXT) expression (ROW | ROWS) ONLY)?
-    | FETCH (FIRST | NEXT) expression (ROW | ROWS) ONLY
+    | OFFSET expression (ROW | ROWS) (FETCH (FIRST | NEXT) expression (ROW | ROWS) fetchRestriction)?
+    | FETCH (FIRST | NEXT) expression (ROW | ROWS) fetchRestriction
+    | FETCH (FIRST | NEXT) (ROW | ROWS) fetchRestriction
     ;
 
 autoIncrement : GENERATED (ALWAYS | BY DEFAULT) AS IDENTITY ;

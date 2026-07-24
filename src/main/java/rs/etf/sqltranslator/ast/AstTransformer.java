@@ -84,7 +84,7 @@ public class AstTransformer implements AstVisitor<Object> {
     @Override
     public Object visitRowLimit(RowLimit node) {
         return new RowLimit(rebuildOptional(node.count()), rebuildOptional(node.offset()),
-                node.pos());
+                node.withTies(), node.pos());
     }
 
     @Override

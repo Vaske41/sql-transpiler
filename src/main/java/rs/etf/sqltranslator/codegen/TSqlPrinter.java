@@ -114,6 +114,9 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
             out.token("TOP").token("(");
             owner.limit().orElseThrow().count().orElseThrow().accept(this);
             out.raw(")");
+            if (owner.limit().orElseThrow().withTies()) {
+                out.token("WITH").token("TIES");
+            }
         }
     }
 
@@ -122,6 +125,10 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
         query.limit().ifPresent(limit -> {
             if (topShape(query)) {
                 return;                              // already emitted as TOP
+            }
+            if (limit.withTies()) {
+                throw new IllegalStateException(
+                        "rule engine contract: WITH TIES + OFFSET must be refused before T-SQL print");
             }
             out.token("OFFSET");
             limit.offset().ifPresentOrElse(offset -> offset.accept(this),

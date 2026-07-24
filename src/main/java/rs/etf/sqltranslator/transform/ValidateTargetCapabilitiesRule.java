@@ -264,6 +264,16 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
                         "row limit over UNION requires ORDER BY on SQL Server",
                         limit.pos());
             }
+            if (limit.withTies() && limit.offset().isPresent()
+                    && ctx.target() == Dialect.TSQL) {
+                throw new UnsupportedFeatureException(
+                        "OFFSET/FETCH WITH TIES is not supported by T-SQL", limit.pos());
+            }
+            if (limit.withTies() && limit.offset().isPresent()
+                    && ctx.target() == Dialect.MYSQL) {
+                throw new UnsupportedFeatureException(
+                        "LIMIT OFFSET WITH TIES is not supported by MySQL", limit.pos());
+            }
             if (limit.offset().isEmpty()) {
                 return;
             }

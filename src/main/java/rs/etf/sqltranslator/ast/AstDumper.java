@@ -74,7 +74,7 @@ public final class AstDumper implements AstVisitor<String> {
 
     @Override
     public String visitRowLimit(RowLimit node) {
-        return node("RowLimit")
+        return node("RowLimit withTies=" + node.withTies())
                 .child("count", node.count())
                 .child("offset", node.offset())
                 .done();

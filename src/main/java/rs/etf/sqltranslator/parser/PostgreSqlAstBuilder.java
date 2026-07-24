@@ -48,6 +48,7 @@ import rs.etf.sqltranslator.ast.RowValue;
 import rs.etf.sqltranslator.ast.ValuesTable;
 import rs.etf.sqltranslator.ast.LikePredicate;
 import rs.etf.sqltranslator.ast.NullLiteral;
+import rs.etf.sqltranslator.ast.NumericLiteral;
 import rs.etf.sqltranslator.ast.NullsOrder;
 import rs.etf.sqltranslator.ast.OrderItem;
 import rs.etf.sqltranslator.ast.PrimaryKeyConstraint;
@@ -161,18 +162,31 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
         return (Query) visit(ctx.queryExpression());
     }
 
-    /** PostgreSQL: LIMIT/OFFSET either order, plus OFFSET/FETCH and bare FETCH. */
+    /** PostgreSQL: LIMIT/OFFSET either order, plus OFFSET/FETCH and bare FETCH [WITH TIES]. */
     private Optional<RowLimit> rowLimit(PostgreSqlParser.RowLimitClauseContext ctx) {
         if (ctx == null) {
             return Optional.empty();
         }
+        boolean withTies = false;
+        if (ctx.fetchRestriction() != null && ctx.fetchRestriction().identifier() != null) {
+            support.requireTiesKeyword(ident(ctx.fetchRestriction().identifier()));
+            withTies = true;
+        } else if (ctx.identifier() != null) {
+            support.requireTiesKeyword(ident(ctx.identifier()));
+            withTies = true;
+        }
+        SourcePosition position = pos(ctx);
+        // FETCH FIRST/NEXT ROW [WITH TIES] — count defaults to 1.
+        if (ctx.FETCH() != null && ctx.expression().isEmpty()) {
+            return Optional.of(new RowLimit(
+                    Optional.of(new NumericLiteral("1", false, position)),
+                    Optional.empty(), withTies, position));
+        }
         Expression first = expr(ctx.expression(0));
         Expression second = ctx.expression().size() > 1 ? expr(ctx.expression(1)) : null;
         int start = ctx.getStart().getType();
-        // LIMIT n [OFFSET m] and FETCH FIRST/NEXT n fold count-first.
-        // OFFSET … (LIMIT | FETCH) folds offset-first.
         boolean countFirst = start == PostgreSqlParser.LIMIT || start == PostgreSqlParser.FETCH;
-        return Optional.of(support.pgRowLimit(first, second, countFirst, pos(ctx)));
+        return Optional.of(support.pgRowLimit(first, second, countFirst, withTies, position));
     }
 
     @Override

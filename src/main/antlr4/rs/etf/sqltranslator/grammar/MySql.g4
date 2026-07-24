@@ -394,9 +394,9 @@ identifier : ID | QUOTED_IDENTIFIER ;
 
 dataTypeArg : INTEGER_LITERAL ;
 
-// MySQL: LIMIT n | LIMIT n OFFSET m | LIMIT m, n.
+// MySQL: LIMIT n [WITH TIES] | LIMIT n OFFSET m | LIMIT m, n.
 rowLimitClause
-    : LIMIT expression (OFFSET expression)?
+    : LIMIT expression (OFFSET expression)? (WITH identifier)?
     | LIMIT expression ',' expression
     ;
 

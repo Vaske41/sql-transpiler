@@ -160,7 +160,7 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
         return (Query) visit(ctx.queryExpression());
     }
 
-    /** MySQL: LIMIT n [OFFSET m] | LIMIT m, n — the comma form swaps operands (§2.2). */
+    /** MySQL: LIMIT n [OFFSET m] [WITH TIES] | LIMIT m, n — the comma form swaps operands (§2.2). */
     private Optional<RowLimit> rowLimit(MySqlParser.RowLimitClauseContext ctx) {
         if (ctx == null) {
             return Optional.empty();
@@ -168,7 +168,12 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
         Expression first = expr(ctx.expression(0));
         Expression second = ctx.expression().size() > 1 ? expr(ctx.expression(1)) : null;
         boolean commaForm = second != null && ctx.OFFSET() == null;
-        return Optional.of(support.mysqlRowLimit(first, second, commaForm, pos(ctx)));
+        boolean withTies = false;
+        if (ctx.identifier() != null) {
+            support.requireTiesKeyword(ident(ctx.identifier()));
+            withTies = true;
+        }
+        return Optional.of(support.mysqlRowLimit(first, second, commaForm, withTies, pos(ctx)));
     }
 
     @Override

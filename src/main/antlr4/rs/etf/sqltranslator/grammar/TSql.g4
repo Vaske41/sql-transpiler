@@ -223,9 +223,14 @@ groupByClause : GROUP BY expression (',' expression)* ;
 havingClause : HAVING expression ;
 
 // OFFSET/FETCH is part of ORDER BY in T-SQL.
+fetchRestriction
+    : ONLY
+    | WITH identifier
+    ;
+
 orderByClause
     : ORDER BY orderItem (',' orderItem)*
-      (OFFSET expression (ROW | ROWS) (FETCH (FIRST | NEXT) expression (ROW | ROWS) ONLY)?)?
+      (OFFSET expression (ROW | ROWS) (FETCH (FIRST | NEXT) expression (ROW | ROWS) fetchRestriction)?)?
     ;
 
 orderItem : expression (ASC | DESC)? ;
@@ -393,7 +398,7 @@ identifier : ID | QUOTED_IDENTIFIER ;
 // T-SQL 2-arg CONVERT (3-arg style codes stay refused — refuse-list).
 convertExpression : CONVERT '(' dataType ',' expression ')' ;
 
-topClause : TOP ( INTEGER_LITERAL | '(' expression ')' ) ;
+topClause : TOP ( INTEGER_LITERAL | '(' expression ')' ) (WITH identifier)? ;
 
 autoIncrement : IDENTITY '(' INTEGER_LITERAL ',' INTEGER_LITERAL ')' ;
 

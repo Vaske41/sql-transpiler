@@ -721,14 +721,15 @@ final class AstBuilderSupport {
      */
     Optional<RowLimit> tsqlRowLimit(Expression top, SourcePosition topPosition,
                                     Expression offset, Expression fetch,
-                                    SourcePosition offsetPosition) {
+                                    boolean withTies, SourcePosition offsetPosition) {
         refuseIf(top != null && offset != null, "TOP combined with OFFSET/FETCH", topPosition);
+        refuseIf(withTies && offset != null, "OFFSET/FETCH WITH TIES", offsetPosition);
         if (top != null) {
-            return Optional.of(new RowLimit(Optional.of(top), Optional.empty(), topPosition));
+            return Optional.of(new RowLimit(Optional.of(top), Optional.empty(), withTies, topPosition));
         }
         if (offset != null) {
             return Optional.of(new RowLimit(Optional.ofNullable(fetch), Optional.of(offset),
-                    offsetPosition));
+                    false, offsetPosition));
         }
         return Optional.empty();
     }
@@ -750,25 +751,35 @@ final class AstBuilderSupport {
     }
 
     /** One T-SQL {@code TOP} clause extracted by the dialect builder. */
-    record ExtractedTop(Expression count, SourcePosition position) {
+    record ExtractedTop(Expression count, boolean withTies, SourcePosition position) {
+        ExtractedTop(Expression count, SourcePosition position) {
+            this(count, false, position);
+        }
     }
 
-    /** MySQL: {@code LIMIT n [OFFSET m]} or {@code LIMIT m, n} (operand swap). */
+    /** MySQL: {@code LIMIT n [OFFSET m] [WITH TIES]} or {@code LIMIT m, n} (operand swap). */
     RowLimit mysqlRowLimit(Expression first, Expression second, boolean commaForm,
-                           SourcePosition position) {
+                           boolean withTies, SourcePosition position) {
+        refuseIf(commaForm && withTies, "LIMIT m,n WITH TIES", position);
+        refuseIf(withTies && second != null && !commaForm, "LIMIT OFFSET WITH TIES", position);
         if (commaForm) {
-            return new RowLimit(Optional.of(second), Optional.of(first), position);
+            return new RowLimit(Optional.of(second), Optional.of(first), false, position);
         }
-        return new RowLimit(Optional.of(first), Optional.ofNullable(second), position);
+        return new RowLimit(Optional.of(first), Optional.ofNullable(second), withTies, position);
     }
 
-    /** PostgreSQL: LIMIT and OFFSET in either order. */
+    /** PostgreSQL: LIMIT and OFFSET in either order; FETCH may omit count (means 1). */
     RowLimit pgRowLimit(Expression first, Expression second, boolean limitFirst,
-                        SourcePosition position) {
+                        boolean withTies, SourcePosition position) {
         if (limitFirst) {
-            return new RowLimit(Optional.of(first), Optional.ofNullable(second), position);
+            return new RowLimit(Optional.of(first), Optional.ofNullable(second), withTies, position);
         }
-        return new RowLimit(Optional.ofNullable(second), Optional.of(first), position);
+        return new RowLimit(Optional.ofNullable(second), Optional.of(first), withTies, position);
+    }
+
+    void requireTiesKeyword(Identifier id) {
+        refuseIf(id.quoted() || !id.value().equalsIgnoreCase("TIES"),
+                "WITH " + id.value() + " (expected TIES)", id.pos());
     }
 
     // ------------------------------------------------------------------

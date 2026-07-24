@@ -6,6 +6,7 @@ import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.IntervalLiteral;
 import rs.etf.sqltranslator.ast.NullsOrder;
+import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.StringLiteral;
 
 /**
@@ -14,6 +15,24 @@ import rs.etf.sqltranslator.ast.StringLiteral;
  * MySQL itself stores, and the one our own builder folds back to BOOLEAN.
  */
 public final class MySqlPrinter extends AbstractSqlPrinter {
+
+    @Override
+    protected void renderRowLimit(Query query) {
+        query.limit().ifPresent(limit -> {
+            // MySQL 8.0.13+: LIMIT n WITH TIES (no OFFSET in the same clause).
+            if (limit.withTies()) {
+                if (limit.offset().isPresent()) {
+                    throw new IllegalStateException(
+                            "rule engine contract: LIMIT OFFSET WITH TIES must be refused before MySQL print");
+                }
+                out.token("LIMIT");
+                limit.count().ifPresentOrElse(count -> count.accept(this), () -> out.token("1"));
+                out.token("WITH").token("TIES");
+                return;
+            }
+            super.renderRowLimit(query);
+        });
+    }
 
     @Override
     protected String quoteIdentifier(String value) {

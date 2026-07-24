@@ -134,8 +134,13 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
                     if (topClause == null) {
                         return null;
                     }
+                    boolean topTies = false;
+                    if (topClause.identifier() != null) {
+                        support.requireTiesKeyword(ident(topClause.identifier()));
+                        topTies = true;
+                    }
                     return new AstBuilderSupport.ExtractedTop(topExpression(topClause),
-                            pos(topClause));
+                            topTies, pos(topClause));
                 })
                 .toList();
         AstBuilderSupport.ExtractedTop top = support.extractTsqlTop(tops, hasArms);
@@ -145,6 +150,7 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
         List<OrderItem> orderBy = new ArrayList<>();
         Expression offset = null;
         Expression fetch = null;
+        boolean withTies = top != null && top.withTies();
         SourcePosition offsetPos = null;
         TSqlParser.OrderByClauseContext orderByClause = ctx.orderByClause();
         if (orderByClause != null) {
@@ -156,13 +162,19 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
                 offset = expr(orderByClause.expression(0));
                 if (orderByClause.FETCH() != null) {
                     fetch = expr(orderByClause.expression(1));
+                    if (orderByClause.fetchRestriction() != null
+                            && orderByClause.fetchRestriction().identifier() != null) {
+                        support.requireTiesKeyword(
+                                ident(orderByClause.fetchRestriction().identifier()));
+                        withTies = true;
+                    }
                 }
             }
         }
         Optional<RowLimit> limit = support.tsqlRowLimit(
                 top == null ? null : top.count(),
                 top == null ? null : top.position(),
-                offset, fetch, offsetPos);
+                offset, fetch, withTies, offsetPos);
         return new Query(ctes, recursive, first, arms, orderBy, limit, pos(ctx));
     }
 
