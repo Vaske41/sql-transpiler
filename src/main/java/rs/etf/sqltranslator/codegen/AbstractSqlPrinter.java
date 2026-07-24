@@ -734,6 +734,21 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     }
 
     @Override
+    public Void visitTableFunction(TableFunction node) {
+        out.token(dotted(node.name()));
+        out.raw("(");
+        csv(node.args());
+        out.raw(")");
+        node.alias().ifPresent(alias -> out.token("AS").token(identifier(alias)));
+        node.columnAliases().ifPresent(cols -> {
+            out.raw("(");
+            csv(cols);
+            out.raw(")");
+        });
+        return null;
+    }
+
+    @Override
     public Void visitRowValue(RowValue node) {
         out.token("(");
         csv(node.values());

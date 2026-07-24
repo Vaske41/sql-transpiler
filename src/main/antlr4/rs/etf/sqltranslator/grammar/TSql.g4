@@ -189,8 +189,12 @@ selectItem
 tableSource : tablePrimary joinedTable* ;
 
 tablePrimary
-    : qualifiedName (AS? aliasName)?                           # namedTablePrimary
-    | '(' queryExpression ')' AS? aliasName
+    // Function form before bare name — otherwise generate_series(…) matches namedTablePrimary
+    // and the '(' is left for the statement closer.
+    : qualifiedName '(' (expression (',' expression)*)? ')' (AS? aliasName)?
+        ('(' columnName (',' columnName)* ')')?                # functionTablePrimary
+    | qualifiedName (AS? aliasName)?                           # namedTablePrimary
+    | '(' queryExpression ')' (AS? aliasName)?
         ('(' columnName (',' columnName)* ')')?              # derivedTablePrimary
     | '(' VALUES rowValue (',' rowValue)* ')' AS? aliasName
         ('(' columnName (',' columnName)* ')')?              # valuesTablePrimary
@@ -202,7 +206,7 @@ joinedTable
     | joinType LATERAL? tablePrimary ON expression
     | joinType LATERAL? tablePrimary USING columnList
     | CROSS JOIN LATERAL? tablePrimary
-    | ',' LATERAL tablePrimary
+    | ',' LATERAL? tablePrimary
     ;
 
 joinType
@@ -239,7 +243,11 @@ andExpression : notExpression (AND notExpression)* ;
 notExpression : NOT notExpression | predicate ;
 
 predicate
-    : concatExpression comparisonOperator concatExpression                 # comparisonPredicate
+    // Quantified forms before plain comparison — otherwise `= ANY (SELECT…)` becomes
+    // comparison against column ANY and leaves the subquery dangling.
+    : concatExpression comparisonOperator ALL subquery                     # quantifiedAllPredicate
+    | concatExpression comparisonOperator identifier subquery              # quantifiedAnyPredicate
+    | concatExpression comparisonOperator concatExpression                 # comparisonPredicate
     | concatExpression NOT? BETWEEN concatExpression AND concatExpression  # betweenPredicate
     | concatExpression NOT? LIKE concatExpression                          # likePredicate
     | concatExpression NOT? IN '(' expression (',' expression)* ')'        # inListPredicate

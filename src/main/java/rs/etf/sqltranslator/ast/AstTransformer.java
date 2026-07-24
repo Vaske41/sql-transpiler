@@ -131,6 +131,16 @@ public class AstTransformer implements AstVisitor<Object> {
     }
 
     @Override
+    public Object visitTableFunction(TableFunction node) {
+        return new TableFunction(
+                rebuild(node.name()),
+                rebuildList(node.args()),
+                rebuildOptional(node.alias()),
+                node.columnAliases().map(this::rebuildList),
+                node.pos());
+    }
+
+    @Override
     public Object visitRowValue(RowValue node) {
         return new RowValue(rebuildList(node.values()), node.pos());
     }

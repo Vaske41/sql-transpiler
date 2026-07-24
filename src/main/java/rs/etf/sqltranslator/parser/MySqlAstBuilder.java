@@ -66,6 +66,7 @@ import rs.etf.sqltranslator.ast.Statement;
 import rs.etf.sqltranslator.ast.StringLiteral;
 import rs.etf.sqltranslator.ast.SubqueryExpression;
 import rs.etf.sqltranslator.ast.TableConstraint;
+import rs.etf.sqltranslator.ast.TableFunction;
 import rs.etf.sqltranslator.ast.TableRef;
 import rs.etf.sqltranslator.ast.TableSource;
 import rs.etf.sqltranslator.ast.UnaryOp;
@@ -225,9 +226,22 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitFunctionTablePrimary(MySqlParser.FunctionTablePrimaryContext ctx) {
+        List<Expression> args = ctx.expression().stream().map(this::expr).toList();
+        Optional<Identifier> alias = ctx.aliasName() == null
+                ? Optional.empty() : Optional.of(aliasName(ctx.aliasName()));
+        Optional<List<Identifier>> cols = Optional.empty();
+        if (!ctx.columnName().isEmpty()) {
+            cols = Optional.of(ctx.columnName().stream().map(this::columnName).toList());
+        }
+        return new TableFunction(qname(ctx.qualifiedName()), args, alias, cols, pos(ctx));
+    }
+
+    @Override
     public Object visitDerivedTablePrimary(MySqlParser.DerivedTablePrimaryContext ctx) {
         Query query = (Query) visit(ctx.queryExpression());
-        Identifier alias = aliasName(ctx.aliasName());
+        Identifier alias = support.derivedAliasOrSynthetic(
+                ctx.aliasName() == null ? null : aliasName(ctx.aliasName()), pos(ctx));
         Optional<List<Identifier>> cols = Optional.empty();
         if (!ctx.columnName().isEmpty()) {
             cols = Optional.of(ctx.columnName().stream().map(this::columnName).toList());
@@ -703,6 +717,26 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     public Object visitComparisonPredicate(MySqlParser.ComparisonPredicateContext ctx) {
         return new BinaryOp(support.comparisonOperator(ctx.comparisonOperator().getText()),
                 expr(ctx.concatExpression(0)), expr(ctx.concatExpression(1)), pos(ctx));
+    }
+
+    @Override
+    public Object visitQuantifiedAllPredicate(MySqlParser.QuantifiedAllPredicateContext ctx) {
+        return support.quantifiedComparison(
+                expr(ctx.concatExpression()),
+                ctx.comparisonOperator().getText(),
+                "ALL",
+                (Query) visit(ctx.subquery()),
+                pos(ctx));
+    }
+
+    @Override
+    public Object visitQuantifiedAnyPredicate(MySqlParser.QuantifiedAnyPredicateContext ctx) {
+        return support.quantifiedComparison(
+                expr(ctx.concatExpression()),
+                ctx.comparisonOperator().getText(),
+                ctx.identifier().getText(),
+                (Query) visit(ctx.subquery()),
+                pos(ctx));
     }
 
     @Override

@@ -22,6 +22,7 @@ import rs.etf.sqltranslator.ast.Script;
 import rs.etf.sqltranslator.ast.SelectExpr;
 import rs.etf.sqltranslator.ast.SelectItem;
 import rs.etf.sqltranslator.ast.SetOperator;
+import rs.etf.sqltranslator.ast.TableFunction;
 import rs.etf.sqltranslator.ast.UnionArm;
 import rs.etf.sqltranslator.ast.WindowFrame;
 import rs.etf.sqltranslator.core.Dialect;
@@ -110,6 +111,15 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
                         "DELETE USING is not supported by T-SQL", node.pos());
             }
             return super.visitDeleteStatement(node);
+        }
+
+        @Override
+        public Object visitTableFunction(TableFunction node) {
+            if (ctx.target() == Dialect.MYSQL || ctx.target() == Dialect.TSQL) {
+                throw new UnsupportedFeatureException(
+                        "table function (no SRF-in-FROM in target)", node.pos());
+            }
+            return super.visitTableFunction(node);
         }
 
         @Override

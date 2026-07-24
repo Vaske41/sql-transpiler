@@ -135,6 +135,15 @@ public final class AstDumper implements AstVisitor<String> {
     }
 
     @Override
+    public String visitTableFunction(TableFunction node) {
+        return node("TableFunction")
+                .child("name", node.name())
+                .children("args", node.args())
+                .child("alias", node.alias())
+                .done();
+    }
+
+    @Override
     public String visitRowValue(RowValue node) {
         return node("RowValue")
                 .children("values", node.values())

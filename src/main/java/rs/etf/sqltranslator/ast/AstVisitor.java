@@ -36,6 +36,8 @@ public interface AstVisitor<R> {
 
     R visitValuesTable(ValuesTable node);
 
+    R visitTableFunction(TableFunction node);
+
     R visitRowValue(RowValue node);
 
     R visitJoin(Join node);

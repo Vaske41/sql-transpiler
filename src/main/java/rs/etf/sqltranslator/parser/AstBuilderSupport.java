@@ -23,6 +23,7 @@ import rs.etf.sqltranslator.ast.FixedLength;
 import rs.etf.sqltranslator.ast.ForeignKeyRef;
 import rs.etf.sqltranslator.ast.GenericType;
 import rs.etf.sqltranslator.ast.Identifier;
+import rs.etf.sqltranslator.ast.InSubqueryPredicate;
 import rs.etf.sqltranslator.ast.IntervalLiteral;
 import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.JoinKind;
@@ -645,6 +646,31 @@ final class AstBuilderSupport {
             case "@>" -> BinaryOperator.JSON_CONTAINS;
             default -> throw new IllegalStateException("Unmapped binary operator: " + text);
         };
+    }
+
+    /**
+     * Fold {@code expr <op> ANY|SOME (subquery)} and {@code expr <op> ALL (subquery)}
+     * into IN / NOT IN when the rewrite is faithful; refuse other combinations.
+     */
+    Expression quantifiedComparison(Expression value, String opText, String quantifier,
+                                    Query subquery, SourcePosition position) {
+        String q = quantifier == null ? "" : quantifier.trim().toUpperCase(Locale.ROOT);
+        BinaryOperator op = comparisonOperator(opText);
+        if (("ANY".equals(q) || "SOME".equals(q)) && op == BinaryOperator.EQ) {
+            return new InSubqueryPredicate(value, subquery, false, position);
+        }
+        if ("ALL".equals(q) && op == BinaryOperator.NEQ) {
+            return new InSubqueryPredicate(value, subquery, true, position);
+        }
+        throw refuse(opText + " " + q + " (subquery)", position);
+    }
+
+    /** Synthesize a stable alias when a derived table omits one (MySQL-tolerant corpus). */
+    Identifier derivedAliasOrSynthetic(Identifier alias, SourcePosition position) {
+        if (alias != null) {
+            return alias;
+        }
+        return new Identifier("_dt", false, position);
     }
 
     BinaryOperator comparisonOperator(String text) {

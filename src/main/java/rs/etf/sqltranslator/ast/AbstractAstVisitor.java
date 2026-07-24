@@ -146,6 +146,21 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitTableFunction(TableFunction node) {
+        node.name().accept(this);
+        for (Expression arg : node.args()) {
+            arg.accept(this);
+        }
+        node.alias().ifPresent(alias -> alias.accept(this));
+        node.columnAliases().ifPresent(cols -> {
+            for (Identifier col : cols) {
+                col.accept(this);
+            }
+        });
+        return defaultResult();
+    }
+
+    @Override
     public R visitRowValue(RowValue node) {
         for (Expression value : node.values()) {
             value.accept(this);

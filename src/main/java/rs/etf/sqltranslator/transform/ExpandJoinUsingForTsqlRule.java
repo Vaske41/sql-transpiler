@@ -13,6 +13,7 @@ import rs.etf.sqltranslator.ast.Relation;
 import rs.etf.sqltranslator.ast.Script;
 import rs.etf.sqltranslator.ast.TableRef;
 import rs.etf.sqltranslator.ast.TableSource;
+import rs.etf.sqltranslator.ast.TableFunction;
 import rs.etf.sqltranslator.ast.ValuesTable;
 import rs.etf.sqltranslator.core.Dialect;
 import rs.etf.sqltranslator.core.SourcePosition;
@@ -93,6 +94,9 @@ public final class ExpandJoinUsingForTsqlRule implements Rule {
             }
             if (relation instanceof ValuesTable values) {
                 return values.alias().value();
+            }
+            if (relation instanceof TableFunction fn) {
+                return fn.alias().orElse(fn.name().last()).value();
             }
             throw new UnsupportedFeatureException(
                     "JOIN USING requires a named left/right relation for T-SQL expansion",
