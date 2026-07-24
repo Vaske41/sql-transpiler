@@ -54,6 +54,18 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
 
     protected abstract void renderAutoIncrement();
 
+    /**
+     * Emits {@code WITH} / {@code WITH RECURSIVE}. Default keeps {@code RECURSIVE}
+     * when the AST flag is set (PostgreSQL / MySQL). T-SQL overrides to drop it —
+     * SQL Server infers recursion from self-reference.
+     */
+    protected void renderWithKeyword(boolean recursive) {
+        out.token("WITH");
+        if (recursive) {
+            out.token("RECURSIVE");
+        }
+    }
+
     // --- identifiers ---
 
     protected final String identifier(Identifier id) {
@@ -480,7 +492,7 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     @Override
     public Void visitQuery(Query node) {
         if (!node.ctes().isEmpty()) {
-            out.token("WITH");
+            renderWithKeyword(node.recursive());
             boolean first = true;
             for (Cte cte : node.ctes()) {
                 if (!first) {

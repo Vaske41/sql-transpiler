@@ -135,7 +135,7 @@ the documented rollback if the ladder proves incomplete.
 
 1. ~~`INSERT ... SELECT`~~ — shipped (2026-07) — one grammar alternative + one AST field reusing `Query`
 2. ~~`CREATE INDEX`~~ — shipped (2026-07) — small grammar surface, high practical relevance
-3. ~~CTEs (`WITH`)~~ — shipped (Wave 1) — `WITH RECURSIVE` and CTE self-reference refused (T-SQL recursion without keyword included)
+3. ~~CTEs (`WITH`)~~ — shipped (Wave 1) — recursive forms rendered structurally (Wave 2 Task 11; coverage ≠ AccEX)
 4. ~~Derived tables in `FROM`~~ — shipped (Wave 1)
 5. ~~Window functions~~ — shipped (Wave 1) — frames refused
 
@@ -147,7 +147,7 @@ the frozen AST. Engine-backed `cases/semantic/` for CTE/window is **deferred**
 The queue is the first thing sacrificed when behind schedule: v1 scope never
 grows before the day-14 milestones are green.
 
-### CTE policy (Wave 1)
+### CTE policy (Wave 1 + Wave 2 Task 11)
 
 Non-recursive `WITH` is supported end-to-end (parse → AST → rules → print). Nested
 `WITH` inside a CTE body is supported via recursive `Query.ctes` for MySQL and
@@ -155,11 +155,18 @@ PostgreSQL. When the **target is T-SQL**, nested CTE lists are **flattened** int
 a single top-level `WITH` list (`FlattenNestedCtesForTsqlRule`) — SQL Server does
 not allow a nested `WITH` inside a CTE body.
 
-**Refused** (parse OK, build throws `UnsupportedFeatureException` `"recursive CTE"`):
+**Recursive CTEs** (`WITH RECURSIVE` and/or CTE self-`TableRef`) are **rendered
+structurally** for coverage (Wave 2 Task 11):
 
-- `WITH RECURSIVE` on all three dialects
-- Any CTE whose body references its own name as a `TableRef` (covers T-SQL
-  recursion that omits the `RECURSIVE` keyword)
+- `Query.recursive` is set when the source had `RECURSIVE` **or** a CTE body
+  references its own name (covers T-SQL recursion that omits the keyword).
+- PostgreSQL / MySQL printers emit `WITH RECURSIVE` when the flag is set.
+- T-SQL printer drops `RECURSIVE` (SQL Server infers recursion) via
+  `renderWithKeyword`.
+
+**Honesty:** this is parse/print **coverage**, not engine-level recursion
+verification (AccEX / semantic validation of recursive termination stays out of
+scope). Coverage `SUCCESS` ≠ AccEX.
 
 CTE names are visible to `ScopedTransformer.relationScope` as empty-schema
 relations and **shadow** catalog base tables of the same name (CTE map before
@@ -245,7 +252,6 @@ error) and throw `UnsupportedFeatureException` at build with a `SourcePosition`:
 | Partial index (`WHERE`) | PostgreSQL | `partial index (WHERE)` |
 | `NULLS` ordering in index columns | PostgreSQL | `NULLS ordering in index columns` |
 | Index column prefix length | MySQL | `index column prefix length` |
-| Recursive CTE (`WITH RECURSIVE` or self-`TableRef`) | all | `recursive CTE` |
 | Window frame (`ROWS`/`RANGE`) | all | `window frame` |
 
 T-SQL `NONCLUSTERED` folds away (canonical index shape has no clustered flag).

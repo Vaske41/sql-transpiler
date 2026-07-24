@@ -107,13 +107,11 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     @Override
     public Object visitQueryExpression(TSqlParser.QueryExpressionContext ctx) {
         List<Cte> ctes = List.of();
+        boolean recursive = false;
         if (ctx.withClause() != null) {
             var w = ctx.withClause();
-            support.refuseIfRecursiveKeyword(w, w.RECURSIVE() != null);
             ctes = w.commonTableExpression().stream().map(c -> (Cte) visit(c)).toList();
-            for (Cte cte : ctes) {
-                support.refuseIfCteSelfReference(cte);
-            }
+            recursive = support.isRecursiveWith(w.RECURSIVE() != null, ctes);
         }
         List<TSqlParser.QuerySpecificationContext> specs = ctx.querySpecification();
         boolean hasArms = specs.size() > 1;
@@ -151,7 +149,7 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
                 top == null ? null : top.count(),
                 top == null ? null : top.position(),
                 offset, fetch, offsetPos);
-        return new Query(ctes, first, arms, orderBy, limit, pos(ctx));
+        return new Query(ctes, recursive, first, arms, orderBy, limit, pos(ctx));
     }
 
     @Override

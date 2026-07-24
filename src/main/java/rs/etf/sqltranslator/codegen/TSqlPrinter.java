@@ -36,6 +36,12 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
         return "+";
     }
 
+    /** SQL Server infers recursion; never emit the {@code RECURSIVE} keyword. */
+    @Override
+    protected void renderWithKeyword(boolean recursive) {
+        out.token("WITH");
+    }
+
     @Override
     protected int concatPrecedence() {
         return 6;    // CONCAT renders as ADD's '+' token — same level, or minimal

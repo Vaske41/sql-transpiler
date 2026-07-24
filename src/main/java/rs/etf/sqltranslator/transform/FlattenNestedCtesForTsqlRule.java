@@ -38,12 +38,15 @@ public final class FlattenNestedCtesForTsqlRule implements Rule {
                 return rebuilt;
             }
             List<Cte> flat = new ArrayList<>();
+            boolean recursive = rebuilt.recursive();
             for (Cte cte : rebuilt.ctes()) {
                 Query body = cte.query();
                 if (!body.ctes().isEmpty()) {
+                    recursive = recursive || body.recursive();
                     flat.addAll(body.ctes());
                     Query stripped = new Query(
                             List.of(),
+                            false,
                             body.first(),
                             body.unionArms(),
                             body.orderBy(),
@@ -56,6 +59,7 @@ public final class FlattenNestedCtesForTsqlRule implements Rule {
             }
             return new Query(
                     flat,
+                    recursive,
                     rebuilt.first(),
                     rebuilt.unionArms(),
                     rebuilt.orderBy(),

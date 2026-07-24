@@ -19,7 +19,7 @@ To fit 2 weeks, fix the supported SQL subset **up front** and refuse everything 
 
 | Category | In scope (v1) | Out of scope |
 |---|---|---|
-| DML | `SELECT` (joins, `WHERE`, `GROUP BY`/`HAVING`, `ORDER BY`, `LIMIT`/`TOP`/`FETCH`), non-recursive CTEs (`WITH`), `INSERT ... VALUES` (incl. multi-row), `INSERT ... SELECT`, `UPDATE`, `DELETE` | Recursive CTEs (`WITH RECURSIVE` / CTE self-reference), window frames, `MERGE` |
+| DML | `SELECT` (joins, `WHERE`, `GROUP BY`/`HAVING`, `ORDER BY`, `LIMIT`/`TOP`/`FETCH`), CTEs (`WITH`, incl. recursive structural render), `INSERT ... VALUES` (incl. multi-row), `INSERT ... SELECT`, `UPDATE`, `DELETE` | Window frames, `MERGE` |
 | DDL | `CREATE TABLE` (columns, types, `NOT NULL`, `DEFAULT`, `PRIMARY KEY`, `FOREIGN KEY`, `UNIQUE`, auto-increment), `CREATE INDEX` / `CREATE UNIQUE INDEX` (column list + optional `DESC`; dialect-only options refused — see README), `DROP TABLE`, basic `ALTER TABLE ADD/DROP COLUMN` | Partitioning, triggers, procedures; index options beyond the shared shape (`CLUSTERED`, `USING`, partial `WHERE`, index `NULLS`, prefix lengths) |
 | Expressions | Literals, identifiers, arithmetic/comparison/logical ops, `CASE`, `CAST`, subqueries in expression position (scalar, `IN (SELECT …)`, `EXISTS`), derived tables in `FROM`/`JOIN`, frameless window functions (`OVER`), ~15 common functions (see Phase 4) | Vendor-specific function long tail; framed windows (`ROWS`/`RANGE`) |
 
@@ -359,7 +359,7 @@ Adding statement N+1 is this ordered touch-list — a ~30-minute checklist, not 
 ### The ranked queue (value-per-hour order)
 1. ~~`INSERT ... SELECT`~~ — shipped (2026-07) — nearly free: one grammar alternative + one AST field reusing `Query`
 2. ~~`CREATE INDEX`~~ — shipped (2026-07) — small grammar surface, high practical relevance
-3. ~~CTEs (`WITH`)~~ — shipped (Wave 1) — `WITH RECURSIVE` and CTE self-reference refused (T-SQL recursion without keyword included)
+3. ~~CTEs (`WITH`)~~ — shipped (Wave 1); recursive forms rendered structurally (Wave 2 Task 11; coverage ≠ AccEX)
 4. ~~Derived tables in `FROM`~~ — shipped (Wave 1)
 5. ~~Window functions~~ — shipped (Wave 1) — frames refused
 

@@ -81,6 +81,7 @@ public abstract class ScopedTransformer extends rs.etf.sqltranslator.ast.AstTran
             }
             return new Query(
                     rebuiltCtes,
+                    node.recursive(),
                     rebuild(node.first()),
                     rebuildList(node.unionArms()),
                     rebuildList(node.orderBy()),

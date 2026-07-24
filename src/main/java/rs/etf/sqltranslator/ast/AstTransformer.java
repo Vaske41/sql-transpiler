@@ -51,6 +51,7 @@ public class AstTransformer implements AstVisitor<Object> {
     public Object visitQuery(Query node) {
         return new Query(
                 rebuildList(node.ctes()),
+                node.recursive(),
                 rebuild(node.first()),
                 rebuildList(node.unionArms()),
                 rebuildList(node.orderBy()),

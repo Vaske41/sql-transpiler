@@ -106,13 +106,11 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     @Override
     public Object visitQueryExpression(MySqlParser.QueryExpressionContext ctx) {
         List<Cte> ctes = List.of();
+        boolean recursive = false;
         if (ctx.withClause() != null) {
             var w = ctx.withClause();
-            support.refuseIfRecursiveKeyword(w, w.RECURSIVE() != null);
             ctes = w.commonTableExpression().stream().map(c -> (Cte) visit(c)).toList();
-            for (Cte cte : ctes) {
-                support.refuseIfCteSelfReference(cte);
-            }
+            recursive = support.isRecursiveWith(w.RECURSIVE() != null, ctes);
         }
         QuerySpecification first = (QuerySpecification) visit(ctx.querySpecification(0));
         List<UnionArm> arms = support.unionArms(ctx, MySqlParser.UNION, MySqlParser.ALL, this);
@@ -120,7 +118,8 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
                 ? List.of()
                 : ctx.orderByClause().orderItem().stream()
                         .map(i -> (OrderItem) visit(i)).toList();
-        return new Query(ctes, first, arms, orderBy, rowLimit(ctx.rowLimitClause()), pos(ctx));
+        return new Query(ctes, recursive, first, arms, orderBy, rowLimit(ctx.rowLimitClause()),
+                pos(ctx));
     }
 
     @Override

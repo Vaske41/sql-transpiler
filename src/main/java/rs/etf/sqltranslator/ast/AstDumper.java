@@ -36,7 +36,7 @@ public final class AstDumper implements AstVisitor<String> {
 
     @Override
     public String visitQuery(Query node) {
-        return node("Query")
+        return node("Query" + (node.recursive() ? " recursive=true" : ""))
                 .children("ctes", node.ctes())
                 .child("first", node.first())
                 .children("unionArms", node.unionArms())

@@ -94,18 +94,22 @@ final class AstBuilderSupport {
         }
     }
 
-    void refuseIfRecursiveKeyword(ParserRuleContext withClause, boolean recursive) {
-        if (recursive) {
-            refuse("recursive CTE", pos(withClause));
+    /**
+     * Structural recursion flag for coverage render: {@code WITH RECURSIVE} keyword
+     * or any CTE body that references its own name (T-SQL omits the keyword).
+     * Does not validate recursion semantics.
+     */
+    boolean isRecursiveWith(boolean recursiveKeyword, List<Cte> ctes) {
+        if (recursiveKeyword) {
+            return true;
         }
-    }
-
-    /** T-SQL (and others) may omit RECURSIVE; refuse self-reference in the CTE body. */
-    void refuseIfCteSelfReference(Cte cte) {
-        String name = cte.name().value().toLowerCase(Locale.ROOT);
-        if (referencesTableName(cte.query(), name)) {
-            refuse("recursive CTE", cte.pos());
+        for (Cte cte : ctes) {
+            String name = cte.name().value().toLowerCase(Locale.ROOT);
+            if (referencesTableName(cte.query(), name)) {
+                return true;
+            }
         }
+        return false;
     }
 
     private boolean referencesTableName(Query query, String lowerName) {
