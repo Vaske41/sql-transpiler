@@ -135,8 +135,21 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
         if (ctx.identifier().size() > 1) {
             cols = Optional.of(ctx.identifier().stream().skip(1).map(this::ident).toList());
         }
-        Query query = (Query) visit(ctx.queryExpression());
+        Query query = cteBody(ctx.cteBody(), name, cols);
         return new Cte(name, cols, query, pos(ctx));
+    }
+
+    private Query cteBody(MySqlParser.CteBodyContext ctx, Identifier name,
+                          Optional<List<Identifier>> cols) {
+        if (ctx.VALUES() != null) {
+            List<RowValue> rows = ctx.rowValue().stream()
+                    .map(row -> new RowValue(
+                            row.expression().stream().map(this::expr).toList(),
+                            pos(row)))
+                    .toList();
+            return support.valuesCteBody(rows, name, cols, pos(ctx));
+        }
+        return (Query) visit(ctx.queryExpression());
     }
 
     /** MySQL: LIMIT n [OFFSET m] | LIMIT m, n — the comma form swaps operands (§2.2). */
@@ -343,11 +356,13 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
                 .toList();
         Optional<Identifier> alias = ctx.identifier() == null
                 ? Optional.empty() : Optional.of(ident(ctx.identifier()));
+        List<Join> inlineJoins = ctx.joinedTable().stream()
+                .map(j -> (Join) visit(j)).toList();
         Optional<TableSource> from = updateFrom(ctx.tableSource(), ctx.FROM() != null);
         Optional<Expression> where = ctx.whereClause() == null
                 ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
-        return new UpdateStatement(qname(ctx.qualifiedName()), alias, assignments, from, where,
-                pos(ctx));
+        return support.updateWithInlineJoins(qname(ctx.qualifiedName()), alias, inlineJoins, from,
+                assignments, where, pos(ctx));
     }
 
     private Optional<TableSource> updateFrom(

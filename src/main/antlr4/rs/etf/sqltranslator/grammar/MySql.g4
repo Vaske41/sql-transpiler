@@ -50,7 +50,7 @@ returningClause : identifier selectItem (',' selectItem)* ;
 rowValue : '(' expression (',' expression)* ')' ;
 
 updateStatement
-    : UPDATE qualifiedName (AS? identifier)? (',' tableSource)?
+    : UPDATE qualifiedName (AS? identifier)? joinedTable* (',' tableSource)?
       SET assignment (',' assignment)*
       (FROM tableSource)? whereClause?
     ;
@@ -157,7 +157,12 @@ withClause
     ;
 
 commonTableExpression
-    : identifier ('(' identifier (',' identifier)* ')')? AS '(' queryExpression ')'
+    : identifier ('(' identifier (',' identifier)* ')')? AS '(' cteBody ')'
+    ;
+
+cteBody
+    : queryExpression
+    | VALUES rowValue (',' rowValue)*
     ;
 
 querySpecification

@@ -23,21 +23,28 @@ import rs.etf.sqltranslator.ast.ForeignKeyRef;
 import rs.etf.sqltranslator.ast.GenericType;
 import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.IntervalLiteral;
+import rs.etf.sqltranslator.ast.Join;
+import rs.etf.sqltranslator.ast.JoinKind;
 import rs.etf.sqltranslator.ast.MaxLength;
 import rs.etf.sqltranslator.ast.NumericLiteral;
 import rs.etf.sqltranslator.ast.QualifiedName;
 import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.QuerySpecification;
 import rs.etf.sqltranslator.ast.RowLimit;
+import rs.etf.sqltranslator.ast.RowValue;
+import rs.etf.sqltranslator.ast.SelectStar;
 import rs.etf.sqltranslator.ast.Statement;
 import rs.etf.sqltranslator.ast.StringLiteral;
 import rs.etf.sqltranslator.ast.TableRef;
+import rs.etf.sqltranslator.ast.TableSource;
 import rs.etf.sqltranslator.ast.SelectItem;
 import rs.etf.sqltranslator.ast.TruncateStatement;
 import rs.etf.sqltranslator.ast.TypeLength;
 import rs.etf.sqltranslator.ast.UnionArm;
+import rs.etf.sqltranslator.ast.UpdateStatement;
 import rs.etf.sqltranslator.ast.Upsert;
 import rs.etf.sqltranslator.ast.UpsertKind;
+import rs.etf.sqltranslator.ast.ValuesTable;
 import rs.etf.sqltranslator.ast.WhenClause;
 import rs.etf.sqltranslator.ast.Assignment;
 import rs.etf.sqltranslator.core.Dialect;
@@ -287,6 +294,62 @@ final class AstBuilderSupport {
             return new CreateViewStatement(name, columns, query, true, position);
         }
         throw refuse("malformed CREATE VIEW header", position);
+    }
+
+    /**
+     * MySQL-style {@code UPDATE t JOIN u ON … SET} → portable {@code UPDATE t SET … FROM …}
+     * by folding the first JOIN's ON into WHERE (INNER/CROSS only).
+     */
+    UpdateStatement updateWithInlineJoins(QualifiedName table, Optional<Identifier> alias,
+                                          List<Join> inlineJoins, Optional<TableSource> from,
+                                          List<Assignment> assignments, Optional<Expression> where,
+                                          SourcePosition position) {
+        if (inlineJoins.isEmpty()) {
+            return new UpdateStatement(table, alias, assignments, from, where, position);
+        }
+        refuseIf(from.isPresent(),
+                "UPDATE cannot combine target JOIN with a separate FROM clause", position);
+        for (Join join : inlineJoins) {
+            refuseIf(join.kind() != JoinKind.INNER && join.kind() != JoinKind.CROSS,
+                    "UPDATE target OUTER JOIN is not supported", join.pos());
+            refuseIf(!join.usingColumns().isEmpty(),
+                    "UPDATE JOIN USING is not supported; use ON", join.pos());
+            refuseIf(join.lateral(), "UPDATE LATERAL join is not supported", join.pos());
+        }
+        Join first = inlineJoins.get(0);
+        List<Join> rest = inlineJoins.subList(1, inlineJoins.size());
+        Optional<TableSource> normalizedFrom =
+                Optional.of(new TableSource(first.table(), rest, position));
+        Optional<Expression> normalizedWhere = where;
+        if (first.on().isPresent()) {
+            normalizedWhere = andPredicates(first.on().get(), normalizedWhere, first.pos());
+        }
+        return new UpdateStatement(table, alias, assignments, normalizedFrom, normalizedWhere,
+                position);
+    }
+
+    /** {@code WITH name[(cols)] AS (VALUES …)} → {@code AS (SELECT * FROM (VALUES …) AS name[(cols)])}. */
+    Query valuesCteBody(List<RowValue> rows, Identifier alias, Optional<List<Identifier>> columns,
+                        SourcePosition position) {
+        List<Identifier> cols = columns.orElse(List.of());
+        ValuesTable values = new ValuesTable(rows, alias, cols, position);
+        QuerySpecification spec = new QuerySpecification(
+                Optional.empty(),
+                List.of(new SelectStar(Optional.empty(), position)),
+                Optional.of(new TableSource(values, List.of(), position)),
+                Optional.empty(),
+                List.of(),
+                Optional.empty(),
+                position);
+        return new Query(List.of(), false, spec, List.of(), List.of(), Optional.empty(), position);
+    }
+
+    private Optional<Expression> andPredicates(Expression left, Optional<Expression> right,
+                                               SourcePosition position) {
+        if (right.isEmpty()) {
+            return Optional.of(left);
+        }
+        return Optional.of(new BinaryOp(BinaryOperator.AND, left, right.get(), position));
     }
 
     TruncateStatement truncate(Identifier keyword, QualifiedName table, SourcePosition position) {
