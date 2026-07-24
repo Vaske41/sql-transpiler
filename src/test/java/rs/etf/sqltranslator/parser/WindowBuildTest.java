@@ -7,11 +7,13 @@ import rs.etf.sqltranslator.ast.SelectExpr;
 import rs.etf.sqltranslator.ast.SelectStatement;
 import rs.etf.sqltranslator.codegen.CodegenTestSupport;
 import rs.etf.sqltranslator.core.Dialect;
+import rs.etf.sqltranslator.core.UnsupportedFeatureException;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class WindowBuildTest {
 
@@ -30,6 +32,25 @@ class WindowBuildTest {
                 sql, Dialect.POSTGRESQL, Dialect.MYSQL).sql();
         assertThat(out).containsIgnoringCase("ROWS");
         assertThat(out).containsIgnoringCase("UNBOUNDED PRECEDING");
+        assertThat(out).containsIgnoringCase("CURRENT ROW");
+    }
+
+    @Test
+    void rangeOffsetFrameRefusedTowardTsql() {
+        assertThatThrownBy(() -> CodegenTestSupport.printTranslated(
+                "SELECT SUM(x) OVER (ORDER BY y RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM t;",
+                Dialect.POSTGRESQL, Dialect.TSQL))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("RANGE frame with offset bounds");
+    }
+
+    @Test
+    void rowsOffsetFramePrintsTowardTsql() {
+        String out = CodegenTestSupport.printTranslated(
+                "SELECT SUM(x) OVER (ORDER BY y ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) FROM t;",
+                Dialect.POSTGRESQL, Dialect.TSQL).sql();
+        assertThat(out).containsIgnoringCase("ROWS");
+        assertThat(out).containsIgnoringCase("1 PRECEDING");
         assertThat(out).containsIgnoringCase("CURRENT ROW");
     }
 }

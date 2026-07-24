@@ -31,7 +31,9 @@ import java.util.Optional;
  * Rewrite PostgreSQL {@code SELECT DISTINCT ON (k) … ORDER BY k, s} for MySQL / T-SQL as
  * {@code SELECT cols FROM (SELECT cols, ROW_NUMBER() OVER (PARTITION BY k ORDER BY s) AS _rn
  * FROM …) _t WHERE _rn = 1}. Refuse {@code DISTINCT ON} without {@code ORDER BY} (no faithful
- * single-row pick). Leave native {@code DISTINCT ON} when the target is PostgreSQL.
+ * single-row pick) and {@code DISTINCT ON} with {@code SELECT *} (outer star would leak
+ * {@code _rn}; expansion needs a catalog). Leave native {@code DISTINCT ON} when the target
+ * is PostgreSQL.
  */
 public final class RewriteDistinctOnRule implements Rule {
 
@@ -69,7 +71,17 @@ public final class RewriteDistinctOnRule implements Rule {
                 throw new UnsupportedFeatureException(
                         "DISTINCT ON without ORDER BY", rebuilt.first().pos());
             }
+            if (containsSelectStar(rebuilt.first().items())) {
+                // Outer SELECT * over the wrap would project _rn. Expansion needs a
+                // catalog; without it, refuse rather than emit a wrong column set.
+                throw new UnsupportedFeatureException(
+                        "DISTINCT ON with SELECT *", rebuilt.first().pos());
+            }
             return rewrite(rebuilt);
+        }
+
+        private static boolean containsSelectStar(List<SelectItem> items) {
+            return items.stream().anyMatch(SelectStar.class::isInstance);
         }
 
         private Query rewrite(Query query) {
@@ -145,10 +157,6 @@ public final class RewriteDistinctOnRule implements Rule {
             List<SelectItem> out = new ArrayList<>(items.size());
             int i = 0;
             for (SelectItem item : items) {
-                if (item instanceof SelectStar) {
-                    out.add(item);
-                    continue;
-                }
                 SelectExpr expr = (SelectExpr) item;
                 if (expr.alias().isPresent()) {
                     out.add(expr);
@@ -172,12 +180,7 @@ public final class RewriteDistinctOnRule implements Rule {
         private static List<SelectItem> outerItems(List<SelectItem> innerItems, SourcePosition pos) {
             List<SelectItem> projected = new ArrayList<>();
             for (int i = 0; i < innerItems.size() - 1; i++) {
-                SelectItem item = innerItems.get(i);
-                if (item instanceof SelectStar star) {
-                    projected.add(star);
-                    continue;
-                }
-                SelectExpr expr = (SelectExpr) item;
+                SelectExpr expr = (SelectExpr) innerItems.get(i);
                 Identifier alias = expr.alias().orElseThrow();
                 projected.add(new SelectExpr(
                         new ColumnRef(new QualifiedName(List.of(alias), pos), pos),

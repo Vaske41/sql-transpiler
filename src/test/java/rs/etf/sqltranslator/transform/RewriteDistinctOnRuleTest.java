@@ -60,4 +60,44 @@ class RewriteDistinctOnRuleTest {
                 .isInstanceOf(UnsupportedFeatureException.class)
                 .hasMessageContaining("DISTINCT ON without ORDER BY");
     }
+
+    @Test
+    void distinctOnSelectStarRefusedTowardMysql() {
+        assertThatThrownBy(() -> CodegenTestSupport.printTranslated(
+                "SELECT DISTINCT ON (name) * FROM races ORDER BY name, date DESC;",
+                Dialect.POSTGRESQL, Dialect.MYSQL))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("DISTINCT ON with SELECT *");
+    }
+
+    @Test
+    void distinctOnSelectStarRefusedTowardTsql() {
+        assertThatThrownBy(() -> CodegenTestSupport.printTranslated(
+                "SELECT DISTINCT ON (name) * FROM races ORDER BY name, date DESC;",
+                Dialect.POSTGRESQL, Dialect.TSQL))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("DISTINCT ON with SELECT *");
+    }
+
+    @Test
+    void distinctOnSelectStarPreservedTowardPostgresql() {
+        String sql = CodegenTestSupport.printTranslated(
+                "SELECT DISTINCT ON (name) * FROM races ORDER BY name, date DESC;",
+                Dialect.POSTGRESQL, Dialect.POSTGRESQL).sql();
+        assertThat(sql).containsIgnoringCase("DISTINCT ON");
+        assertThat(sql).doesNotContainIgnoringCase("ROW_NUMBER()");
+        assertThat(sql).doesNotContainIgnoringCase("_rn");
+    }
+
+    @Test
+    void distinctOnNamedListOuterDoesNotExposeRn() {
+        String sql = CodegenTestSupport.printTranslated(
+                "SELECT DISTINCT ON (name) raceid, name, date FROM races ORDER BY name, date DESC;",
+                Dialect.POSTGRESQL, Dialect.MYSQL).sql();
+        // Inner wrap still has _rn for the filter; outer SELECT must list original cols only.
+        assertThat(sql).containsIgnoringCase("WHERE");
+        assertThat(sql).containsIgnoringCase("_rn = 1");
+        // Outer projection is named — no bare SELECT * that would leak _rn.
+        assertThat(sql).doesNotContainIgnoringCase("SELECT * FROM");
+    }
 }

@@ -7,6 +7,9 @@ import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.ColumnRef;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.Expression;
+import rs.etf.sqltranslator.ast.FrameBound;
+import rs.etf.sqltranslator.ast.FrameBoundKind;
+import rs.etf.sqltranslator.ast.FrameMode;
 import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.JoinKind;
@@ -16,6 +19,7 @@ import rs.etf.sqltranslator.ast.RowLimit;
 import rs.etf.sqltranslator.ast.Script;
 import rs.etf.sqltranslator.ast.SelectExpr;
 import rs.etf.sqltranslator.ast.SelectItem;
+import rs.etf.sqltranslator.ast.WindowFrame;
 import rs.etf.sqltranslator.core.Dialect;
 import rs.etf.sqltranslator.core.SourcePosition;
 import rs.etf.sqltranslator.core.UnsupportedFeatureException;
@@ -96,6 +100,36 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
                         "LATERAL join ON condition cannot fold to APPLY", node.pos());
             }
             return super.visitJoin(node);
+        }
+
+        /**
+         * SQL Server accepts {@code RANGE} only with {@code UNBOUNDED}/{@code CURRENT ROW}
+         * extents. Offset bounds under {@code RANGE} are invalid T-SQL; {@code ROWS} frames
+         * (and portable {@code RANGE UNBOUNDED…CURRENT ROW}) print structurally.
+         */
+        @Override
+        public Object visitWindowFrame(WindowFrame node) {
+            if (ctx.target() == Dialect.TSQL
+                    && node.mode() == FrameMode.RANGE
+                    && hasOffsetBound(node)) {
+                throw new UnsupportedFeatureException(
+                        "RANGE frame with offset bounds is not supported by T-SQL",
+                        node.pos());
+            }
+            return super.visitWindowFrame(node);
+        }
+
+        private static boolean hasOffsetBound(WindowFrame frame) {
+            if (isOffsetBound(frame.start())) {
+                return true;
+            }
+            return frame.end().map(ValidateTargetCapabilitiesRule.Validator::isOffsetBound)
+                    .orElse(false);
+        }
+
+        private static boolean isOffsetBound(FrameBound bound) {
+            return bound.kind() == FrameBoundKind.PRECEDING
+                    || bound.kind() == FrameBoundKind.FOLLOWING;
         }
 
         /** CROSS APPLY, or OUTER APPLY (= LEFT LATERAL with empty/TRUE ON). */
