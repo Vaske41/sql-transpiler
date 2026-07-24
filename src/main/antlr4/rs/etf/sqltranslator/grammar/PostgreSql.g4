@@ -258,7 +258,7 @@ primaryBase
     | functionCall windowOverlay?
     | columnReference
     | subquery
-    | '(' expression ')'
+    | '(' expression (',' expression)* ')'
     ;
 
 // Contextual EXTRACT — builder requires identifier text EXTRACT (no new keyword).

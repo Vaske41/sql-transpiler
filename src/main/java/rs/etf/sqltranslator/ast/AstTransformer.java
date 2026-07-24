@@ -380,6 +380,11 @@ public class AstTransformer implements AstVisitor<Object> {
         return new SubqueryExpression(rebuild(node.query()), node.pos());
     }
 
+    @Override
+    public Object visitRowConstructor(RowConstructor node) {
+        return new RowConstructor(rebuildList(node.elements()), node.pos());
+    }
+
     // --- literals, identifiers, types (leaves rebuild to themselves) ---
 
     @Override

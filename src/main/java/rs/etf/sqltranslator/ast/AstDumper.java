@@ -487,6 +487,11 @@ public final class AstDumper implements AstVisitor<String> {
         return node("SubqueryExpression").child("query", node.query()).done();
     }
 
+    @Override
+    public String visitRowConstructor(RowConstructor node) {
+        return node("RowConstructor").children("elements", node.elements()).done();
+    }
+
     // --- literals, identifiers, types ---
 
     @Override

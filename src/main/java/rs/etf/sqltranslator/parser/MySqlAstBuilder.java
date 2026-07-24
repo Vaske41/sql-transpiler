@@ -40,6 +40,7 @@ import rs.etf.sqltranslator.ast.IsBoolPredicate;
 import rs.etf.sqltranslator.ast.BoolTest;
 import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.JoinKind;
+import rs.etf.sqltranslator.ast.RowConstructor;
 import rs.etf.sqltranslator.ast.RowValue;
 import rs.etf.sqltranslator.ast.ValuesTable;
 import rs.etf.sqltranslator.ast.LikePredicate;
@@ -860,7 +861,11 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
 
     @Override
     public Object visitParenExpr(MySqlParser.ParenExprContext ctx) {
-        return visit(ctx.expression());
+        List<Expression> elems = ctx.expression().stream().map(this::expr).toList();
+        if (elems.size() == 1) {
+            return elems.get(0);
+        }
+        return new RowConstructor(elems, pos(ctx));
     }
 
     // --- shared extraction helpers ---

@@ -123,6 +123,8 @@ public interface AstVisitor<R> {
 
     R visitSubqueryExpression(SubqueryExpression node);
 
+    R visitRowConstructor(RowConstructor node);
+
     // --- literals, identifiers, types ---
     R visitNumericLiteral(NumericLiteral node);
 

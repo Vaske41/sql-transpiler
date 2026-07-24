@@ -386,6 +386,11 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitRowConstructor(RowConstructor node) {
+        return defaultResult();
+    }
+
+    @Override
     public R visitNumericLiteral(NumericLiteral node) {
         return defaultResult();
     }

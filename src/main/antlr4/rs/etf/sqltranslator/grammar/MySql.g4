@@ -251,7 +251,7 @@ primaryExpression
     | functionCall windowOverlay?           # functionExpr
     | columnReference                       # columnRefExpr
     | subquery                              # scalarSubqueryExpr
-    | '(' expression ')'                    # parenExpr
+    | '(' expression (',' expression)* ')'  # parenExpr
     ;
 
 // Contextual EXTRACT — builder requires identifier text EXTRACT (no new keyword).

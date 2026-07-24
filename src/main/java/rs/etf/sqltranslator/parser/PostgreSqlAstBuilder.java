@@ -40,6 +40,7 @@ import rs.etf.sqltranslator.ast.IsBoolPredicate;
 import rs.etf.sqltranslator.ast.BoolTest;
 import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.JoinKind;
+import rs.etf.sqltranslator.ast.RowConstructor;
 import rs.etf.sqltranslator.ast.RowValue;
 import rs.etf.sqltranslator.ast.ValuesTable;
 import rs.etf.sqltranslator.ast.LikePredicate;
@@ -715,7 +716,7 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
             return visit(ctx.caseExpression());
         }
         if (ctx.CAST() != null) {
-            return new CastExpression(expr(ctx.expression()), castType(ctx.dataType()), pos(ctx));
+            return new CastExpression(expr(ctx.expression(0)), castType(ctx.dataType()), pos(ctx));
         }
         if (ctx.extractExpression() != null) {
             return visit(ctx.extractExpression());
@@ -738,7 +739,11 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
         if (ctx.subquery() != null) {
             return new SubqueryExpression((Query) visit(ctx.subquery()), pos(ctx));
         }
-        return visit(ctx.expression());
+        List<Expression> elems = ctx.expression().stream().map(this::expr).toList();
+        if (elems.size() == 1) {
+            return elems.get(0);
+        }
+        return new RowConstructor(elems, pos(ctx));
     }
 
     @Override

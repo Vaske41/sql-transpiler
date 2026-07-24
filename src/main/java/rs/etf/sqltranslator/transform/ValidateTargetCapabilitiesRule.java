@@ -102,6 +102,15 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
             return super.visitJoin(node);
         }
 
+        @Override
+        public Object visitRowConstructor(rs.etf.sqltranslator.ast.RowConstructor node) {
+            if (ctx.target() == Dialect.TSQL) {
+                throw new UnsupportedFeatureException(
+                        "row constructor is not supported by T-SQL", node.pos());
+            }
+            return super.visitRowConstructor(node);
+        }
+
         /**
          * SQL Server accepts {@code RANGE} only with {@code UNBOUNDED}/{@code CURRENT ROW}
          * extents. Offset bounds under {@code RANGE} are invalid T-SQL; {@code ROWS} frames
