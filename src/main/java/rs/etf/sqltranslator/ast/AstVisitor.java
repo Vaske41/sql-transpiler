@@ -43,6 +43,8 @@ public interface AstVisitor<R> {
     // --- DML ---
     R visitInsertStatement(InsertStatement node);
 
+    R visitUpsert(Upsert node);
+
     R visitUpdateStatement(UpdateStatement node);
 
     R visitAssignment(Assignment node);

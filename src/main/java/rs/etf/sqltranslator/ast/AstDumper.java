@@ -164,8 +164,19 @@ public final class AstDumper implements AstVisitor<String> {
                 dump.child("rows[" + i + "][" + j + "]", row.get(j));
             }
         }
-        dump.child("query", node.query());
+        dump.child("query", node.query())
+                .child("upsert", node.upsert());
+        node.returning().ifPresent(items -> dump.children("returning", items));
         return dump.done();
+    }
+
+    @Override
+    public String visitUpsert(Upsert node) {
+        return node("Upsert kind=" + node.kind().name())
+                .children("conflictTarget", node.conflictTarget())
+                .children("assignments", node.assignments())
+                .child("where", node.where())
+                .done();
     }
 
     @Override

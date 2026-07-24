@@ -24,12 +24,27 @@ statement
 insertStatement
     : INSERT INTO? qualifiedName ('(' identifier (',' identifier)* ')')?
       insertSource
+      upsertClause?
+      returningClause?
     ;
 
 insertSource
     : VALUES rowValue (',' rowValue)*   # insertValues
     | queryExpression                   # insertQuery
     ;
+
+// CONFLICT / DUPLICATE / DO / NOTHING / RETURNING are contextual (keyword-block free).
+upsertClause
+    : ON identifier KEY UPDATE SET? assignment (',' assignment)*
+    | ON identifier conflictTarget? identifier
+        ( identifier
+        | UPDATE SET? assignment (',' assignment)* whereClause?
+        )
+    ;
+
+conflictTarget : '(' identifier (',' identifier)* ')' ;
+
+returningClause : identifier selectItem (',' selectItem)* ;
 
 rowValue : '(' expression (',' expression)* ')' ;
 

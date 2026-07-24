@@ -31,10 +31,14 @@ import rs.etf.sqltranslator.ast.RowLimit;
 import rs.etf.sqltranslator.ast.Statement;
 import rs.etf.sqltranslator.ast.StringLiteral;
 import rs.etf.sqltranslator.ast.TableRef;
+import rs.etf.sqltranslator.ast.SelectItem;
 import rs.etf.sqltranslator.ast.TruncateStatement;
 import rs.etf.sqltranslator.ast.TypeLength;
 import rs.etf.sqltranslator.ast.UnionArm;
+import rs.etf.sqltranslator.ast.Upsert;
+import rs.etf.sqltranslator.ast.UpsertKind;
 import rs.etf.sqltranslator.ast.WhenClause;
+import rs.etf.sqltranslator.ast.Assignment;
 import rs.etf.sqltranslator.core.Dialect;
 import rs.etf.sqltranslator.core.SourcePosition;
 import rs.etf.sqltranslator.core.UnsupportedFeatureException;
@@ -92,6 +96,53 @@ final class AstBuilderSupport {
         if (condition) {
             throw refuse(construct, position);
         }
+    }
+
+    /**
+     * Build {@link Upsert} from an {@code ON DUPLICATE KEY UPDATE} clause
+     * ({@code kindToken} must read DUPLICATE).
+     */
+    Upsert duplicateKeyUpsert(Token kindToken, List<Assignment> assignments,
+                              SourcePosition pos) {
+        requireWord(kindToken, "DUPLICATE", pos);
+        return new Upsert(UpsertKind.ON_DUPLICATE_KEY, List.of(), assignments,
+                Optional.empty(), pos);
+    }
+
+    /**
+     * Build {@link Upsert} from {@code ON CONFLICT … DO NOTHING|UPDATE}.
+     * {@code conflictToken} must read CONFLICT; {@code doToken} must read DO.
+     * For DO NOTHING, {@code nothingToken} must read NOTHING and assignments/where
+     * must be empty; for DO UPDATE pass {@code nothingToken == null}.
+     */
+    Upsert conflictUpsert(Token conflictToken, List<Identifier> target,
+                          Token doToken, Token nothingToken,
+                          List<Assignment> assignments, Optional<Expression> where,
+                          SourcePosition pos) {
+        requireWord(conflictToken, "CONFLICT", pos);
+        requireWord(doToken, "DO", pos);
+        if (nothingToken != null) {
+            requireWord(nothingToken, "NOTHING", pos);
+            refuseIf(!assignments.isEmpty() || where.isPresent(),
+                    "ON CONFLICT DO NOTHING with UPDATE payload", pos);
+            return new Upsert(UpsertKind.ON_CONFLICT_NOTHING, target, List.of(),
+                    Optional.empty(), pos);
+        }
+        refuseIf(assignments.isEmpty(), "ON CONFLICT DO UPDATE without assignments", pos);
+        return new Upsert(UpsertKind.ON_CONFLICT_UPDATE, target, assignments, where, pos);
+    }
+
+    /** {@code RETURNING} list — contextual keyword checked here. */
+    List<SelectItem> returningItems(Token returningToken, List<SelectItem> items,
+                                    SourcePosition pos) {
+        requireWord(returningToken, "RETURNING", pos);
+        return List.copyOf(items);
+    }
+
+    private void requireWord(Token token, String expected, SourcePosition pos) {
+        String text = token.getText();
+        refuseIf(text == null || !expected.equalsIgnoreCase(text),
+                "expected " + expected + " (got '" + text + "')", pos);
     }
 
     /**

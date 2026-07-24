@@ -69,6 +69,7 @@ import rs.etf.sqltranslator.ast.UnaryOperator;
 import rs.etf.sqltranslator.ast.UnionArm;
 import rs.etf.sqltranslator.ast.UniqueConstraint;
 import rs.etf.sqltranslator.ast.UpdateStatement;
+import rs.etf.sqltranslator.ast.Upsert;
 import rs.etf.sqltranslator.ast.WindowFrame;
 import rs.etf.sqltranslator.ast.WindowSpec;
 import rs.etf.sqltranslator.core.Dialect;
@@ -295,16 +296,63 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     public Object visitInsertStatement(TSqlParser.InsertStatementContext ctx) {
         List<Identifier> columns = ctx.identifier().stream().map(this::ident).toList();
         QualifiedName table = qname(ctx.qualifiedName());
+        Optional<Upsert> upsert = ctx.upsertClause() == null
+                ? Optional.empty() : Optional.of((Upsert) visit(ctx.upsertClause()));
+        Optional<List<SelectItem>> returning = ctx.returningClause() == null
+                ? Optional.empty()
+                : Optional.of(returningItems(ctx.returningClause()));
         if (ctx.insertSource() instanceof TSqlParser.InsertQueryContext queryCtx) {
             return new InsertStatement(table, columns, List.of(),
-                    Optional.of((Query) visit(queryCtx.queryExpression())), pos(ctx));
+                    Optional.of((Query) visit(queryCtx.queryExpression())),
+                    upsert, returning, pos(ctx));
         }
         TSqlParser.InsertValuesContext values =
                 (TSqlParser.InsertValuesContext) ctx.insertSource();
         List<List<Expression>> rows = values.rowValue().stream()
                 .map(row -> row.expression().stream().map(this::expr).toList())
                 .toList();
-        return new InsertStatement(table, columns, rows, Optional.empty(), pos(ctx));
+        return new InsertStatement(table, columns, rows, Optional.empty(),
+                upsert, returning, pos(ctx));
+    }
+
+    @Override
+    public Object visitUpsertClause(TSqlParser.UpsertClauseContext ctx) {
+        if (ctx.KEY() != null) {
+            List<Assignment> assignments = ctx.assignment().stream()
+                    .map(a -> new Assignment(qname(a.qualifiedName()), expr(a.expression()),
+                            pos(a)))
+                    .toList();
+            return support.duplicateKeyUpsert(ctx.identifier(0).getStart(), assignments,
+                    pos(ctx));
+        }
+        List<Identifier> target = ctx.conflictTarget() == null
+                ? List.of()
+                : ctx.conflictTarget().identifier().stream().map(this::ident).toList();
+        if (ctx.UPDATE() != null) {
+            List<Assignment> assignments = ctx.assignment().stream()
+                    .map(a -> new Assignment(qname(a.qualifiedName()), expr(a.expression()),
+                            pos(a)))
+                    .toList();
+            Optional<Expression> where = ctx.whereClause() == null
+                    ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
+            return support.conflictUpsert(ctx.identifier(0).getStart(), target,
+                    ctx.identifier(1).getStart(), null, assignments, where, pos(ctx));
+        }
+        return support.conflictUpsert(ctx.identifier(0).getStart(), target,
+                ctx.identifier(1).getStart(), ctx.identifier(2).getStart(),
+                List.of(), Optional.empty(), pos(ctx));
+    }
+
+    @Override
+    public Object visitReturningClause(TSqlParser.ReturningClauseContext ctx) {
+        return returningItems(ctx);
+    }
+
+    private List<SelectItem> returningItems(TSqlParser.ReturningClauseContext ctx) {
+        List<SelectItem> items = ctx.selectItem().stream()
+                .map(s -> (SelectItem) visit(s))
+                .toList();
+        return support.returningItems(ctx.identifier().getStart(), items, pos(ctx));
     }
 
     @Override

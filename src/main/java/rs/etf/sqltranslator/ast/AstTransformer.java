@@ -145,9 +145,17 @@ public class AstTransformer implements AstVisitor<Object> {
 
     @Override
     public Object visitInsertStatement(InsertStatement node) {
+        Optional<List<SelectItem>> returning = node.returning().map(this::rebuildList);
         return new InsertStatement(rebuild(node.table()), rebuildList(node.columns()),
                 node.rows().stream().map(this::rebuildList).toList(),
-                rebuildOptional(node.query()), node.pos());
+                rebuildOptional(node.query()), rebuildOptional(node.upsert()),
+                returning, node.pos());
+    }
+
+    @Override
+    public Object visitUpsert(Upsert node) {
+        return new Upsert(node.kind(), rebuildList(node.conflictTarget()),
+                rebuildList(node.assignments()), rebuildOptional(node.where()), node.pos());
     }
 
     @Override

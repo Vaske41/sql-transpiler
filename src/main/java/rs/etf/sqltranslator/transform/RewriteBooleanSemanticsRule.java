@@ -187,13 +187,14 @@ public final class RewriteBooleanSemanticsRule implements Rule {
                 Query query = harmonizeInsertQuery(
                         insert.query().get(), insert.columns(), schema.get());
                 return new InsertStatement(insert.table(), insert.columns(), List.of(),
-                        Optional.of(query), insert.pos());
+                        Optional.of(query), insert.upsert(), insert.returning(),
+                        insert.pos());
             }
             List<List<Expression>> rows = insert.rows().stream()
                     .map(row -> harmonizeRow(row, insert.columns(), schema.get()))
                     .toList();
             return new InsertStatement(insert.table(), insert.columns(), rows,
-                    Optional.empty(), insert.pos());
+                    Optional.empty(), insert.upsert(), insert.returning(), insert.pos());
         }
 
         @Override

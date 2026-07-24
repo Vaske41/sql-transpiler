@@ -748,18 +748,58 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         }
         if (node.query().isPresent()) {
             node.query().get().accept(this);
-            return null;
-        }
-        out.token("VALUES");
-        for (int i = 0; i < node.rows().size(); i++) {
-            if (i > 0) {
-                out.raw(",");
+        } else {
+            out.token("VALUES");
+            for (int i = 0; i < node.rows().size(); i++) {
+                if (i > 0) {
+                    out.raw(",");
+                }
+                out.token("(");
+                csv(node.rows().get(i));
+                out.raw(")");
             }
-            out.token("(");
-            csv(node.rows().get(i));
-            out.raw(")");
+        }
+        node.upsert().ifPresent(u -> u.accept(this));
+        node.returning().ifPresent(items -> {
+            out.token("RETURNING");
+            csv(items);
+        });
+        return null;
+    }
+
+    @Override
+    public Void visitUpsert(Upsert node) {
+        switch (node.kind()) {
+            case ON_DUPLICATE_KEY -> {
+                out.token("ON").token("DUPLICATE").token("KEY").token("UPDATE");
+                csv(node.assignments());
+            }
+            case ON_CONFLICT_NOTHING -> {
+                out.token("ON").token("CONFLICT");
+                printConflictTarget(node);
+                out.token("DO").token("NOTHING");
+            }
+            case ON_CONFLICT_UPDATE -> {
+                out.token("ON").token("CONFLICT");
+                printConflictTarget(node);
+                out.token("DO").token("UPDATE").token("SET");
+                csv(node.assignments());
+                node.where().ifPresent(where -> {
+                    out.token("WHERE");
+                    where.accept(this);
+                });
+            }
         }
         return null;
+    }
+
+    private void printConflictTarget(Upsert node) {
+        if (node.conflictTarget().isEmpty()) {
+            return;
+        }
+        out.token("(");
+        csv(node.conflictTarget());
+        out.raw(")");
     }
 
     @Override
