@@ -34,10 +34,18 @@ public interface AstVisitor<R> {
 
     R visitDerivedTable(DerivedTable node);
 
+    R visitValuesTable(ValuesTable node);
+
+    R visitTableFunction(TableFunction node);
+
+    R visitRowValue(RowValue node);
+
     R visitJoin(Join node);
 
     // --- DML ---
     R visitInsertStatement(InsertStatement node);
+
+    R visitUpsert(Upsert node);
 
     R visitUpdateStatement(UpdateStatement node);
 
@@ -47,6 +55,8 @@ public interface AstVisitor<R> {
 
     // --- DDL ---
     R visitCreateTableStatement(CreateTableStatement node);
+
+    R visitCreateViewStatement(CreateViewStatement node);
 
     R visitColumnDefinition(ColumnDefinition node);
 
@@ -60,11 +70,23 @@ public interface AstVisitor<R> {
 
     R visitDropTableStatement(DropTableStatement node);
 
+    R visitDropViewStatement(DropViewStatement node);
+
+    R visitDropRoutineStatement(DropRoutineStatement node);
+
+    R visitDropIndexStatement(DropIndexStatement node);
+
+    R visitTruncateStatement(TruncateStatement node);
+
     R visitAlterTableStatement(AlterTableStatement node);
 
     R visitAddColumn(AddColumn node);
 
+    R visitAddTableConstraint(AddTableConstraint node);
+
     R visitDropColumn(DropColumn node);
+
+    R visitAlterColumnType(AlterColumnType node);
 
     R visitCreateIndexStatement(CreateIndexStatement node);
 
@@ -85,6 +107,8 @@ public interface AstVisitor<R> {
 
     R visitIsNullPredicate(IsNullPredicate node);
 
+    R visitIsBoolPredicate(IsBoolPredicate node);
+
     R visitExistsPredicate(ExistsPredicate node);
 
     R visitFunctionCall(FunctionCall node);
@@ -101,7 +125,15 @@ public interface AstVisitor<R> {
 
     R visitCastExpression(CastExpression node);
 
+    R visitExtractExpression(ExtractExpression node);
+
     R visitSubqueryExpression(SubqueryExpression node);
+
+    R visitRowConstructor(RowConstructor node);
+
+    R visitArrayLiteral(ArrayLiteral node);
+
+    R visitAtTimeZone(AtTimeZone node);
 
     // --- literals, identifiers, types ---
     R visitNumericLiteral(NumericLiteral node);
@@ -111,6 +143,8 @@ public interface AstVisitor<R> {
     R visitBooleanLiteral(BooleanLiteral node);
 
     R visitNullLiteral(NullLiteral node);
+
+    R visitIntervalLiteral(IntervalLiteral node);
 
     R visitIdentifier(Identifier node);
 

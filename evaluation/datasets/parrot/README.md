@@ -36,8 +36,8 @@ only**; no `--sqlglot`). Artifact:
 | | SUCCESS | PARSE | REFUSED | SUCCESS rate |
 |---|---:|---:|---:|---:|
 | Pre–Wave 1 baseline | 345 | 1057 | 24 | 24.2% |
-| Post–Wave 1 (remeasure) | **654** | 666 | 106 | **45.9%** |
-| Δ | **+309** | −391 | +82 | +21.7 pp |
+| Post–Wave 1 (remeasure) | **655** | 665 | 106 | **45.9%** |
+| Δ | **+310** | −392 | +82 | +21.7 pp |
 | Wave 1 bar (~65%) | ≥ ~927 | — | — | **not met** |
 
 Caption CSV `SUCCESS` as **parse→rules→print coverage** (process exit 0), **not**

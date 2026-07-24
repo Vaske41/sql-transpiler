@@ -1,7 +1,12 @@
 package rs.etf.sqltranslator.codegen;
 
+import rs.etf.sqltranslator.ast.BinaryOp;
+import rs.etf.sqltranslator.ast.BinaryOperator;
+import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.DataType;
+import rs.etf.sqltranslator.ast.IntervalLiteral;
 import rs.etf.sqltranslator.ast.NullsOrder;
+import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.StringLiteral;
 
 /**
@@ -10,6 +15,24 @@ import rs.etf.sqltranslator.ast.StringLiteral;
  * MySQL itself stores, and the one our own builder folds back to BOOLEAN.
  */
 public final class MySqlPrinter extends AbstractSqlPrinter {
+
+    @Override
+    protected void renderRowLimit(Query query) {
+        query.limit().ifPresent(limit -> {
+            // MySQL 8.0.13+: LIMIT n WITH TIES (no OFFSET in the same clause).
+            if (limit.withTies()) {
+                if (limit.offset().isPresent()) {
+                    throw new IllegalStateException(
+                            "rule engine contract: LIMIT OFFSET WITH TIES must be refused before MySQL print");
+                }
+                out.token("LIMIT");
+                limit.count().ifPresentOrElse(count -> count.accept(this), () -> out.token("1"));
+                out.token("WITH").token("TIES");
+                return;
+            }
+            super.renderRowLimit(query);
+        });
+    }
 
     @Override
     protected String quoteIdentifier(String value) {
@@ -31,7 +54,39 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
     }
 
     @Override
+    public Void visitBinaryOp(BinaryOp node) {
+        BinaryOperator op = node.op();
+        if (op == BinaryOperator.JSON_PATH
+                || op == BinaryOperator.JSON_PATH_TEXT
+                || op == BinaryOperator.JSON_CONTAINS) {
+            throw new IllegalStateException(
+                    "rule engine contract: PG-only JSON ops must be rewritten/refused before MySQL print");
+        }
+        return super.visitBinaryOp(node);
+    }
+
+    @Override
+    protected void renderIntervalLiteral(IntervalLiteral node) {
+        if (node.unit().isEmpty()) {
+            throw new IllegalStateException(
+                    "rule engine contract: compound INTERVAL must be refused before MySQL print");
+        }
+        out.token("INTERVAL");
+        String raw = node.raw();
+        if (raw.matches("-?\\d+(\\.\\d+)?")) {
+            out.token(raw);
+        } else {
+            out.token("'" + raw.replace("\\", "\\\\").replace("'", "''") + "'");
+        }
+        out.token(node.unit().get().toUpperCase(java.util.Locale.ROOT));
+    }
+
+    @Override
     protected void renderDataType(DataType type) {
+        if (type.arrayDims() > 0) {
+            throw new IllegalStateException(
+                    "rule engine contract: array type must not reach the MySQL printer");
+        }
         if (type.type() == rs.etf.sqltranslator.ast.GenericType.BOOLEAN) {
             out.token("TINYINT(1)");                 // carries no args by construction
             return;
@@ -51,9 +106,12 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
             case TIME -> "TIME";
             case TIMESTAMP -> "DATETIME";            // avoids epoch range + tz coercion
             case BLOB -> "BLOB";
+            case JSON, JSONB -> "JSON";
             case BOOLEAN -> throw new AssertionError("handled above");
             case NVARCHAR -> throw new IllegalStateException(
                     "rule engine contract: NVARCHAR must not reach the MySQL printer");
+            case UUID -> throw new IllegalStateException(
+                    "rule engine contract: UUID must be narrowed to CHAR(36) before MySQL print");
         };
         out.token(name);
         renderTypeArgs(type);
@@ -68,5 +126,49 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
     protected void renderNullsOrder(NullsOrder nulls) {
         throw new IllegalStateException(
                 "NULLS ordering must be dropped by DropNullsOrderingRule before printing");
+    }
+
+    @Override
+    protected void renderAlterColumnType(rs.etf.sqltranslator.ast.AlterColumnType node) {
+        out.token("MODIFY COLUMN").token(identifier(node.column()));
+        renderDataType(node.type());
+        if (node.using().isPresent()) {
+            throw new IllegalStateException(
+                    "rule engine contract: USING must be dropped before MySQL print");
+        }
+    }
+
+    /**
+     * MySQL has no {@code UPDATE … FROM}. When a FROM clause is present (after
+     * {@code RewriteUpdateFromForMysqlRule} qualifies SET LHS), emit the multi-table
+     * comma-join form: {@code UPDATE t [AS a], src SET t.c = … WHERE …}.
+     */
+    @Override
+    public Void visitUpdateStatement(rs.etf.sqltranslator.ast.UpdateStatement node) {
+        if (node.from().isEmpty()) {
+            return super.visitUpdateStatement(node);
+        }
+        if (!node.ctes().isEmpty()) {
+            renderWithKeyword(node.recursive());
+            boolean first = true;
+            for (Cte cte : node.ctes()) {
+                if (!first) {
+                    out.raw(",");
+                }
+                first = false;
+                cte.accept(this);
+            }
+        }
+        out.token("UPDATE").token(dotted(node.table()));
+        node.alias().ifPresent(alias -> out.token("AS").token(identifier(alias)));
+        out.raw(",");
+        node.from().get().accept(this);
+        out.token("SET");
+        csv(node.assignments());
+        node.where().ifPresent(where -> {
+            out.token("WHERE");
+            where.accept(this);
+        });
+        return null;
     }
 }

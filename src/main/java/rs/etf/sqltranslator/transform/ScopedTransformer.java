@@ -21,6 +21,8 @@ import rs.etf.sqltranslator.ast.StringLiteral;
 import rs.etf.sqltranslator.ast.TableRef;
 import rs.etf.sqltranslator.ast.TableSource;
 import rs.etf.sqltranslator.ast.UpdateStatement;
+import rs.etf.sqltranslator.ast.ValuesTable;
+import rs.etf.sqltranslator.ast.TableFunction;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -80,6 +82,7 @@ public abstract class ScopedTransformer extends rs.etf.sqltranslator.ast.AstTran
             }
             return new Query(
                     rebuiltCtes,
+                    node.recursive(),
                     rebuild(node.first()),
                     rebuildList(node.unionArms()),
                     rebuildList(node.orderBy()),
@@ -105,11 +108,36 @@ public abstract class ScopedTransformer extends rs.etf.sqltranslator.ast.AstTran
 
     @Override
     public final Object visitUpdateStatement(UpdateStatement node) {
-        scopes.push(tableScope(node.table()));
+        boolean pushed = !node.ctes().isEmpty();
+        if (pushed) {
+            pushCteFrame();
+        }
         try {
-            return super.visitUpdateStatement(node);
+            List<Cte> rebuiltCtes = new ArrayList<>(node.ctes().size());
+            for (Cte cte : node.ctes()) {
+                Cte rebuilt = (Cte) cte.accept(this);
+                rebuiltCtes.add(rebuilt);
+                String name = rebuilt.name().value().toLowerCase(Locale.ROOT);
+                cteSchemas().put(name, emptySchema(rebuilt.name()));
+            }
+            scopes.push(tableScope(node.table()));
+            try {
+                return new UpdateStatement(
+                        rebuiltCtes,
+                        node.recursive(),
+                        rebuild(node.table()),
+                        rebuildOptional(node.alias()),
+                        rebuildList(node.assignments()),
+                        rebuildOptional(node.from()),
+                        rebuildOptional(node.where()),
+                        node.pos());
+            } finally {
+                scopes.pop();
+            }
         } finally {
-            scopes.pop();
+            if (pushed) {
+                popCteFrame();
+            }
         }
     }
 
@@ -194,8 +222,8 @@ public abstract class ScopedTransformer extends rs.etf.sqltranslator.ast.AstTran
         if (expr instanceof rs.etf.sqltranslator.ast.BinaryOp op) {
             return Optional.of(switch (op.op()) {
                 case ADD, SUB, MUL, DIV, MOD -> TypeFamily.NUMERIC;
-                case CONCAT -> TypeFamily.STRING;
-                case OR, AND, EQ, NEQ, LT, LTE, GT, GTE -> TypeFamily.BOOLEAN;
+                case CONCAT, JSON_GET, JSON_GET_TEXT, JSON_PATH, JSON_PATH_TEXT -> TypeFamily.STRING;
+                case OR, AND, EQ, NEQ, LT, LTE, GT, GTE, JSON_CONTAINS -> TypeFamily.BOOLEAN;
             });
         }
         if (expr instanceof rs.etf.sqltranslator.ast.UnaryOp op) {
@@ -259,6 +287,21 @@ public abstract class ScopedTransformer extends rs.etf.sqltranslator.ast.AstTran
             QualifiedName qn = new QualifiedName(
                     List.of(new Identifier(derived.alias().value(), false, derived.alias().pos())),
                     derived.alias().pos());
+            return List.of(new ScopedTable(key, new TableSchema(qn, List.of())));
+        }
+        if (relation instanceof ValuesTable values) {
+            String key = values.alias().value().toLowerCase(Locale.ROOT);
+            QualifiedName qn = new QualifiedName(
+                    List.of(new Identifier(values.alias().value(), false, values.alias().pos())),
+                    values.alias().pos());
+            return List.of(new ScopedTable(key, new TableSchema(qn, List.of())));
+        }
+        if (relation instanceof TableFunction fn) {
+            Identifier alias = fn.alias().orElse(fn.name().last());
+            String key = alias.value().toLowerCase(Locale.ROOT);
+            QualifiedName qn = new QualifiedName(
+                    List.of(new Identifier(alias.value(), false, alias.pos())),
+                    alias.pos());
             return List.of(new ScopedTable(key, new TableSchema(qn, List.of())));
         }
         throw new IllegalStateException("unknown Relation: " + relation.getClass());

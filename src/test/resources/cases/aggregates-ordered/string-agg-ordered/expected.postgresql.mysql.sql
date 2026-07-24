@@ -1,0 +1,1 @@
+SELECT GROUP_CONCAT(name ORDER BY name SEPARATOR ',') FROM users;

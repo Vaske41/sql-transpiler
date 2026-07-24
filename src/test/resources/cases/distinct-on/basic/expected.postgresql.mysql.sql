@@ -1,0 +1,1 @@
+SELECT raceid AS raceid, name AS name, date AS date FROM (SELECT raceid AS raceid, name AS name, date AS date, ROW_NUMBER() OVER(PARTITION BY name ORDER BY name, date DESC) AS _rn FROM races) AS _t WHERE _rn = 1 ORDER BY name, date DESC;

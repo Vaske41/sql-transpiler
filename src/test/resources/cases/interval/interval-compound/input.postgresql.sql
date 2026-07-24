@@ -1,0 +1,1 @@
+SELECT INTERVAL '1 day 03:00' FROM events;

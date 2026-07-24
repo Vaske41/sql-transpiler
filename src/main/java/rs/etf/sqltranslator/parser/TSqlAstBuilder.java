@@ -6,8 +6,11 @@ import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import rs.etf.sqltranslator.ast.AlterAction;
 import rs.etf.sqltranslator.ast.AddColumn;
+import rs.etf.sqltranslator.ast.AddTableConstraint;
 import rs.etf.sqltranslator.ast.AlterTableStatement;
+import rs.etf.sqltranslator.ast.ArrayLiteral;
 import rs.etf.sqltranslator.ast.Assignment;
+import rs.etf.sqltranslator.ast.AtTimeZone;
 import rs.etf.sqltranslator.ast.BetweenPredicate;
 import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.CastExpression;
@@ -20,6 +23,7 @@ import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.DeleteStatement;
 import rs.etf.sqltranslator.ast.DerivedTable;
 import rs.etf.sqltranslator.ast.DropColumn;
+import rs.etf.sqltranslator.ast.DropIndexStatement;
 import rs.etf.sqltranslator.ast.DropTableStatement;
 import rs.etf.sqltranslator.ast.ExistsPredicate;
 import rs.etf.sqltranslator.ast.Expression;
@@ -35,8 +39,13 @@ import rs.etf.sqltranslator.ast.InSubqueryPredicate;
 import rs.etf.sqltranslator.ast.IndexColumn;
 import rs.etf.sqltranslator.ast.InsertStatement;
 import rs.etf.sqltranslator.ast.IsNullPredicate;
+import rs.etf.sqltranslator.ast.IsBoolPredicate;
+import rs.etf.sqltranslator.ast.BoolTest;
 import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.JoinKind;
+import rs.etf.sqltranslator.ast.RowConstructor;
+import rs.etf.sqltranslator.ast.RowValue;
+import rs.etf.sqltranslator.ast.ValuesTable;
 import rs.etf.sqltranslator.ast.LikePredicate;
 import rs.etf.sqltranslator.ast.NullLiteral;
 import rs.etf.sqltranslator.ast.OrderItem;
@@ -54,8 +63,10 @@ import rs.etf.sqltranslator.ast.SelectStatement;
 import rs.etf.sqltranslator.ast.SetQuantifier;
 import rs.etf.sqltranslator.ast.SortDirection;
 import rs.etf.sqltranslator.ast.Statement;
+import rs.etf.sqltranslator.ast.StringLiteral;
 import rs.etf.sqltranslator.ast.SubqueryExpression;
 import rs.etf.sqltranslator.ast.TableConstraint;
+import rs.etf.sqltranslator.ast.TableFunction;
 import rs.etf.sqltranslator.ast.TableRef;
 import rs.etf.sqltranslator.ast.TableSource;
 import rs.etf.sqltranslator.ast.UnaryOp;
@@ -63,6 +74,7 @@ import rs.etf.sqltranslator.ast.UnaryOperator;
 import rs.etf.sqltranslator.ast.UnionArm;
 import rs.etf.sqltranslator.ast.UniqueConstraint;
 import rs.etf.sqltranslator.ast.UpdateStatement;
+import rs.etf.sqltranslator.ast.Upsert;
 import rs.etf.sqltranslator.ast.WindowFrame;
 import rs.etf.sqltranslator.ast.WindowSpec;
 import rs.etf.sqltranslator.core.Dialect;
@@ -101,15 +113,18 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     // --- query shape ---
 
     @Override
-    public Object visitQueryExpression(TSqlParser.QueryExpressionContext ctx) {
+    public Object visitQueryExprParen(TSqlParser.QueryExprParenContext ctx) {
+        return visit(ctx.queryExpression());
+    }
+
+    @Override
+    public Object visitQueryExprSetOps(TSqlParser.QueryExprSetOpsContext ctx) {
         List<Cte> ctes = List.of();
+        boolean recursive = false;
         if (ctx.withClause() != null) {
             var w = ctx.withClause();
-            support.refuseIfRecursiveKeyword(w, w.RECURSIVE() != null);
             ctes = w.commonTableExpression().stream().map(c -> (Cte) visit(c)).toList();
-            for (Cte cte : ctes) {
-                support.refuseIfCteSelfReference(cte);
-            }
+            recursive = support.isRecursiveWith(w.RECURSIVE() != null, ctes);
         }
         List<TSqlParser.QuerySpecificationContext> specs = ctx.querySpecification();
         boolean hasArms = specs.size() > 1;
@@ -119,16 +134,23 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
                     if (topClause == null) {
                         return null;
                     }
+                    boolean topTies = false;
+                    if (topClause.identifier() != null) {
+                        support.requireTiesKeyword(ident(topClause.identifier()));
+                        topTies = true;
+                    }
                     return new AstBuilderSupport.ExtractedTop(topExpression(topClause),
-                            pos(topClause));
+                            topTies, pos(topClause));
                 })
                 .toList();
         AstBuilderSupport.ExtractedTop top = support.extractTsqlTop(tops, hasArms);
         QuerySpecification first = (QuerySpecification) visit(specs.get(0));
-        List<UnionArm> arms = support.unionArms(ctx, TSqlParser.UNION, TSqlParser.ALL, this);
+        List<UnionArm> arms = support.unionArms(ctx, TSqlParser.UNION, TSqlParser.EXCEPT,
+                TSqlParser.INTERSECT, TSqlParser.ALL, this);
         List<OrderItem> orderBy = new ArrayList<>();
         Expression offset = null;
         Expression fetch = null;
+        boolean withTies = top != null && top.withTies();
         SourcePosition offsetPos = null;
         TSqlParser.OrderByClauseContext orderByClause = ctx.orderByClause();
         if (orderByClause != null) {
@@ -140,14 +162,20 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
                 offset = expr(orderByClause.expression(0));
                 if (orderByClause.FETCH() != null) {
                     fetch = expr(orderByClause.expression(1));
+                    if (orderByClause.fetchRestriction() != null
+                            && orderByClause.fetchRestriction().identifier() != null) {
+                        support.requireTiesKeyword(
+                                ident(orderByClause.fetchRestriction().identifier()));
+                        withTies = true;
+                    }
                 }
             }
         }
         Optional<RowLimit> limit = support.tsqlRowLimit(
                 top == null ? null : top.count(),
                 top == null ? null : top.position(),
-                offset, fetch, offsetPos);
-        return new Query(ctes, first, arms, orderBy, limit, pos(ctx));
+                offset, fetch, withTies, offsetPos);
+        return new Query(ctes, recursive, first, arms, orderBy, limit, pos(ctx));
     }
 
     @Override
@@ -157,8 +185,21 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
         if (ctx.identifier().size() > 1) {
             cols = Optional.of(ctx.identifier().stream().skip(1).map(this::ident).toList());
         }
-        Query query = (Query) visit(ctx.queryExpression());
+        Query query = cteBody(ctx.cteBody(), name, cols);
         return new Cte(name, cols, query, pos(ctx));
+    }
+
+    private Query cteBody(TSqlParser.CteBodyContext ctx, Identifier name,
+                          Optional<List<Identifier>> cols) {
+        if (ctx.VALUES() != null) {
+            List<RowValue> rows = ctx.rowValue().stream()
+                    .map(row -> new RowValue(
+                            row.expression().stream().map(this::expr).toList(),
+                            pos(row)))
+                    .toList();
+            return support.valuesCteBody(rows, name, cols, pos(ctx));
+        }
+        return (Query) visit(ctx.queryExpression());
     }
 
     private Expression topExpression(TSqlParser.TopClauseContext ctx) {
@@ -203,8 +244,8 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
 
     @Override
     public Object visitSelectExpr(TSqlParser.SelectExprContext ctx) {
-        Optional<Identifier> alias = ctx.identifier() == null
-                ? Optional.empty() : Optional.of(ident(ctx.identifier()));
+        Optional<Identifier> alias = ctx.aliasName() == null
+                ? Optional.empty() : Optional.of(aliasName(ctx.aliasName()));
         return new SelectExpr(expr(ctx.expression()), alias, pos(ctx));
     }
 
@@ -216,30 +257,67 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
 
     @Override
     public Object visitNamedTablePrimary(TSqlParser.NamedTablePrimaryContext ctx) {
-        Optional<Identifier> alias = ctx.identifier() == null
-                ? Optional.empty() : Optional.of(ident(ctx.identifier()));
+        Optional<Identifier> alias = ctx.aliasName() == null
+                ? Optional.empty() : Optional.of(aliasName(ctx.aliasName()));
         return new TableRef(qname(ctx.qualifiedName()), alias, pos(ctx));
+    }
+
+    @Override
+    public Object visitFunctionTablePrimary(TSqlParser.FunctionTablePrimaryContext ctx) {
+        List<Expression> args = ctx.expression().stream().map(this::expr).toList();
+        Optional<Identifier> alias = ctx.aliasName() == null
+                ? Optional.empty() : Optional.of(aliasName(ctx.aliasName()));
+        Optional<List<Identifier>> cols = Optional.empty();
+        if (!ctx.columnName().isEmpty()) {
+            cols = Optional.of(ctx.columnName().stream().map(this::columnName).toList());
+        }
+        return new TableFunction(qname(ctx.qualifiedName()), args, alias, cols, pos(ctx));
     }
 
     @Override
     public Object visitDerivedTablePrimary(TSqlParser.DerivedTablePrimaryContext ctx) {
         Query query = (Query) visit(ctx.queryExpression());
-        Identifier alias = ident(ctx.identifier(0));
+        Identifier alias = support.derivedAliasOrSynthetic(
+                ctx.aliasName() == null ? null : aliasName(ctx.aliasName()), pos(ctx));
         Optional<List<Identifier>> cols = Optional.empty();
-        if (ctx.identifier().size() > 1) {
-            cols = Optional.of(ctx.identifier().stream().skip(1).map(this::ident).toList());
+        if (!ctx.columnName().isEmpty()) {
+            cols = Optional.of(ctx.columnName().stream().map(this::columnName).toList());
         }
         return new DerivedTable(query, alias, cols, pos(ctx));
     }
 
     @Override
+    public Object visitValuesTablePrimary(TSqlParser.ValuesTablePrimaryContext ctx) {
+        List<RowValue> rows = ctx.rowValue().stream()
+                .map(row -> new RowValue(
+                        row.expression().stream().map(this::expr).toList(),
+                        pos(row)))
+                .toList();
+        Identifier alias = aliasName(ctx.aliasName());
+        List<Identifier> cols = ctx.columnName().stream().map(this::columnName).toList();
+        return new ValuesTable(rows, alias, cols, pos(ctx));
+    }
+
+    @Override
     public Object visitJoinedTable(TSqlParser.JoinedTableContext ctx) {
         Relation table = (Relation) visit(ctx.tablePrimary());
-        if (ctx.CROSS() != null) {
-            return new Join(JoinKind.CROSS, table, Optional.empty(), pos(ctx));
+        if (ctx.APPLY() != null) {
+            if (ctx.CROSS() != null) {
+                return new Join(JoinKind.CROSS, table, Optional.empty(), true, pos(ctx));
+            }
+            return new Join(JoinKind.LEFT, table, Optional.empty(), true, pos(ctx));
+        }
+        boolean lateral = ctx.LATERAL() != null;
+        if (ctx.CROSS() != null || ctx.joinType() == null) {
+            return new Join(JoinKind.CROSS, table, Optional.empty(), lateral, pos(ctx));
+        }
+        if (ctx.USING() != null) {
+            List<Identifier> cols = ctx.columnList().identifier().stream()
+                    .map(this::ident).toList();
+            return Join.using(joinKind(ctx.joinType()), table, cols, pos(ctx));
         }
         return new Join(joinKind(ctx.joinType()), table,
-                Optional.of(expr(ctx.expression())), pos(ctx));
+                Optional.of(expr(ctx.expression())), lateral, pos(ctx));
     }
 
     private JoinKind joinKind(TSqlParser.JoinTypeContext ctx) {
@@ -270,35 +348,121 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
 
     @Override
     public Object visitInsertStatement(TSqlParser.InsertStatementContext ctx) {
-        List<Identifier> columns = ctx.identifier().stream().map(this::ident).toList();
+        List<Identifier> columns = ctx.columnName().stream().map(this::columnName).toList();
         QualifiedName table = qname(ctx.qualifiedName());
+        Optional<Upsert> upsert = ctx.upsertClause() == null
+                ? Optional.empty() : Optional.of((Upsert) visit(ctx.upsertClause()));
+        Optional<List<SelectItem>> returning = ctx.returningClause() == null
+                ? Optional.empty()
+                : Optional.of(returningItems(ctx.returningClause()));
         if (ctx.insertSource() instanceof TSqlParser.InsertQueryContext queryCtx) {
             return new InsertStatement(table, columns, List.of(),
-                    Optional.of((Query) visit(queryCtx.queryExpression())), pos(ctx));
+                    Optional.of((Query) visit(queryCtx.queryExpression())),
+                    upsert, returning, pos(ctx));
         }
         TSqlParser.InsertValuesContext values =
                 (TSqlParser.InsertValuesContext) ctx.insertSource();
         List<List<Expression>> rows = values.rowValue().stream()
                 .map(row -> row.expression().stream().map(this::expr).toList())
                 .toList();
-        return new InsertStatement(table, columns, rows, Optional.empty(), pos(ctx));
+        return new InsertStatement(table, columns, rows, Optional.empty(),
+                upsert, returning, pos(ctx));
+    }
+
+    @Override
+    public Object visitUpsertClause(TSqlParser.UpsertClauseContext ctx) {
+        if (ctx.KEY() != null) {
+            List<Assignment> assignments = ctx.assignment().stream()
+                    .map(a -> (Assignment) visit(a))
+                    .toList();
+            return support.duplicateKeyUpsert(ctx.identifier(0).getStart(), assignments,
+                    pos(ctx));
+        }
+        List<Identifier> target = ctx.conflictTarget() == null
+                ? List.of()
+                : ctx.conflictTarget().identifier().stream().map(this::ident).toList();
+        if (ctx.UPDATE() != null) {
+            List<Assignment> assignments = ctx.assignment().stream()
+                    .map(a -> (Assignment) visit(a))
+                    .toList();
+            Optional<Expression> where = ctx.whereClause() == null
+                    ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
+            return support.conflictUpsert(ctx.identifier(0).getStart(), target,
+                    ctx.identifier(1).getStart(), null, assignments, where, pos(ctx));
+        }
+        return support.conflictUpsert(ctx.identifier(0).getStart(), target,
+                ctx.identifier(1).getStart(), ctx.identifier(2).getStart(),
+                List.of(), Optional.empty(), pos(ctx));
+    }
+
+    @Override
+    public Object visitReturningClause(TSqlParser.ReturningClauseContext ctx) {
+        return returningItems(ctx);
+    }
+
+    private List<SelectItem> returningItems(TSqlParser.ReturningClauseContext ctx) {
+        List<SelectItem> items = ctx.selectItem().stream()
+                .map(s -> (SelectItem) visit(s))
+                .toList();
+        return support.returningItems(ctx.identifier().getStart(), items, pos(ctx));
+    }
+
+    @Override
+    public Object visitAssignment(TSqlParser.AssignmentContext ctx) {
+        List<QualifiedName> columns = ctx.qualifiedName().stream().map(this::qname).toList();
+        return new Assignment(columns, expr(ctx.expression()), pos(ctx));
     }
 
     @Override
     public Object visitUpdateStatement(TSqlParser.UpdateStatementContext ctx) {
+        List<Cte> ctes = List.of();
+        boolean recursive = false;
+        if (ctx.withClause() != null) {
+            var w = ctx.withClause();
+            ctes = w.commonTableExpression().stream().map(c -> (Cte) visit(c)).toList();
+            recursive = support.isRecursiveWith(w.RECURSIVE() != null, ctes);
+        }
         List<Assignment> assignments = ctx.assignment().stream()
-                .map(a -> new Assignment(ident(a.identifier()), expr(a.expression()), pos(a)))
+                .map(a -> (Assignment) visit(a))
                 .toList();
+        Optional<Identifier> alias = ctx.identifier() == null
+                ? Optional.empty() : Optional.of(ident(ctx.identifier()));
+        List<Join> inlineJoins = ctx.joinedTable().stream()
+                .map(j -> (Join) visit(j)).toList();
+        Optional<TableSource> from = updateFrom(ctx.tableSource(), ctx.FROM() != null);
         Optional<Expression> where = ctx.whereClause() == null
                 ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
-        return new UpdateStatement(qname(ctx.qualifiedName()), assignments, where, pos(ctx));
+        return support.updateWithInlineJoins(ctes, recursive, qname(ctx.qualifiedName()), alias,
+                inlineJoins, from, assignments, where, pos(ctx));
+    }
+
+    private Optional<TableSource> updateFrom(
+            List<TSqlParser.TableSourceContext> sources, boolean hasFromKeyword) {
+        if (sources == null || sources.isEmpty()) {
+            return Optional.empty();
+        }
+        int index = hasFromKeyword ? sources.size() - 1 : 0;
+        return Optional.of((TableSource) visit(sources.get(index)));
     }
 
     @Override
-    public Object visitDeleteStatement(TSqlParser.DeleteStatementContext ctx) {
+    public Object visitDeleteFromUsing(TSqlParser.DeleteFromUsingContext ctx) {
+        Optional<Identifier> alias = ctx.identifier() == null
+                ? Optional.empty() : Optional.of(ident(ctx.identifier()));
+        Optional<TableSource> using = ctx.tableSource() == null
+                ? Optional.empty() : Optional.of((TableSource) visit(ctx.tableSource()));
         Optional<Expression> where = ctx.whereClause() == null
                 ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
-        return new DeleteStatement(qname(ctx.qualifiedName()), where, pos(ctx));
+        return new DeleteStatement(qname(ctx.qualifiedName()), alias, using, where, pos(ctx));
+    }
+
+    @Override
+    public Object visitDeleteTargetsFrom(TSqlParser.DeleteTargetsFromContext ctx) {
+        List<Identifier> targets = ctx.identifier().stream().map(this::ident).toList();
+        TableSource from = (TableSource) visit(ctx.tableSource());
+        Optional<Expression> where = ctx.whereClause() == null
+                ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
+        return support.deleteFromJoinTargets(targets, from, where, pos(ctx));
     }
 
     // --- DDL ---
@@ -337,6 +501,14 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitCreateViewStatement(TSqlParser.CreateViewStatementContext ctx) {
+        List<Identifier> header = ctx.identifier().stream().map(this::ident).toList();
+        List<Identifier> columns = ctx.columnName().stream().map(this::columnName).toList();
+        return support.createView(header, qname(ctx.qualifiedName()), columns,
+                (Query) visit(ctx.queryExpression()), pos(ctx));
+    }
+
+    @Override
     public Object visitColumnDefinition(TSqlParser.ColumnDefinitionContext ctx) {
         AstBuilderSupport.FoldedType type = columnType(ctx.dataType());
         AstBuilderSupport.ColumnAttributes attributes = new AstBuilderSupport.ColumnAttributes();
@@ -372,7 +544,7 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
                         AstBuilderSupport.ColumnConstraintKind.AUTO_INCREMENT, null, null);
             }
         }
-        return support.columnDefinition(ident(ctx.identifier()), type, attributes, pos(ctx));
+        return support.columnDefinition(columnName(ctx.columnName()), type, attributes, pos(ctx));
     }
 
     @Override
@@ -401,11 +573,112 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitDropIndexStatement(TSqlParser.DropIndexStatementContext ctx) {
+        return new DropIndexStatement(ident(ctx.identifier()), ctx.IF() != null,
+                ctx.qualifiedName() != null ? Optional.of(qname(ctx.qualifiedName())) : Optional.empty(),
+                pos(ctx));
+    }
+
+    @Override
+    public Object visitDropViewOrRoutineStatement(TSqlParser.DropViewOrRoutineStatementContext ctx) {
+        boolean hasSignature = false;
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            if ("(".equals(ctx.getChild(i).getText())) {
+                hasSignature = true;
+                break;
+            }
+        }
+        List<DataType> argTypes = hasSignature
+                ? ctx.dataType().stream().map(this::castType).toList()
+                : List.of();
+        Optional<Identifier> cascade = ctx.identifier().size() > 1
+                ? Optional.of(ident(ctx.identifier(ctx.identifier().size() - 1)))
+                : Optional.empty();
+        return support.dropViewOrRoutine(ident(ctx.identifier(0)), qname(ctx.qualifiedName()),
+                ctx.IF() != null, hasSignature, argTypes, cascade, pos(ctx));
+    }
+
+    @Override
+    public Object visitTruncateStatement(TSqlParser.TruncateStatementContext ctx) {
+        return support.truncate(ident(ctx.identifier()), qname(ctx.qualifiedName()), pos(ctx));
+    }
+
+    @Override
     public Object visitAlterTableStatement(TSqlParser.AlterTableStatementContext ctx) {
-        AlterAction action = ctx.ADD() != null
-                ? new AddColumn((ColumnDefinition) visit(ctx.columnDefinition()), pos(ctx))
-                : new DropColumn(ident(ctx.identifier()), pos(ctx));
-        return new AlterTableStatement(qname(ctx.qualifiedName()), action, pos(ctx));
+        return new AlterTableStatement(qname(ctx.qualifiedName()),
+                (AlterAction) visit(ctx.alterTableAction()), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterAddColumn(TSqlParser.AlterAddColumnContext ctx) {
+        return new AddColumn((ColumnDefinition) visit(ctx.columnDefinition()), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterAddConstraint(TSqlParser.AlterAddConstraintContext ctx) {
+        return new AddTableConstraint((TableConstraint) visit(ctx.tableConstraint()), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterDropColumn(TSqlParser.AlterDropColumnContext ctx) {
+        return new DropColumn(ident(ctx.identifier()), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterChangeColumnType(TSqlParser.AlterChangeColumnTypeContext ctx) {
+        @SuppressWarnings("unchecked")
+        TypeChange change = (TypeChange) visit(ctx.alterColumnTypeSpec());
+        return support.alterColumnType(ident(ctx.identifier()), change.type(), change.using(), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterModifyColumn(TSqlParser.AlterModifyColumnContext ctx) {
+        support.requireModifyKeyword(ident(ctx.identifier(0)));
+        return support.alterColumnType(ident(ctx.identifier(1)), castType(ctx.dataType()),
+                Optional.empty(), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterTypeKeyword(TSqlParser.AlterTypeKeywordContext ctx) {
+        support.requireTypeKeyword(ident(ctx.identifier()));
+        Optional<Expression> using = Optional.empty();
+        if (ctx.usingClause() != null) {
+            @SuppressWarnings("unchecked")
+            Optional<Expression> u = (Optional<Expression>) visit(ctx.usingClause());
+            using = u;
+        }
+        return new TypeChange(castAlterType(ctx.alterDataType()), using);
+    }
+
+    @Override
+    public Object visitAlterSetDataType(TSqlParser.AlterSetDataTypeContext ctx) {
+        support.requireDataTypeKeywords(ident(ctx.identifier(0)), ident(ctx.identifier(1)));
+        Optional<Expression> using = Optional.empty();
+        if (ctx.usingClause() != null) {
+            @SuppressWarnings("unchecked")
+            Optional<Expression> u = (Optional<Expression>) visit(ctx.usingClause());
+            using = u;
+        }
+        return new TypeChange(castAlterType(ctx.alterDataType()), using);
+    }
+
+    @Override
+    public Object visitAlterBareType(TSqlParser.AlterBareTypeContext ctx) {
+        Optional<Expression> using = Optional.empty();
+        if (ctx.usingClause() != null) {
+            @SuppressWarnings("unchecked")
+            Optional<Expression> u = (Optional<Expression>) visit(ctx.usingClause());
+            using = u;
+        }
+        return new TypeChange(castAlterType(ctx.alterDataType()), using);
+    }
+
+    @Override
+    public Object visitUsingClause(TSqlParser.UsingClauseContext ctx) {
+        return Optional.of(expr(ctx.expression()));
+    }
+
+    private record TypeChange(DataType type, Optional<Expression> using) {
     }
 
     // --- expression ladder ---
@@ -434,6 +707,11 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitJsonExpression(TSqlParser.JsonExpressionContext ctx) {
+        return support.foldBinaryChain(ctx, this);
+    }
+
+    @Override
     public Object visitAdditiveExpression(TSqlParser.AdditiveExpressionContext ctx) {
         return support.foldBinaryChain(ctx, this);
     }
@@ -450,7 +728,26 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
                     ? UnaryOperator.NEG : UnaryOperator.POS;
             return new UnaryOp(op, expr(ctx.unaryExpression()), pos(ctx));
         }
-        return visit(ctx.primaryExpression());
+        return visit(ctx.annotatedPrimary());
+    }
+
+    @Override
+    public Object visitAnnotatedPrimary(TSqlParser.AnnotatedPrimaryContext ctx) {
+        Expression value = expr(ctx.primaryExpression());
+        for (TSqlParser.AtTimeZoneContext atz : ctx.atTimeZone()) {
+            support.requireContextualKeyword(ident(atz.identifier(0)), "AT");
+            support.requireContextualKeyword(ident(atz.identifier(1)), "TIME");
+            support.requireContextualKeyword(ident(atz.identifier(2)), "ZONE");
+            value = new AtTimeZone(value, expr(atz.primaryExpression()), pos(atz));
+        }
+        return value;
+    }
+
+    @Override
+    public Object visitArrayLiteralExpr(TSqlParser.ArrayLiteralExprContext ctx) {
+        support.requireContextualKeyword(ident(ctx.identifier()), "ARRAY");
+        List<Expression> elems = ctx.expression().stream().map(this::expr).toList();
+        return new ArrayLiteral(elems, pos(ctx));
     }
 
     // --- predicates ---
@@ -459,6 +756,26 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     public Object visitComparisonPredicate(TSqlParser.ComparisonPredicateContext ctx) {
         return new BinaryOp(support.comparisonOperator(ctx.comparisonOperator().getText()),
                 expr(ctx.concatExpression(0)), expr(ctx.concatExpression(1)), pos(ctx));
+    }
+
+    @Override
+    public Object visitQuantifiedAllPredicate(TSqlParser.QuantifiedAllPredicateContext ctx) {
+        return support.quantifiedComparison(
+                expr(ctx.concatExpression()),
+                ctx.comparisonOperator().getText(),
+                "ALL",
+                (Query) visit(ctx.subquery()),
+                pos(ctx));
+    }
+
+    @Override
+    public Object visitQuantifiedAnyPredicate(TSqlParser.QuantifiedAnyPredicateContext ctx) {
+        return support.quantifiedComparison(
+                expr(ctx.concatExpression()),
+                ctx.comparisonOperator().getText(),
+                ctx.identifier().getText(),
+                (Query) visit(ctx.subquery()),
+                pos(ctx));
     }
 
     @Override
@@ -490,6 +807,13 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     @Override
     public Object visitIsNullPredicate(TSqlParser.IsNullPredicateContext ctx) {
         return new IsNullPredicate(expr(ctx.concatExpression()), ctx.NOT() != null, pos(ctx));
+    }
+
+    @Override
+    public Object visitIsBoolPredicate(TSqlParser.IsBoolPredicateContext ctx) {
+        BoolTest test = ctx.TRUE() != null ? BoolTest.TRUE
+                : ctx.FALSE() != null ? BoolTest.FALSE : BoolTest.UNKNOWN;
+        return new IsBoolPredicate(expr(ctx.concatExpression()), test, ctx.NOT() != null, pos(ctx));
     }
 
     @Override
@@ -551,6 +875,40 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitExtractExpr(TSqlParser.ExtractExprContext ctx) {
+        return visit(ctx.extractExpression());
+    }
+
+    @Override
+    public Object visitExtractExpression(TSqlParser.ExtractExpressionContext ctx) {
+        return support.extractExpression(
+                ident(ctx.identifier()),
+                ident(ctx.extractField().identifier()),
+                expr(ctx.expression()),
+                pos(ctx));
+    }
+
+    @Override
+    public Object visitIntervalExpr(TSqlParser.IntervalExprContext ctx) {
+        return visit(ctx.intervalLiteral());
+    }
+
+    @Override
+    public Object visitIntervalLiteral(TSqlParser.IntervalLiteralContext ctx) {
+        if (ctx.STRING_LITERAL() != null && ctx.expression() == null) {
+            StringLiteral lit = support.stringLiteral(ctx.STRING_LITERAL().getSymbol());
+            Optional<String> unit = ctx.identifier() == null
+                    ? Optional.empty()
+                    : Optional.of(ident(ctx.identifier()).value());
+            return support.intervalFromString(lit.value(), unit, pos(ctx));
+        }
+        return support.intervalFromExpression(
+                expr(ctx.expression()),
+                ident(ctx.datePartKeyword().identifier()).value(),
+                pos(ctx));
+    }
+
+    @Override
     public Object visitConvertExpr(TSqlParser.ConvertExprContext ctx) {
         return visit(ctx.convertExpression());
     }
@@ -566,11 +924,8 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
         FunctionCall call = (FunctionCall) visit(ctx.functionCall());
         if (ctx.windowOverlay() != null) {
             WindowSpec spec = (WindowSpec) visit(ctx.windowOverlay().windowSpecification());
-            if (spec.frame().isPresent()) {
-                throw support.refuse("window frame", spec.frame().get().pos());
-            }
             call = new FunctionCall(call.name(), call.args(), call.star(), call.quantifier(),
-                    Optional.of(spec), call.pos());
+                    call.orderBy(), call.filter(), Optional.of(spec), call.pos());
         }
         return call;
     }
@@ -579,14 +934,35 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     public Object visitFunctionCall(TSqlParser.FunctionCallContext ctx) {
         String name = support.functionName(functionNameIdentifier(ctx.functionName()));
         boolean star = false;
-        for (ParseTree child : ctx.children) {
-            if (child instanceof TerminalNode terminal && terminal.getText().equals("*")) {
-                star = true;
+        List<Expression> args = List.of();
+        List<OrderItem> orderBy = List.of();
+        Optional<SetQuantifier> quantifier = Optional.empty();
+        if (ctx.functionArgs() != null) {
+            TSqlParser.FunctionArgsContext fa = ctx.functionArgs();
+            for (ParseTree child : fa.children) {
+                if (child instanceof TerminalNode terminal && terminal.getText().equals("*")) {
+                    star = true;
+                }
+            }
+            if (!star) {
+                args = fa.expression().stream().map(this::expr).toList();
+                orderBy = fa.orderItem().stream()
+                        .map(item -> (OrderItem) visit(item)).toList();
+                quantifier = quantifier(fa.setQuantifier());
             }
         }
-        List<Expression> args = ctx.expression().stream().map(this::expr).toList();
-        return new FunctionCall(name, args, star, quantifier(ctx.setQuantifier()),
-                Optional.empty(), pos(ctx));
+        if (ctx.withinGroupClause() != null) {
+            orderBy = ctx.withinGroupClause().orderItem().stream()
+                    .map(item -> (OrderItem) visit(item)).toList();
+        }
+        Optional<Expression> filter = Optional.empty();
+        if (ctx.aggFilter() != null) {
+            filter = Optional.of(support.aggregateFilterKeyword(
+                    ident(ctx.aggFilter().identifier()),
+                    expr(ctx.aggFilter().expression())));
+        }
+        return new FunctionCall(name, args, star, quantifier, orderBy,
+                filter, Optional.empty(), pos(ctx));
     }
 
     @Override
@@ -636,7 +1012,7 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
 
     @Override
     public Object visitColumnRefExpr(TSqlParser.ColumnRefExprContext ctx) {
-        return new ColumnRef(qname(ctx.qualifiedName()), pos(ctx));
+        return new ColumnRef(columnRef(ctx.columnReference()), pos(ctx));
     }
 
     @Override
@@ -646,7 +1022,11 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
 
     @Override
     public Object visitParenExpr(TSqlParser.ParenExprContext ctx) {
-        return visit(ctx.expression());
+        List<Expression> elems = ctx.expression().stream().map(this::expr).toList();
+        if (elems.size() == 1) {
+            return elems.get(0);
+        }
+        return new RowConstructor(elems, pos(ctx));
     }
 
     // --- shared extraction helpers ---
@@ -659,19 +1039,43 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
         return support.identifier(ctx.getStart());
     }
 
+    private Identifier columnName(TSqlParser.ColumnNameContext ctx) {
+        return support.identifier(ctx.getStart());
+    }
+
+    private Identifier aliasName(TSqlParser.AliasNameContext ctx) {
+        return support.identifier(ctx.getStart());
+    }
+
     private QualifiedName qname(TSqlParser.QualifiedNameContext ctx) {
         return support.qualifiedName(ctx.identifier().stream().map(this::ident).toList(),
                 pos(ctx));
     }
 
-    private AstBuilderSupport.FoldedType columnType(TSqlParser.DataTypeContext ctx) {
-        return support.foldColumnType(typeWord(ctx, 0), secondTypeWord(ctx), argTexts(ctx),
+    private QualifiedName columnRef(TSqlParser.ColumnReferenceContext ctx) {
+        return support.qualifiedName(ctx.columnName().stream().map(this::columnName).toList(),
                 pos(ctx));
     }
 
+    private AstBuilderSupport.FoldedType columnType(TSqlParser.DataTypeContext ctx) {
+        return AstBuilderSupport.withArrayDims(
+                support.foldColumnType(typeWord(ctx, 0), secondTypeWord(ctx), argTexts(ctx),
+                        pos(ctx)),
+                AstBuilderSupport.arrayDims(ctx));
+    }
+
     private DataType castType(TSqlParser.DataTypeContext ctx) {
-        return support.foldCastType(typeWord(ctx, 0), secondTypeWord(ctx), argTexts(ctx),
-                pos(ctx));
+        return AstBuilderSupport.withArrayDims(
+                support.foldCastType(typeWord(ctx, 0), secondTypeWord(ctx), argTexts(ctx),
+                        pos(ctx)),
+                AstBuilderSupport.arrayDims(ctx));
+    }
+
+    private DataType castAlterType(TSqlParser.AlterDataTypeContext ctx) {
+        return AstBuilderSupport.withArrayDims(
+                support.foldCastType(alterTypeWord(ctx), null, alterArgTexts(ctx),
+                        pos(ctx)),
+                AstBuilderSupport.arrayDims(ctx));
     }
 
     private String typeWord(TSqlParser.DataTypeContext ctx, int index) {
@@ -683,6 +1087,14 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     }
 
     private List<String> argTexts(TSqlParser.DataTypeContext ctx) {
+        return ctx.dataTypeArg().stream().map(ParserRuleContext::getText).toList();
+    }
+
+    private String alterTypeWord(TSqlParser.AlterDataTypeContext ctx) {
+        return support.identifier(ctx.identifier().getStart()).value();
+    }
+
+    private List<String> alterArgTexts(TSqlParser.AlterDataTypeContext ctx) {
         return ctx.dataTypeArg().stream().map(ParserRuleContext::getText).toList();
     }
 

@@ -26,7 +26,30 @@ public final class CodegenTestSupport {
             "joins/full-join/input.postgresql.sql|MYSQL",
             "limits/limit-offset/input.mysql.sql|TSQL",
             "limits/union-limit-no-order/input.postgresql.sql|TSQL",
-            "limits/union-limit-no-order/input.mysql.sql|TSQL");
+            "limits/union-limit-no-order/input.mysql.sql|TSQL",
+            "aggregates-ordered/array-agg-ordered/input.postgresql.sql|MYSQL",
+            "aggregates-ordered/array-agg-ordered/input.postgresql.sql|TSQL",
+            "aggregates-ordered/group-concat-ordered/input.mysql.sql|TSQL",
+            "casts/pg-array-cast/input.postgresql.sql|MYSQL",
+            "casts/pg-array-cast/input.postgresql.sql|TSQL",
+            "json-access/json-containment/input.postgresql.sql|MYSQL",
+            "json-access/json-containment/input.postgresql.sql|TSQL",
+            "interval/pg-string/input.postgresql.sql|TSQL",
+            "interval/mysql-numeric/input.mysql.sql|TSQL",
+            "interval/mysql-string-unit/input.mysql.sql|TSQL",
+            "interval/interval-compound/input.postgresql.sql|MYSQL",
+            "interval/interval-compound/input.postgresql.sql|TSQL",
+            "ddl-misc/drop-index-no-table/input.postgresql.sql|MYSQL",
+            "ddl-misc/drop-index-no-table/input.postgresql.sql|TSQL",
+            "ddl-misc/drop-function-args/input.postgresql.sql|MYSQL",
+            "ddl-misc/drop-function-args/input.postgresql.sql|TSQL",
+            "update-from/self-join/input.postgresql.sql|MYSQL",
+            "update-from/self-join/input.tsql.sql|MYSQL",
+            "update-from/self-join/input.mysql.sql|MYSQL",
+            "lateral/left-join-lateral-on-pred/input.postgresql.sql|TSQL",
+            "lateral/left-join-lateral-on-pred/input.mysql.sql|TSQL",
+            "extract/extract-dow/input.postgresql.sql|TSQL",
+            "extract/extract-dow/input.mysql.sql|TSQL");
 
     private CodegenTestSupport() {
     }

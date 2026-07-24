@@ -1,9 +1,11 @@
 package rs.etf.sqltranslator.transform;
 
+import rs.etf.sqltranslator.ast.AlterColumnType;
 import rs.etf.sqltranslator.ast.AstTransformer;
 import rs.etf.sqltranslator.ast.CastExpression;
 import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.DataType;
+import rs.etf.sqltranslator.ast.FixedLength;
 import rs.etf.sqltranslator.ast.GenericType;
 import rs.etf.sqltranslator.ast.MaxLength;
 import rs.etf.sqltranslator.ast.Script;
@@ -16,8 +18,8 @@ import java.util.Optional;
  * Rewrites generic types the target cannot express into ones it can, with loss
  * warnings. Name rendering (BOOLEAN→BIT, DOUBLE→FLOAT, BLOB→VARBINARY(MAX), …) is
  * Phase 5's job; this rule only changes the generic structure. DataType carries no
- * position, so narrowing happens at the two owners (column definitions, casts) whose
- * positions anchor the warnings.
+ * position, so narrowing happens at the owners (column definitions, casts, ALTER
+ * COLUMN type) whose positions anchor the warnings.
  */
 public final class NarrowTypesRule implements Rule {
 
@@ -48,6 +50,13 @@ public final class NarrowTypesRule implements Rule {
         }
 
         @Override
+        public Object visitAlterColumnType(AlterColumnType node) {
+            AlterColumnType altered = (AlterColumnType) super.visitAlterColumnType(node);
+            return new AlterColumnType(altered.column(), narrow(altered.type(), altered.pos()),
+                    altered.using(), altered.pos());
+        }
+
+        @Override
         public Object visitCastExpression(CastExpression node) {
             CastExpression cast = (CastExpression) super.visitCastExpression(node);
             return new CastExpression(cast.operand(),
@@ -61,7 +70,8 @@ public final class NarrowTypesRule implements Rule {
         private DataType narrowCastTarget(DataType type, SourcePosition pos) {
             DataType narrowed = narrow(type, pos);
             if (ctx.target() == Dialect.MYSQL && narrowed.type() == GenericType.VARCHAR) {
-                return new DataType(GenericType.CHAR, narrowed.length(), narrowed.scale());
+                return new DataType(GenericType.CHAR, narrowed.length(), narrowed.scale(),
+                        narrowed.arrayDims());
             }
             return narrowed;
         }
@@ -73,22 +83,38 @@ public final class NarrowTypesRule implements Rule {
 
             if (toMySqlOrPg && type.type() == GenericType.NVARCHAR) {
                 return maxLength
-                        ? new DataType(GenericType.TEXT, Optional.empty(), Optional.empty())
-                        : new DataType(GenericType.VARCHAR, type.length(), type.scale());
+                        ? new DataType(GenericType.TEXT, Optional.empty(), Optional.empty(),
+                        type.arrayDims())
+                        : new DataType(GenericType.VARCHAR, type.length(), type.scale(),
+                        type.arrayDims());
             }
             if (toMySqlOrPg && type.type() == GenericType.VARCHAR && maxLength) {
-                return new DataType(GenericType.TEXT, Optional.empty(), Optional.empty());
+                return new DataType(GenericType.TEXT, Optional.empty(), Optional.empty(),
+                        type.arrayDims());
             }
             if (ctx.target() == Dialect.TSQL && type.type() == GenericType.TEXT) {
                 return new DataType(GenericType.NVARCHAR,
-                        Optional.of(new MaxLength()), Optional.empty());
+                        Optional.of(new MaxLength()), Optional.empty(), type.arrayDims());
+            }
+            if (ctx.target() == Dialect.TSQL
+                    && (type.type() == GenericType.JSON || type.type() == GenericType.JSONB)) {
+                ctx.report().warn("JSON_AS_NVARCHAR",
+                        type.type() + " has no T-SQL equivalent; mapped to NVARCHAR(MAX)", pos);
+                return new DataType(GenericType.NVARCHAR,
+                        Optional.of(new MaxLength()), Optional.empty(), type.arrayDims());
+            }
+            if (ctx.target() == Dialect.MYSQL && type.type() == GenericType.UUID) {
+                ctx.report().warn("UUID_AS_CHAR",
+                        "UUID has no MySQL equivalent; mapped to CHAR(36)", pos);
+                return new DataType(GenericType.CHAR,
+                        Optional.of(new FixedLength(36)), Optional.empty(), type.arrayDims());
             }
             if (type.type() == GenericType.TINYINT) {
                 if (ctx.target() == Dialect.POSTGRESQL) {
                     ctx.report().warn("TINYINT_WIDENED",
                             "PostgreSQL has no TINYINT; widened to SMALLINT", pos);
                     return new DataType(GenericType.SMALLINT, Optional.empty(),
-                            Optional.empty());
+                            Optional.empty(), type.arrayDims());
                 }
                 boolean crossesSignedness =
                         (ctx.source() == Dialect.MYSQL && ctx.target() == Dialect.TSQL)

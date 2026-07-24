@@ -10,6 +10,8 @@ import rs.etf.sqltranslator.ast.MaxLength;
 import rs.etf.sqltranslator.core.Dialect;
 import rs.etf.sqltranslator.core.UnsupportedFeatureException;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
@@ -76,6 +78,34 @@ class TypeFoldingTest {
                 .isEqualTo(GenericType.DOUBLE);
         assertThat(columnType("BYTEA", Dialect.POSTGRESQL).type())
                 .isEqualTo(GenericType.BLOB);
+        assertThat(columnType("JSON", Dialect.POSTGRESQL).type())
+                .isEqualTo(GenericType.JSON);
+        assertThat(columnType("JSONB", Dialect.POSTGRESQL).type())
+                .isEqualTo(GenericType.JSONB);
+        assertThat(columnType("UUID", Dialect.POSTGRESQL).type())
+                .isEqualTo(GenericType.UUID);
+    }
+
+    @Test
+    void mysqlJsonFolds() {
+        assertThat(columnType("JSON", Dialect.MYSQL).type()).isEqualTo(GenericType.JSON);
+    }
+
+    @Test
+    void tsqlUniqueidentifierFoldsToUuid() {
+        assertThat(columnType("UNIQUEIDENTIFIER", Dialect.TSQL).type())
+                .isEqualTo(GenericType.UUID);
+    }
+
+    @Test
+    void unmappableTypesStayRefused() {
+        for (String type : List.of("GEOGRAPHY", "GEOMETRY", "TSVECTOR", "CITEXT",
+                "INET", "MACADDR")) {
+            assertThatExceptionOfType(UnsupportedFeatureException.class)
+                    .as("refuses %s", type)
+                    .isThrownBy(() -> columnType(type, Dialect.POSTGRESQL))
+                    .withMessageContaining("type " + type);
+        }
     }
 
     @Test

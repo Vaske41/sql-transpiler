@@ -9,7 +9,7 @@ public enum TypeFamily {
     public static TypeFamily of(GenericType type) {
         return switch (type) {
             case TINYINT, SMALLINT, INTEGER, BIGINT, DECIMAL, FLOAT, DOUBLE -> NUMERIC;
-            case CHAR, VARCHAR, NVARCHAR, TEXT -> STRING;
+            case CHAR, VARCHAR, NVARCHAR, TEXT, JSON, JSONB, UUID -> STRING;
             case BOOLEAN -> BOOLEAN;
             case DATE, TIME, TIMESTAMP -> DATETIME;
             case BLOB -> BINARY;

@@ -4,9 +4,12 @@ import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import rs.etf.sqltranslator.ast.AddColumn;
+import rs.etf.sqltranslator.ast.AddTableConstraint;
 import rs.etf.sqltranslator.ast.AlterAction;
 import rs.etf.sqltranslator.ast.AlterTableStatement;
+import rs.etf.sqltranslator.ast.ArrayLiteral;
 import rs.etf.sqltranslator.ast.Assignment;
+import rs.etf.sqltranslator.ast.AtTimeZone;
 import rs.etf.sqltranslator.ast.BetweenPredicate;
 import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.BooleanLiteral;
@@ -20,6 +23,7 @@ import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.DeleteStatement;
 import rs.etf.sqltranslator.ast.DerivedTable;
 import rs.etf.sqltranslator.ast.DropColumn;
+import rs.etf.sqltranslator.ast.DropIndexStatement;
 import rs.etf.sqltranslator.ast.DropTableStatement;
 import rs.etf.sqltranslator.ast.ExistsPredicate;
 import rs.etf.sqltranslator.ast.Expression;
@@ -35,8 +39,13 @@ import rs.etf.sqltranslator.ast.InSubqueryPredicate;
 import rs.etf.sqltranslator.ast.IndexColumn;
 import rs.etf.sqltranslator.ast.InsertStatement;
 import rs.etf.sqltranslator.ast.IsNullPredicate;
+import rs.etf.sqltranslator.ast.IsBoolPredicate;
+import rs.etf.sqltranslator.ast.BoolTest;
 import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.JoinKind;
+import rs.etf.sqltranslator.ast.RowConstructor;
+import rs.etf.sqltranslator.ast.RowValue;
+import rs.etf.sqltranslator.ast.ValuesTable;
 import rs.etf.sqltranslator.ast.LikePredicate;
 import rs.etf.sqltranslator.ast.NullLiteral;
 import rs.etf.sqltranslator.ast.OrderItem;
@@ -54,8 +63,10 @@ import rs.etf.sqltranslator.ast.SelectStatement;
 import rs.etf.sqltranslator.ast.SetQuantifier;
 import rs.etf.sqltranslator.ast.SortDirection;
 import rs.etf.sqltranslator.ast.Statement;
+import rs.etf.sqltranslator.ast.StringLiteral;
 import rs.etf.sqltranslator.ast.SubqueryExpression;
 import rs.etf.sqltranslator.ast.TableConstraint;
+import rs.etf.sqltranslator.ast.TableFunction;
 import rs.etf.sqltranslator.ast.TableRef;
 import rs.etf.sqltranslator.ast.TableSource;
 import rs.etf.sqltranslator.ast.UnaryOp;
@@ -63,6 +74,7 @@ import rs.etf.sqltranslator.ast.UnaryOperator;
 import rs.etf.sqltranslator.ast.UnionArm;
 import rs.etf.sqltranslator.ast.UniqueConstraint;
 import rs.etf.sqltranslator.ast.UpdateStatement;
+import rs.etf.sqltranslator.ast.Upsert;
 import rs.etf.sqltranslator.ast.WindowFrame;
 import rs.etf.sqltranslator.ast.WindowSpec;
 import rs.etf.sqltranslator.core.Dialect;
@@ -100,23 +112,28 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     // --- query shape ---
 
     @Override
-    public Object visitQueryExpression(MySqlParser.QueryExpressionContext ctx) {
+    public Object visitQueryExprParen(MySqlParser.QueryExprParenContext ctx) {
+        return visit(ctx.queryExpression());
+    }
+
+    @Override
+    public Object visitQueryExprSetOps(MySqlParser.QueryExprSetOpsContext ctx) {
         List<Cte> ctes = List.of();
+        boolean recursive = false;
         if (ctx.withClause() != null) {
             var w = ctx.withClause();
-            support.refuseIfRecursiveKeyword(w, w.RECURSIVE() != null);
             ctes = w.commonTableExpression().stream().map(c -> (Cte) visit(c)).toList();
-            for (Cte cte : ctes) {
-                support.refuseIfCteSelfReference(cte);
-            }
+            recursive = support.isRecursiveWith(w.RECURSIVE() != null, ctes);
         }
         QuerySpecification first = (QuerySpecification) visit(ctx.querySpecification(0));
-        List<UnionArm> arms = support.unionArms(ctx, MySqlParser.UNION, MySqlParser.ALL, this);
+        List<UnionArm> arms = support.unionArms(ctx, MySqlParser.UNION, MySqlParser.EXCEPT,
+                MySqlParser.INTERSECT, MySqlParser.ALL, this);
         List<OrderItem> orderBy = ctx.orderByClause() == null
                 ? List.of()
                 : ctx.orderByClause().orderItem().stream()
                         .map(i -> (OrderItem) visit(i)).toList();
-        return new Query(ctes, first, arms, orderBy, rowLimit(ctx.rowLimitClause()), pos(ctx));
+        return new Query(ctes, recursive, first, arms, orderBy, rowLimit(ctx.rowLimitClause()),
+                pos(ctx));
     }
 
     @Override
@@ -126,11 +143,24 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
         if (ctx.identifier().size() > 1) {
             cols = Optional.of(ctx.identifier().stream().skip(1).map(this::ident).toList());
         }
-        Query query = (Query) visit(ctx.queryExpression());
+        Query query = cteBody(ctx.cteBody(), name, cols);
         return new Cte(name, cols, query, pos(ctx));
     }
 
-    /** MySQL: LIMIT n [OFFSET m] | LIMIT m, n — the comma form swaps operands (§2.2). */
+    private Query cteBody(MySqlParser.CteBodyContext ctx, Identifier name,
+                          Optional<List<Identifier>> cols) {
+        if (ctx.VALUES() != null) {
+            List<RowValue> rows = ctx.rowValue().stream()
+                    .map(row -> new RowValue(
+                            row.expression().stream().map(this::expr).toList(),
+                            pos(row)))
+                    .toList();
+            return support.valuesCteBody(rows, name, cols, pos(ctx));
+        }
+        return (Query) visit(ctx.queryExpression());
+    }
+
+    /** MySQL: LIMIT n [OFFSET m] [WITH TIES] | LIMIT m, n — the comma form swaps operands (§2.2). */
     private Optional<RowLimit> rowLimit(MySqlParser.RowLimitClauseContext ctx) {
         if (ctx == null) {
             return Optional.empty();
@@ -138,7 +168,12 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
         Expression first = expr(ctx.expression(0));
         Expression second = ctx.expression().size() > 1 ? expr(ctx.expression(1)) : null;
         boolean commaForm = second != null && ctx.OFFSET() == null;
-        return Optional.of(support.mysqlRowLimit(first, second, commaForm, pos(ctx)));
+        boolean withTies = false;
+        if (ctx.identifier() != null) {
+            support.requireTiesKeyword(ident(ctx.identifier()));
+            withTies = true;
+        }
+        return Optional.of(support.mysqlRowLimit(first, second, commaForm, withTies, pos(ctx)));
     }
 
     @Override
@@ -177,8 +212,8 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
 
     @Override
     public Object visitSelectExpr(MySqlParser.SelectExprContext ctx) {
-        Optional<Identifier> alias = ctx.identifier() == null
-                ? Optional.empty() : Optional.of(ident(ctx.identifier()));
+        Optional<Identifier> alias = ctx.aliasName() == null
+                ? Optional.empty() : Optional.of(aliasName(ctx.aliasName()));
         return new SelectExpr(expr(ctx.expression()), alias, pos(ctx));
     }
 
@@ -190,30 +225,67 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
 
     @Override
     public Object visitNamedTablePrimary(MySqlParser.NamedTablePrimaryContext ctx) {
-        Optional<Identifier> alias = ctx.identifier() == null
-                ? Optional.empty() : Optional.of(ident(ctx.identifier()));
+        Optional<Identifier> alias = ctx.aliasName() == null
+                ? Optional.empty() : Optional.of(aliasName(ctx.aliasName()));
         return new TableRef(qname(ctx.qualifiedName()), alias, pos(ctx));
+    }
+
+    @Override
+    public Object visitFunctionTablePrimary(MySqlParser.FunctionTablePrimaryContext ctx) {
+        List<Expression> args = ctx.expression().stream().map(this::expr).toList();
+        Optional<Identifier> alias = ctx.aliasName() == null
+                ? Optional.empty() : Optional.of(aliasName(ctx.aliasName()));
+        Optional<List<Identifier>> cols = Optional.empty();
+        if (!ctx.columnName().isEmpty()) {
+            cols = Optional.of(ctx.columnName().stream().map(this::columnName).toList());
+        }
+        return new TableFunction(qname(ctx.qualifiedName()), args, alias, cols, pos(ctx));
     }
 
     @Override
     public Object visitDerivedTablePrimary(MySqlParser.DerivedTablePrimaryContext ctx) {
         Query query = (Query) visit(ctx.queryExpression());
-        Identifier alias = ident(ctx.identifier(0));
+        Identifier alias = support.derivedAliasOrSynthetic(
+                ctx.aliasName() == null ? null : aliasName(ctx.aliasName()), pos(ctx));
         Optional<List<Identifier>> cols = Optional.empty();
-        if (ctx.identifier().size() > 1) {
-            cols = Optional.of(ctx.identifier().stream().skip(1).map(this::ident).toList());
+        if (!ctx.columnName().isEmpty()) {
+            cols = Optional.of(ctx.columnName().stream().map(this::columnName).toList());
         }
         return new DerivedTable(query, alias, cols, pos(ctx));
     }
 
     @Override
+    public Object visitValuesTablePrimary(MySqlParser.ValuesTablePrimaryContext ctx) {
+        List<RowValue> rows = ctx.rowValue().stream()
+                .map(row -> new RowValue(
+                        row.expression().stream().map(this::expr).toList(),
+                        pos(row)))
+                .toList();
+        Identifier alias = aliasName(ctx.aliasName());
+        List<Identifier> cols = ctx.columnName().stream().map(this::columnName).toList();
+        return new ValuesTable(rows, alias, cols, pos(ctx));
+    }
+
+    @Override
     public Object visitJoinedTable(MySqlParser.JoinedTableContext ctx) {
         Relation table = (Relation) visit(ctx.tablePrimary());
-        if (ctx.CROSS() != null) {
-            return new Join(JoinKind.CROSS, table, Optional.empty(), pos(ctx));
+        if (ctx.APPLY() != null) {
+            if (ctx.CROSS() != null) {
+                return new Join(JoinKind.CROSS, table, Optional.empty(), true, pos(ctx));
+            }
+            return new Join(JoinKind.LEFT, table, Optional.empty(), true, pos(ctx));
+        }
+        boolean lateral = ctx.LATERAL() != null;
+        if (ctx.CROSS() != null || ctx.joinType() == null) {
+            return new Join(JoinKind.CROSS, table, Optional.empty(), lateral, pos(ctx));
+        }
+        if (ctx.USING() != null) {
+            List<Identifier> cols = ctx.columnList().identifier().stream()
+                    .map(this::ident).toList();
+            return Join.using(joinKind(ctx.joinType()), table, cols, pos(ctx));
         }
         return new Join(joinKind(ctx.joinType()), table,
-                Optional.of(expr(ctx.expression())), pos(ctx));
+                Optional.of(expr(ctx.expression())), lateral, pos(ctx));
     }
 
     /** MySQL has no FULL [OUTER] JOIN. */
@@ -242,35 +314,121 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
 
     @Override
     public Object visitInsertStatement(MySqlParser.InsertStatementContext ctx) {
-        List<Identifier> columns = ctx.identifier().stream().map(this::ident).toList();
+        List<Identifier> columns = ctx.columnName().stream().map(this::columnName).toList();
         QualifiedName table = qname(ctx.qualifiedName());
+        Optional<Upsert> upsert = ctx.upsertClause() == null
+                ? Optional.empty() : Optional.of((Upsert) visit(ctx.upsertClause()));
+        Optional<List<SelectItem>> returning = ctx.returningClause() == null
+                ? Optional.empty()
+                : Optional.of(returningItems(ctx.returningClause()));
         if (ctx.insertSource() instanceof MySqlParser.InsertQueryContext queryCtx) {
             return new InsertStatement(table, columns, List.of(),
-                    Optional.of((Query) visit(queryCtx.queryExpression())), pos(ctx));
+                    Optional.of((Query) visit(queryCtx.queryExpression())),
+                    upsert, returning, pos(ctx));
         }
         MySqlParser.InsertValuesContext values =
                 (MySqlParser.InsertValuesContext) ctx.insertSource();
         List<List<Expression>> rows = values.rowValue().stream()
                 .map(row -> row.expression().stream().map(this::expr).toList())
                 .toList();
-        return new InsertStatement(table, columns, rows, Optional.empty(), pos(ctx));
+        return new InsertStatement(table, columns, rows, Optional.empty(),
+                upsert, returning, pos(ctx));
+    }
+
+    @Override
+    public Object visitUpsertClause(MySqlParser.UpsertClauseContext ctx) {
+        if (ctx.KEY() != null) {
+            List<Assignment> assignments = ctx.assignment().stream()
+                    .map(a -> (Assignment) visit(a))
+                    .toList();
+            return support.duplicateKeyUpsert(ctx.identifier(0).getStart(), assignments,
+                    pos(ctx));
+        }
+        List<Identifier> target = ctx.conflictTarget() == null
+                ? List.of()
+                : ctx.conflictTarget().identifier().stream().map(this::ident).toList();
+        if (ctx.UPDATE() != null) {
+            List<Assignment> assignments = ctx.assignment().stream()
+                    .map(a -> (Assignment) visit(a))
+                    .toList();
+            Optional<Expression> where = ctx.whereClause() == null
+                    ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
+            return support.conflictUpsert(ctx.identifier(0).getStart(), target,
+                    ctx.identifier(1).getStart(), null, assignments, where, pos(ctx));
+        }
+        return support.conflictUpsert(ctx.identifier(0).getStart(), target,
+                ctx.identifier(1).getStart(), ctx.identifier(2).getStart(),
+                List.of(), Optional.empty(), pos(ctx));
+    }
+
+    @Override
+    public Object visitReturningClause(MySqlParser.ReturningClauseContext ctx) {
+        return returningItems(ctx);
+    }
+
+    private List<SelectItem> returningItems(MySqlParser.ReturningClauseContext ctx) {
+        List<SelectItem> items = ctx.selectItem().stream()
+                .map(s -> (SelectItem) visit(s))
+                .toList();
+        return support.returningItems(ctx.identifier().getStart(), items, pos(ctx));
+    }
+
+    @Override
+    public Object visitAssignment(MySqlParser.AssignmentContext ctx) {
+        List<QualifiedName> columns = ctx.qualifiedName().stream().map(this::qname).toList();
+        return new Assignment(columns, expr(ctx.expression()), pos(ctx));
     }
 
     @Override
     public Object visitUpdateStatement(MySqlParser.UpdateStatementContext ctx) {
+        List<Cte> ctes = List.of();
+        boolean recursive = false;
+        if (ctx.withClause() != null) {
+            var w = ctx.withClause();
+            ctes = w.commonTableExpression().stream().map(c -> (Cte) visit(c)).toList();
+            recursive = support.isRecursiveWith(w.RECURSIVE() != null, ctes);
+        }
         List<Assignment> assignments = ctx.assignment().stream()
-                .map(a -> new Assignment(ident(a.identifier()), expr(a.expression()), pos(a)))
+                .map(a -> (Assignment) visit(a))
                 .toList();
+        Optional<Identifier> alias = ctx.identifier() == null
+                ? Optional.empty() : Optional.of(ident(ctx.identifier()));
+        List<Join> inlineJoins = ctx.joinedTable().stream()
+                .map(j -> (Join) visit(j)).toList();
+        Optional<TableSource> from = updateFrom(ctx.tableSource(), ctx.FROM() != null);
         Optional<Expression> where = ctx.whereClause() == null
                 ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
-        return new UpdateStatement(qname(ctx.qualifiedName()), assignments, where, pos(ctx));
+        return support.updateWithInlineJoins(ctes, recursive, qname(ctx.qualifiedName()), alias,
+                inlineJoins, from, assignments, where, pos(ctx));
+    }
+
+    private Optional<TableSource> updateFrom(
+            List<MySqlParser.TableSourceContext> sources, boolean hasFromKeyword) {
+        if (sources == null || sources.isEmpty()) {
+            return Optional.empty();
+        }
+        int index = hasFromKeyword ? sources.size() - 1 : 0;
+        return Optional.of((TableSource) visit(sources.get(index)));
     }
 
     @Override
-    public Object visitDeleteStatement(MySqlParser.DeleteStatementContext ctx) {
+    public Object visitDeleteFromUsing(MySqlParser.DeleteFromUsingContext ctx) {
+        Optional<Identifier> alias = ctx.identifier() == null
+                ? Optional.empty() : Optional.of(ident(ctx.identifier()));
+        Optional<TableSource> using = ctx.tableSource() == null
+                ? Optional.empty() : Optional.of((TableSource) visit(ctx.tableSource()));
         Optional<Expression> where = ctx.whereClause() == null
                 ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
-        return new DeleteStatement(qname(ctx.qualifiedName()), where, pos(ctx));
+        return new DeleteStatement(qname(ctx.qualifiedName()), alias, using, where, pos(ctx));
+    }
+
+    @Override
+    public Object visitDeleteTargetsFrom(MySqlParser.DeleteTargetsFromContext ctx) {
+        List<Identifier> targets = ctx.identifier().stream().map(this::ident).toList();
+        TableSource from = (TableSource) visit(ctx.tableSource());
+        Optional<Expression> where = ctx.whereClause() == null
+                ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
+        return support.deleteFromJoinTargets(targets, from, where, pos(ctx));
     }
 
     // --- DDL ---
@@ -311,6 +469,14 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitCreateViewStatement(MySqlParser.CreateViewStatementContext ctx) {
+        List<Identifier> header = ctx.identifier().stream().map(this::ident).toList();
+        List<Identifier> columns = ctx.columnName().stream().map(this::columnName).toList();
+        return support.createView(header, qname(ctx.qualifiedName()), columns,
+                (Query) visit(ctx.queryExpression()), pos(ctx));
+    }
+
+    @Override
     public Object visitColumnDefinition(MySqlParser.ColumnDefinitionContext ctx) {
         AstBuilderSupport.FoldedType type = columnType(ctx.dataType());
         AstBuilderSupport.ColumnAttributes attributes = new AstBuilderSupport.ColumnAttributes();
@@ -343,7 +509,7 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
                         AstBuilderSupport.ColumnConstraintKind.AUTO_INCREMENT, null, null);
             }
         }
-        return support.columnDefinition(ident(ctx.identifier()), type, attributes, pos(ctx));
+        return support.columnDefinition(columnName(ctx.columnName()), type, attributes, pos(ctx));
     }
 
     @Override
@@ -372,11 +538,112 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitDropIndexStatement(MySqlParser.DropIndexStatementContext ctx) {
+        return new DropIndexStatement(ident(ctx.identifier()), ctx.IF() != null,
+                ctx.qualifiedName() != null ? Optional.of(qname(ctx.qualifiedName())) : Optional.empty(),
+                pos(ctx));
+    }
+
+    @Override
+    public Object visitDropViewOrRoutineStatement(MySqlParser.DropViewOrRoutineStatementContext ctx) {
+        boolean hasSignature = false;
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            if ("(".equals(ctx.getChild(i).getText())) {
+                hasSignature = true;
+                break;
+            }
+        }
+        List<DataType> argTypes = hasSignature
+                ? ctx.dataType().stream().map(this::castType).toList()
+                : List.of();
+        Optional<Identifier> cascade = ctx.identifier().size() > 1
+                ? Optional.of(ident(ctx.identifier(ctx.identifier().size() - 1)))
+                : Optional.empty();
+        return support.dropViewOrRoutine(ident(ctx.identifier(0)), qname(ctx.qualifiedName()),
+                ctx.IF() != null, hasSignature, argTypes, cascade, pos(ctx));
+    }
+
+    @Override
+    public Object visitTruncateStatement(MySqlParser.TruncateStatementContext ctx) {
+        return support.truncate(ident(ctx.identifier()), qname(ctx.qualifiedName()), pos(ctx));
+    }
+
+    @Override
     public Object visitAlterTableStatement(MySqlParser.AlterTableStatementContext ctx) {
-        AlterAction action = ctx.ADD() != null
-                ? new AddColumn((ColumnDefinition) visit(ctx.columnDefinition()), pos(ctx))
-                : new DropColumn(ident(ctx.identifier()), pos(ctx));
-        return new AlterTableStatement(qname(ctx.qualifiedName()), action, pos(ctx));
+        return new AlterTableStatement(qname(ctx.qualifiedName()),
+                (AlterAction) visit(ctx.alterTableAction()), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterAddColumn(MySqlParser.AlterAddColumnContext ctx) {
+        return new AddColumn((ColumnDefinition) visit(ctx.columnDefinition()), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterAddConstraint(MySqlParser.AlterAddConstraintContext ctx) {
+        return new AddTableConstraint((TableConstraint) visit(ctx.tableConstraint()), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterDropColumn(MySqlParser.AlterDropColumnContext ctx) {
+        return new DropColumn(ident(ctx.identifier()), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterChangeColumnType(MySqlParser.AlterChangeColumnTypeContext ctx) {
+        @SuppressWarnings("unchecked")
+        TypeChange change = (TypeChange) visit(ctx.alterColumnTypeSpec());
+        return support.alterColumnType(ident(ctx.identifier()), change.type(), change.using(), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterModifyColumn(MySqlParser.AlterModifyColumnContext ctx) {
+        support.requireModifyKeyword(ident(ctx.identifier(0)));
+        return support.alterColumnType(ident(ctx.identifier(1)), castType(ctx.dataType()),
+                Optional.empty(), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterTypeKeyword(MySqlParser.AlterTypeKeywordContext ctx) {
+        support.requireTypeKeyword(ident(ctx.identifier()));
+        Optional<Expression> using = Optional.empty();
+        if (ctx.usingClause() != null) {
+            @SuppressWarnings("unchecked")
+            Optional<Expression> u = (Optional<Expression>) visit(ctx.usingClause());
+            using = u;
+        }
+        return new TypeChange(castAlterType(ctx.alterDataType()), using);
+    }
+
+    @Override
+    public Object visitAlterSetDataType(MySqlParser.AlterSetDataTypeContext ctx) {
+        support.requireDataTypeKeywords(ident(ctx.identifier(0)), ident(ctx.identifier(1)));
+        Optional<Expression> using = Optional.empty();
+        if (ctx.usingClause() != null) {
+            @SuppressWarnings("unchecked")
+            Optional<Expression> u = (Optional<Expression>) visit(ctx.usingClause());
+            using = u;
+        }
+        return new TypeChange(castAlterType(ctx.alterDataType()), using);
+    }
+
+    @Override
+    public Object visitAlterBareType(MySqlParser.AlterBareTypeContext ctx) {
+        Optional<Expression> using = Optional.empty();
+        if (ctx.usingClause() != null) {
+            @SuppressWarnings("unchecked")
+            Optional<Expression> u = (Optional<Expression>) visit(ctx.usingClause());
+            using = u;
+        }
+        return new TypeChange(castAlterType(ctx.alterDataType()), using);
+    }
+
+    @Override
+    public Object visitUsingClause(MySqlParser.UsingClauseContext ctx) {
+        return Optional.of(expr(ctx.expression()));
+    }
+
+    private record TypeChange(DataType type, Optional<Expression> using) {
     }
 
     // --- expression ladder ---
@@ -406,6 +673,11 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitJsonExpression(MySqlParser.JsonExpressionContext ctx) {
+        return support.foldBinaryChain(ctx, this);
+    }
+
+    @Override
     public Object visitAdditiveExpression(MySqlParser.AdditiveExpressionContext ctx) {
         return support.foldBinaryChain(ctx, this);
     }
@@ -422,7 +694,26 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
                     ? UnaryOperator.NEG : UnaryOperator.POS;
             return new UnaryOp(op, expr(ctx.unaryExpression()), pos(ctx));
         }
-        return visit(ctx.primaryExpression());
+        return visit(ctx.annotatedPrimary());
+    }
+
+    @Override
+    public Object visitAnnotatedPrimary(MySqlParser.AnnotatedPrimaryContext ctx) {
+        Expression value = expr(ctx.primaryExpression());
+        for (MySqlParser.AtTimeZoneContext atz : ctx.atTimeZone()) {
+            support.requireContextualKeyword(ident(atz.identifier(0)), "AT");
+            support.requireContextualKeyword(ident(atz.identifier(1)), "TIME");
+            support.requireContextualKeyword(ident(atz.identifier(2)), "ZONE");
+            value = new AtTimeZone(value, expr(atz.primaryExpression()), pos(atz));
+        }
+        return value;
+    }
+
+    @Override
+    public Object visitArrayLiteralExpr(MySqlParser.ArrayLiteralExprContext ctx) {
+        support.requireContextualKeyword(ident(ctx.identifier()), "ARRAY");
+        List<Expression> elems = ctx.expression().stream().map(this::expr).toList();
+        return new ArrayLiteral(elems, pos(ctx));
     }
 
     // --- predicates ---
@@ -431,6 +722,26 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     public Object visitComparisonPredicate(MySqlParser.ComparisonPredicateContext ctx) {
         return new BinaryOp(support.comparisonOperator(ctx.comparisonOperator().getText()),
                 expr(ctx.concatExpression(0)), expr(ctx.concatExpression(1)), pos(ctx));
+    }
+
+    @Override
+    public Object visitQuantifiedAllPredicate(MySqlParser.QuantifiedAllPredicateContext ctx) {
+        return support.quantifiedComparison(
+                expr(ctx.concatExpression()),
+                ctx.comparisonOperator().getText(),
+                "ALL",
+                (Query) visit(ctx.subquery()),
+                pos(ctx));
+    }
+
+    @Override
+    public Object visitQuantifiedAnyPredicate(MySqlParser.QuantifiedAnyPredicateContext ctx) {
+        return support.quantifiedComparison(
+                expr(ctx.concatExpression()),
+                ctx.comparisonOperator().getText(),
+                ctx.identifier().getText(),
+                (Query) visit(ctx.subquery()),
+                pos(ctx));
     }
 
     @Override
@@ -462,6 +773,13 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     @Override
     public Object visitIsNullPredicate(MySqlParser.IsNullPredicateContext ctx) {
         return new IsNullPredicate(expr(ctx.concatExpression()), ctx.NOT() != null, pos(ctx));
+    }
+
+    @Override
+    public Object visitIsBoolPredicate(MySqlParser.IsBoolPredicateContext ctx) {
+        BoolTest test = ctx.TRUE() != null ? BoolTest.TRUE
+                : ctx.FALSE() != null ? BoolTest.FALSE : BoolTest.UNKNOWN;
+        return new IsBoolPredicate(expr(ctx.concatExpression()), test, ctx.NOT() != null, pos(ctx));
     }
 
     @Override
@@ -526,15 +844,46 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitExtractExpr(MySqlParser.ExtractExprContext ctx) {
+        return visit(ctx.extractExpression());
+    }
+
+    @Override
+    public Object visitExtractExpression(MySqlParser.ExtractExpressionContext ctx) {
+        return support.extractExpression(
+                ident(ctx.identifier()),
+                ident(ctx.extractField().identifier()),
+                expr(ctx.expression()),
+                pos(ctx));
+    }
+
+    @Override
+    public Object visitIntervalExpr(MySqlParser.IntervalExprContext ctx) {
+        return visit(ctx.intervalLiteral());
+    }
+
+    @Override
+    public Object visitIntervalLiteral(MySqlParser.IntervalLiteralContext ctx) {
+        if (ctx.STRING_LITERAL() != null && ctx.expression() == null) {
+            StringLiteral lit = support.stringLiteral(ctx.STRING_LITERAL().getSymbol());
+            Optional<String> unit = ctx.identifier() == null
+                    ? Optional.empty()
+                    : Optional.of(ident(ctx.identifier()).value());
+            return support.intervalFromString(lit.value(), unit, pos(ctx));
+        }
+        return support.intervalFromExpression(
+                expr(ctx.expression()),
+                ident(ctx.datePartKeyword().identifier()).value(),
+                pos(ctx));
+    }
+
+    @Override
     public Object visitFunctionExpr(MySqlParser.FunctionExprContext ctx) {
         FunctionCall call = (FunctionCall) visit(ctx.functionCall());
         if (ctx.windowOverlay() != null) {
             WindowSpec spec = (WindowSpec) visit(ctx.windowOverlay().windowSpecification());
-            if (spec.frame().isPresent()) {
-                throw support.refuse("window frame", spec.frame().get().pos());
-            }
             call = new FunctionCall(call.name(), call.args(), call.star(), call.quantifier(),
-                    Optional.of(spec), call.pos());
+                    call.orderBy(), call.filter(), Optional.of(spec), call.pos());
         }
         return call;
     }
@@ -543,14 +892,35 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     public Object visitFunctionCall(MySqlParser.FunctionCallContext ctx) {
         String name = support.functionName(functionNameIdentifier(ctx.functionName()));
         boolean star = false;
-        for (ParseTree child : ctx.children) {
-            if (child instanceof TerminalNode terminal && terminal.getText().equals("*")) {
-                star = true;
+        List<Expression> args = List.of();
+        List<OrderItem> orderBy = List.of();
+        Optional<SetQuantifier> quantifier = Optional.empty();
+        if (ctx.functionArgs() != null) {
+            MySqlParser.FunctionArgsContext fa = ctx.functionArgs();
+            for (ParseTree child : fa.children) {
+                if (child instanceof TerminalNode terminal && terminal.getText().equals("*")) {
+                    star = true;
+                }
+            }
+            if (!star) {
+                args = fa.expression().stream().map(this::expr).toList();
+                orderBy = fa.orderItem().stream()
+                        .map(item -> (OrderItem) visit(item)).toList();
+                quantifier = quantifier(fa.setQuantifier());
             }
         }
-        List<Expression> args = ctx.expression().stream().map(this::expr).toList();
-        return new FunctionCall(name, args, star, quantifier(ctx.setQuantifier()),
-                Optional.empty(), pos(ctx));
+        if (ctx.withinGroupClause() != null) {
+            orderBy = ctx.withinGroupClause().orderItem().stream()
+                    .map(item -> (OrderItem) visit(item)).toList();
+        }
+        Optional<Expression> filter = Optional.empty();
+        if (ctx.aggFilter() != null) {
+            filter = Optional.of(support.aggregateFilterKeyword(
+                    ident(ctx.aggFilter().identifier()),
+                    expr(ctx.aggFilter().expression())));
+        }
+        return new FunctionCall(name, args, star, quantifier, orderBy,
+                filter, Optional.empty(), pos(ctx));
     }
 
     @Override
@@ -600,7 +970,7 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
 
     @Override
     public Object visitColumnRefExpr(MySqlParser.ColumnRefExprContext ctx) {
-        return new ColumnRef(qname(ctx.qualifiedName()), pos(ctx));
+        return new ColumnRef(columnRef(ctx.columnReference()), pos(ctx));
     }
 
     @Override
@@ -610,7 +980,11 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
 
     @Override
     public Object visitParenExpr(MySqlParser.ParenExprContext ctx) {
-        return visit(ctx.expression());
+        List<Expression> elems = ctx.expression().stream().map(this::expr).toList();
+        if (elems.size() == 1) {
+            return elems.get(0);
+        }
+        return new RowConstructor(elems, pos(ctx));
     }
 
     // --- shared extraction helpers ---
@@ -623,19 +997,43 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
         return support.identifier(ctx.getStart());
     }
 
+    private Identifier columnName(MySqlParser.ColumnNameContext ctx) {
+        return support.identifier(ctx.getStart());
+    }
+
+    private Identifier aliasName(MySqlParser.AliasNameContext ctx) {
+        return support.identifier(ctx.getStart());
+    }
+
     private QualifiedName qname(MySqlParser.QualifiedNameContext ctx) {
         return support.qualifiedName(ctx.identifier().stream().map(this::ident).toList(),
                 pos(ctx));
     }
 
-    private AstBuilderSupport.FoldedType columnType(MySqlParser.DataTypeContext ctx) {
-        return support.foldColumnType(typeWord(ctx, 0), secondTypeWord(ctx), argTexts(ctx),
+    private QualifiedName columnRef(MySqlParser.ColumnReferenceContext ctx) {
+        return support.qualifiedName(ctx.columnName().stream().map(this::columnName).toList(),
                 pos(ctx));
     }
 
+    private AstBuilderSupport.FoldedType columnType(MySqlParser.DataTypeContext ctx) {
+        return AstBuilderSupport.withArrayDims(
+                support.foldColumnType(typeWord(ctx, 0), secondTypeWord(ctx), argTexts(ctx),
+                        pos(ctx)),
+                AstBuilderSupport.arrayDims(ctx));
+    }
+
     private DataType castType(MySqlParser.DataTypeContext ctx) {
-        return support.foldCastType(typeWord(ctx, 0), secondTypeWord(ctx), argTexts(ctx),
-                pos(ctx));
+        return AstBuilderSupport.withArrayDims(
+                support.foldCastType(typeWord(ctx, 0), secondTypeWord(ctx), argTexts(ctx),
+                        pos(ctx)),
+                AstBuilderSupport.arrayDims(ctx));
+    }
+
+    private DataType castAlterType(MySqlParser.AlterDataTypeContext ctx) {
+        return AstBuilderSupport.withArrayDims(
+                support.foldCastType(alterTypeWord(ctx), null, alterArgTexts(ctx),
+                        pos(ctx)),
+                AstBuilderSupport.arrayDims(ctx));
     }
 
     private String typeWord(MySqlParser.DataTypeContext ctx, int index) {
@@ -647,6 +1045,14 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     }
 
     private List<String> argTexts(MySqlParser.DataTypeContext ctx) {
+        return ctx.dataTypeArg().stream().map(ParserRuleContext::getText).toList();
+    }
+
+    private String alterTypeWord(MySqlParser.AlterDataTypeContext ctx) {
+        return support.identifier(ctx.identifier().getStart()).value();
+    }
+
+    private List<String> alterArgTexts(MySqlParser.AlterDataTypeContext ctx) {
         return ctx.dataTypeArg().stream().map(ParserRuleContext::getText).toList();
     }
 

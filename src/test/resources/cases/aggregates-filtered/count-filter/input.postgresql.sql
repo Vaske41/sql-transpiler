@@ -1,0 +1,1 @@
+SELECT COUNT(*) FILTER (WHERE active = TRUE) FROM t;

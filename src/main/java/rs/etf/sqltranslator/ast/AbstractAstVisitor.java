@@ -64,6 +64,9 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitQuerySpecification(QuerySpecification node) {
+        for (Expression on : node.distinctOn()) {
+            on.accept(this);
+        }
         for (SelectItem item : node.items()) {
             item.accept(this);
         }
@@ -131,6 +134,41 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitValuesTable(ValuesTable node) {
+        for (RowValue row : node.rows()) {
+            row.accept(this);
+        }
+        node.alias().accept(this);
+        for (Identifier col : node.columns()) {
+            col.accept(this);
+        }
+        return defaultResult();
+    }
+
+    @Override
+    public R visitTableFunction(TableFunction node) {
+        node.name().accept(this);
+        for (Expression arg : node.args()) {
+            arg.accept(this);
+        }
+        node.alias().ifPresent(alias -> alias.accept(this));
+        node.columnAliases().ifPresent(cols -> {
+            for (Identifier col : cols) {
+                col.accept(this);
+            }
+        });
+        return defaultResult();
+    }
+
+    @Override
+    public R visitRowValue(RowValue node) {
+        for (Expression value : node.values()) {
+            value.accept(this);
+        }
+        return defaultResult();
+    }
+
+    @Override
     public R visitJoin(Join node) {
         node.table().accept(this);
         node.on().ifPresent(on -> on.accept(this));
@@ -139,6 +177,11 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitInsertStatement(InsertStatement node) {
+        return defaultResult();
+    }
+
+    @Override
+    public R visitUpsert(Upsert node) {
         return defaultResult();
     }
 
@@ -154,11 +197,18 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitDeleteStatement(DeleteStatement node) {
+        node.usingClause().ifPresent(using -> using.accept(this));
+        node.where().ifPresent(where -> where.accept(this));
         return defaultResult();
     }
 
     @Override
     public R visitCreateTableStatement(CreateTableStatement node) {
+        return defaultResult();
+    }
+
+    @Override
+    public R visitCreateViewStatement(CreateViewStatement node) {
         return defaultResult();
     }
 
@@ -193,6 +243,26 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitDropViewStatement(DropViewStatement node) {
+        return defaultResult();
+    }
+
+    @Override
+    public R visitDropRoutineStatement(DropRoutineStatement node) {
+        return defaultResult();
+    }
+
+    @Override
+    public R visitDropIndexStatement(DropIndexStatement node) {
+        return defaultResult();
+    }
+
+    @Override
+    public R visitTruncateStatement(TruncateStatement node) {
+        return defaultResult();
+    }
+
+    @Override
     public R visitAlterTableStatement(AlterTableStatement node) {
         return defaultResult();
     }
@@ -203,7 +273,17 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitAddTableConstraint(AddTableConstraint node) {
+        return defaultResult();
+    }
+
+    @Override
     public R visitDropColumn(DropColumn node) {
+        return defaultResult();
+    }
+
+    @Override
+    public R visitAlterColumnType(AlterColumnType node) {
         return defaultResult();
     }
 
@@ -251,6 +331,13 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitIsNullPredicate(IsNullPredicate node) {
+        node.value().accept(this);
+        return defaultResult();
+    }
+
+    @Override
+    public R visitIsBoolPredicate(IsBoolPredicate node) {
+        node.value().accept(this);
         return defaultResult();
     }
 
@@ -265,6 +352,10 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
         for (Expression arg : node.args()) {
             arg.accept(this);
         }
+        for (OrderItem item : node.orderBy()) {
+            item.accept(this);
+        }
+        node.filter().ifPresent(f -> f.accept(this));
         node.window().ifPresent(w -> w.accept(this));
         return defaultResult();
     }
@@ -310,8 +401,29 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitExtractExpression(ExtractExpression node) {
+        node.source().accept(this);
+        return defaultResult();
+    }
+
+    @Override
     public R visitSubqueryExpression(SubqueryExpression node) {
         node.query().accept(this);
+        return defaultResult();
+    }
+
+    @Override
+    public R visitRowConstructor(RowConstructor node) {
+        return defaultResult();
+    }
+
+    @Override
+    public R visitArrayLiteral(ArrayLiteral node) {
+        return defaultResult();
+    }
+
+    @Override
+    public R visitAtTimeZone(AtTimeZone node) {
         return defaultResult();
     }
 
@@ -332,6 +444,11 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitNullLiteral(NullLiteral node) {
+        return defaultResult();
+    }
+
+    @Override
+    public R visitIntervalLiteral(IntervalLiteral node) {
         return defaultResult();
     }
 
