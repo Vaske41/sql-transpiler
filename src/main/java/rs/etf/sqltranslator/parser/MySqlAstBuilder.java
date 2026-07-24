@@ -38,6 +38,8 @@ import rs.etf.sqltranslator.ast.InsertStatement;
 import rs.etf.sqltranslator.ast.IsNullPredicate;
 import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.JoinKind;
+import rs.etf.sqltranslator.ast.RowValue;
+import rs.etf.sqltranslator.ast.ValuesTable;
 import rs.etf.sqltranslator.ast.LikePredicate;
 import rs.etf.sqltranslator.ast.NullLiteral;
 import rs.etf.sqltranslator.ast.OrderItem;
@@ -206,6 +208,18 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
             cols = Optional.of(ctx.columnName().stream().map(this::columnName).toList());
         }
         return new DerivedTable(query, alias, cols, pos(ctx));
+    }
+
+    @Override
+    public Object visitValuesTablePrimary(MySqlParser.ValuesTablePrimaryContext ctx) {
+        List<RowValue> rows = ctx.rowValue().stream()
+                .map(row -> new RowValue(
+                        row.expression().stream().map(this::expr).toList(),
+                        pos(row)))
+                .toList();
+        Identifier alias = aliasName(ctx.aliasName());
+        List<Identifier> cols = ctx.columnName().stream().map(this::columnName).toList();
+        return new ValuesTable(rows, alias, cols, pos(ctx));
     }
 
     @Override

@@ -628,6 +628,34 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     }
 
     @Override
+    public Void visitValuesTable(ValuesTable node) {
+        out.token("(");
+        out.token("VALUES");
+        for (int i = 0; i < node.rows().size(); i++) {
+            if (i > 0) {
+                out.raw(",");
+            }
+            node.rows().get(i).accept(this);
+        }
+        out.raw(")");
+        out.token("AS").token(identifier(node.alias()));
+        if (!node.columns().isEmpty()) {
+            out.raw("(");
+            csv(node.columns());
+            out.raw(")");
+        }
+        return null;
+    }
+
+    @Override
+    public Void visitRowValue(RowValue node) {
+        out.token("(");
+        csv(node.values());
+        out.raw(")");
+        return null;
+    }
+
+    @Override
     public Void visitJoin(Join node) {
         out.token(switch (node.kind()) {
             case INNER -> "INNER JOIN";

@@ -120,6 +120,20 @@ public class AstTransformer implements AstVisitor<Object> {
     }
 
     @Override
+    public Object visitValuesTable(ValuesTable node) {
+        return new ValuesTable(
+                rebuildList(node.rows()),
+                rebuild(node.alias()),
+                rebuildList(node.columns()),
+                node.pos());
+    }
+
+    @Override
+    public Object visitRowValue(RowValue node) {
+        return new RowValue(rebuildList(node.values()), node.pos());
+    }
+
+    @Override
     public Object visitJoin(Join node) {
         return new Join(node.kind(), rebuild(node.table()), rebuildOptional(node.on()),
                 node.lateral(), node.pos());

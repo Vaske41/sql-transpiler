@@ -89,6 +89,7 @@ class CrossDialectAstEqualityTest {
             "subqueries/exists-subquery",
             "subqueries/in-subquery",
             "subqueries/scalar-subquery",
+            "values-table/multi-row-alias",
             "windows/rank-over-partition",
             "windows/sum-over-order");
 

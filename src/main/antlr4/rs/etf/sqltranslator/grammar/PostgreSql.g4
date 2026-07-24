@@ -154,6 +154,8 @@ tablePrimary
     : qualifiedName (AS? aliasName)?                           # namedTablePrimary
     | '(' queryExpression ')' AS? aliasName
         ('(' columnName (',' columnName)* ')')?              # derivedTablePrimary
+    | '(' VALUES rowValue (',' rowValue)* ')' AS? aliasName
+        ('(' columnName (',' columnName)* ')')?              # valuesTablePrimary
     ;
 
 joinedTable

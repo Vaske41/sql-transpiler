@@ -123,6 +123,23 @@ public final class AstDumper implements AstVisitor<String> {
     }
 
     @Override
+    public String visitValuesTable(ValuesTable node) {
+        Dump dump = node("ValuesTable alias=" + quote(node.alias().value()))
+                .children("rows", node.rows());
+        if (!node.columns().isEmpty()) {
+            dump.children("columns", node.columns());
+        }
+        return dump.done();
+    }
+
+    @Override
+    public String visitRowValue(RowValue node) {
+        return node("RowValue")
+                .children("values", node.values())
+                .done();
+    }
+
+    @Override
     public String visitJoin(Join node) {
         String label = "Join kind=" + node.kind()
                 + (node.lateral() ? " lateral=true" : "");

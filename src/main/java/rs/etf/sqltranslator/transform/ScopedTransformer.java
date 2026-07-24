@@ -21,6 +21,7 @@ import rs.etf.sqltranslator.ast.StringLiteral;
 import rs.etf.sqltranslator.ast.TableRef;
 import rs.etf.sqltranslator.ast.TableSource;
 import rs.etf.sqltranslator.ast.UpdateStatement;
+import rs.etf.sqltranslator.ast.ValuesTable;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -259,6 +260,13 @@ public abstract class ScopedTransformer extends rs.etf.sqltranslator.ast.AstTran
             QualifiedName qn = new QualifiedName(
                     List.of(new Identifier(derived.alias().value(), false, derived.alias().pos())),
                     derived.alias().pos());
+            return List.of(new ScopedTable(key, new TableSchema(qn, List.of())));
+        }
+        if (relation instanceof ValuesTable values) {
+            String key = values.alias().value().toLowerCase(Locale.ROOT);
+            QualifiedName qn = new QualifiedName(
+                    List.of(new Identifier(values.alias().value(), false, values.alias().pos())),
+                    values.alias().pos());
             return List.of(new ScopedTable(key, new TableSchema(qn, List.of())));
         }
         throw new IllegalStateException("unknown Relation: " + relation.getClass());
