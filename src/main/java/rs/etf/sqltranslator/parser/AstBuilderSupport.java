@@ -16,6 +16,7 @@ import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.DropRoutineStatement;
 import rs.etf.sqltranslator.ast.DropViewStatement;
 import rs.etf.sqltranslator.ast.Expression;
+import rs.etf.sqltranslator.ast.ExtractExpression;
 import rs.etf.sqltranslator.ast.FixedLength;
 import rs.etf.sqltranslator.ast.ForeignKeyRef;
 import rs.etf.sqltranslator.ast.GenericType;
@@ -170,6 +171,16 @@ final class AstBuilderSupport {
         refuseIf(name.quoted() || !name.value().equalsIgnoreCase("FILTER"),
                 "aggregate filter keyword \"" + name.value() + "\"", name.pos());
         return predicate;
+    }
+
+    /**
+     * Contextual {@code EXTRACT(field FROM source)} — {@code name} must be the unquoted
+     * identifier {@code EXTRACT}. Avoids reserving {@code EXTRACT} as a keyword.
+     */
+    ExtractExpression extractExpression(Identifier name, Identifier field, Expression source,
+                                        SourcePosition position) {
+        requireContextualKeyword(name, "EXTRACT");
+        return new ExtractExpression(field.value(), source, position);
     }
 
     /** Requires an unquoted contextual keyword (VIEW / FUNCTION / TRUNCATE / …). */

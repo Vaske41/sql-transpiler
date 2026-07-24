@@ -663,6 +663,20 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitExtractExpr(MySqlParser.ExtractExprContext ctx) {
+        return visit(ctx.extractExpression());
+    }
+
+    @Override
+    public Object visitExtractExpression(MySqlParser.ExtractExpressionContext ctx) {
+        return support.extractExpression(
+                ident(ctx.identifier()),
+                ident(ctx.extractField().identifier()),
+                expr(ctx.expression()),
+                pos(ctx));
+    }
+
+    @Override
     public Object visitIntervalExpr(MySqlParser.IntervalExprContext ctx) {
         return visit(ctx.intervalLiteral());
     }

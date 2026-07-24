@@ -37,6 +37,7 @@ public final class RuleEngine {
                 new NarrowTypesRule(),
                 new RenderJsonRule(),
                 new RewriteIntervalArithmeticRule(),
+                new RenderExtractRule(),
                 new RenderTargetFunctionsRule(),
                 new PreserveNullsOrderingRule(),
                 new DropNullsOrderingRule()));

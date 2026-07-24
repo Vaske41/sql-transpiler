@@ -115,6 +115,8 @@ public interface AstVisitor<R> {
 
     R visitCastExpression(CastExpression node);
 
+    R visitExtractExpression(ExtractExpression node);
+
     R visitSubqueryExpression(SubqueryExpression node);
 
     // --- literals, identifiers, types ---

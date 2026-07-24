@@ -233,12 +233,20 @@ primaryBase
     : literal
     | caseExpression
     | CAST '(' expression AS dataType ')'
+    | extractExpression
     | intervalLiteral
     | functionCall windowOverlay?
     | columnReference
     | subquery
     | '(' expression ')'
     ;
+
+// Contextual EXTRACT — builder requires identifier text EXTRACT (no new keyword).
+extractExpression
+    : identifier '(' extractField FROM expression ')'
+    ;
+
+extractField : identifier ;
 
 // PG string form + MySQL expr+unit form (shared shape for cross-dialect AST).
 intervalLiteral

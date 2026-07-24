@@ -4,5 +4,6 @@ package rs.etf.sqltranslator.ast;
 public sealed interface Expression extends AstNode
         permits Literal, ColumnRef, BinaryOp, UnaryOp, BetweenPredicate, LikePredicate,
                 InListPredicate, InSubqueryPredicate, IsNullPredicate, ExistsPredicate,
-                FunctionCall, CaseExpression, CastExpression, SubqueryExpression {
+                FunctionCall, CaseExpression, CastExpression, ExtractExpression,
+                SubqueryExpression {
 }

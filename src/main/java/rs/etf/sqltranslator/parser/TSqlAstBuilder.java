@@ -688,6 +688,20 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitExtractExpr(TSqlParser.ExtractExprContext ctx) {
+        return visit(ctx.extractExpression());
+    }
+
+    @Override
+    public Object visitExtractExpression(TSqlParser.ExtractExpressionContext ctx) {
+        return support.extractExpression(
+                ident(ctx.identifier()),
+                ident(ctx.extractField().identifier()),
+                expr(ctx.expression()),
+                pos(ctx));
+    }
+
+    @Override
     public Object visitIntervalExpr(TSqlParser.IntervalExprContext ctx) {
         return visit(ctx.intervalLiteral());
     }

@@ -229,12 +229,20 @@ primaryExpression
     : literal                               # literalExpr
     | caseExpression                        # caseExpr
     | castExpression                        # castExpr
+    | extractExpression                     # extractExpr
     | intervalLiteral                       # intervalExpr
     | functionCall windowOverlay?           # functionExpr
     | columnReference                       # columnRefExpr
     | subquery                              # scalarSubqueryExpr
     | '(' expression ')'                    # parenExpr
     ;
+
+// Contextual EXTRACT — builder requires identifier text EXTRACT (no new keyword).
+extractExpression
+    : identifier '(' extractField FROM expression ')'
+    ;
+
+extractField : identifier ;
 
 // PG string form + MySQL expr+unit form (shared shape for cross-dialect AST).
 intervalLiteral

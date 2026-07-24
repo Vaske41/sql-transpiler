@@ -456,6 +456,13 @@ public final class AstDumper implements AstVisitor<String> {
     }
 
     @Override
+    public String visitExtractExpression(ExtractExpression node) {
+        return node("ExtractExpression field=" + quote(node.field()))
+                .child("source", node.source())
+                .done();
+    }
+
+    @Override
     public String visitSubqueryExpression(SubqueryExpression node) {
         return node("SubqueryExpression").child("query", node.query()).done();
     }

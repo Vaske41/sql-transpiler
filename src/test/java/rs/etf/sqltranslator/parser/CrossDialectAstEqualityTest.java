@@ -56,6 +56,7 @@ class CrossDialectAstEqualityTest {
             "ddl-misc/truncate",
             "derived-tables/from-subquery",
             "derived-tables/join-subquery",
+            "extract/year",
             "functions/count-star-distinct",
             "functions/left-right",
             "functions/max-aggregate",

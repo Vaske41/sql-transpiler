@@ -650,6 +650,9 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
         if (ctx.CAST() != null) {
             return new CastExpression(expr(ctx.expression()), castType(ctx.dataType()), pos(ctx));
         }
+        if (ctx.extractExpression() != null) {
+            return visit(ctx.extractExpression());
+        }
         if (ctx.intervalLiteral() != null) {
             return visit(ctx.intervalLiteral());
         }
@@ -706,6 +709,15 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
         return support.intervalFromExpression(
                 expr(ctx.expression()),
                 ident(ctx.datePartKeyword().identifier()).value(),
+                pos(ctx));
+    }
+
+    @Override
+    public Object visitExtractExpression(PostgreSqlParser.ExtractExpressionContext ctx) {
+        return support.extractExpression(
+                ident(ctx.identifier()),
+                ident(ctx.extractField().identifier()),
+                expr(ctx.expression()),
                 pos(ctx));
     }
 

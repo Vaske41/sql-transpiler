@@ -399,6 +399,16 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     }
 
     @Override
+    public Void visitExtractExpression(ExtractExpression node) {
+        out.token("EXTRACT").raw("(");
+        out.token(node.field());
+        out.token("FROM");
+        node.source().accept(this);
+        out.raw(")");
+        return null;
+    }
+
+    @Override
     public Void visitSubqueryExpression(SubqueryExpression node) {
         subquery(node.query());
         return null;

@@ -356,6 +356,11 @@ public class AstTransformer implements AstVisitor<Object> {
     }
 
     @Override
+    public Object visitExtractExpression(ExtractExpression node) {
+        return new ExtractExpression(node.field(), rebuild(node.source()), node.pos());
+    }
+
+    @Override
     public Object visitSubqueryExpression(SubqueryExpression node) {
         return new SubqueryExpression(rebuild(node.query()), node.pos());
     }

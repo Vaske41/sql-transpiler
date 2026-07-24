@@ -359,6 +359,12 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitExtractExpression(ExtractExpression node) {
+        node.source().accept(this);
+        return defaultResult();
+    }
+
+    @Override
     public R visitSubqueryExpression(SubqueryExpression node) {
         node.query().accept(this);
         return defaultResult();

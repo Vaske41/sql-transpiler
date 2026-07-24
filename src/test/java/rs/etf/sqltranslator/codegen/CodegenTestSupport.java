@@ -47,7 +47,9 @@ public final class CodegenTestSupport {
             "update-from/self-join/input.tsql.sql|MYSQL",
             "update-from/self-join/input.mysql.sql|MYSQL",
             "lateral/left-join-lateral-on-pred/input.postgresql.sql|TSQL",
-            "lateral/left-join-lateral-on-pred/input.mysql.sql|TSQL");
+            "lateral/left-join-lateral-on-pred/input.mysql.sql|TSQL",
+            "extract/extract-dow/input.postgresql.sql|TSQL",
+            "extract/extract-dow/input.mysql.sql|TSQL");
 
     private CodegenTestSupport() {
     }

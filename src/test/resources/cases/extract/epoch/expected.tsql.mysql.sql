@@ -1,0 +1,1 @@
+SELECT EXTRACT(EPOCH FROM ts) FROM events;
