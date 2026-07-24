@@ -176,6 +176,7 @@ joinedTable
     : CROSS APPLY tablePrimary
     | OUTER APPLY tablePrimary
     | joinType LATERAL? tablePrimary ON expression
+    | joinType LATERAL? tablePrimary USING columnList
     | CROSS JOIN LATERAL? tablePrimary
     | ',' LATERAL tablePrimary
     ;

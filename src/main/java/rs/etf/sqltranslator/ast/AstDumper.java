@@ -147,6 +147,7 @@ public final class AstDumper implements AstVisitor<String> {
         return node(label)
                 .child("table", node.table())
                 .child("on", node.on())
+                .children("using", node.usingColumns())
                 .done();
     }
 

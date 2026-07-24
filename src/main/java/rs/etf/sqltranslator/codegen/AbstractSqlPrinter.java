@@ -726,7 +726,11 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             out.token("LATERAL");
         }
         node.table().accept(this);
-        if (node.on().isPresent()) {
+        if (!node.usingColumns().isEmpty()) {
+            out.token("USING").token("(");
+            csv(node.usingColumns());
+            out.raw(")");
+        } else if (node.on().isPresent()) {
             out.token("ON");
             node.on().get().accept(this);
         } else if (node.lateral() && node.kind() == JoinKind.LEFT) {

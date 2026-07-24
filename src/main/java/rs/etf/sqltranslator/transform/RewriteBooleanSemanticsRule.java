@@ -76,7 +76,7 @@ public final class RewriteBooleanSemanticsRule implements Rule {
             Optional<TableSource> from = spec.from().map(f -> new TableSource(
                     f.first(),
                     f.joins().stream().map(j -> new Join(j.kind(), j.table(),
-                            j.on().map(this::bool), j.lateral(), j.pos())).toList(),
+                            j.on().map(this::bool), j.usingColumns(), j.lateral(), j.pos())).toList(),
                     f.pos()));
             return new QuerySpecification(spec.quantifier(), spec.distinctOn(), spec.items(), from,
                     spec.where().map(this::bool), spec.groupBy(),

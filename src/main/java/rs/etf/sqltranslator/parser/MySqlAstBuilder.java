@@ -237,6 +237,11 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
         if (ctx.CROSS() != null || ctx.joinType() == null) {
             return new Join(JoinKind.CROSS, table, Optional.empty(), lateral, pos(ctx));
         }
+        if (ctx.USING() != null) {
+            List<Identifier> cols = ctx.columnList().identifier().stream()
+                    .map(this::ident).toList();
+            return Join.using(joinKind(ctx.joinType()), table, cols, pos(ctx));
+        }
         return new Join(joinKind(ctx.joinType()), table,
                 Optional.of(expr(ctx.expression())), lateral, pos(ctx));
     }
