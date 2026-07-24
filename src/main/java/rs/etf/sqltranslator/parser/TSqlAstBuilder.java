@@ -340,8 +340,7 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     public Object visitUpsertClause(TSqlParser.UpsertClauseContext ctx) {
         if (ctx.KEY() != null) {
             List<Assignment> assignments = ctx.assignment().stream()
-                    .map(a -> new Assignment(qname(a.qualifiedName()), expr(a.expression()),
-                            pos(a)))
+                    .map(a -> (Assignment) visit(a))
                     .toList();
             return support.duplicateKeyUpsert(ctx.identifier(0).getStart(), assignments,
                     pos(ctx));
@@ -351,8 +350,7 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
                 : ctx.conflictTarget().identifier().stream().map(this::ident).toList();
         if (ctx.UPDATE() != null) {
             List<Assignment> assignments = ctx.assignment().stream()
-                    .map(a -> new Assignment(qname(a.qualifiedName()), expr(a.expression()),
-                            pos(a)))
+                    .map(a -> (Assignment) visit(a))
                     .toList();
             Optional<Expression> where = ctx.whereClause() == null
                     ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
@@ -377,9 +375,15 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitAssignment(TSqlParser.AssignmentContext ctx) {
+        List<QualifiedName> columns = ctx.qualifiedName().stream().map(this::qname).toList();
+        return new Assignment(columns, expr(ctx.expression()), pos(ctx));
+    }
+
+    @Override
     public Object visitUpdateStatement(TSqlParser.UpdateStatementContext ctx) {
         List<Assignment> assignments = ctx.assignment().stream()
-                .map(a -> new Assignment(qname(a.qualifiedName()), expr(a.expression()), pos(a)))
+                .map(a -> (Assignment) visit(a))
                 .toList();
         Optional<Identifier> alias = ctx.identifier() == null
                 ? Optional.empty() : Optional.of(ident(ctx.identifier()));

@@ -334,8 +334,7 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     public Object visitUpsertClause(PostgreSqlParser.UpsertClauseContext ctx) {
         if (ctx.KEY() != null) {
             List<Assignment> assignments = ctx.assignment().stream()
-                    .map(a -> new Assignment(qname(a.qualifiedName()), expr(a.expression()),
-                            pos(a)))
+                    .map(a -> (Assignment) visit(a))
                     .toList();
             return support.duplicateKeyUpsert(ctx.identifier(0).getStart(), assignments,
                     pos(ctx));
@@ -345,8 +344,7 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
                 : ctx.conflictTarget().identifier().stream().map(this::ident).toList();
         if (ctx.UPDATE() != null) {
             List<Assignment> assignments = ctx.assignment().stream()
-                    .map(a -> new Assignment(qname(a.qualifiedName()), expr(a.expression()),
-                            pos(a)))
+                    .map(a -> (Assignment) visit(a))
                     .toList();
             Optional<Expression> where = ctx.whereClause() == null
                     ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
@@ -368,9 +366,15 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitAssignment(PostgreSqlParser.AssignmentContext ctx) {
+        List<QualifiedName> columns = ctx.qualifiedName().stream().map(this::qname).toList();
+        return new Assignment(columns, expr(ctx.expression()), pos(ctx));
+    }
+
+    @Override
     public Object visitUpdateStatement(PostgreSqlParser.UpdateStatementContext ctx) {
         List<Assignment> assignments = ctx.assignment().stream()
-                .map(a -> new Assignment(qname(a.qualifiedName()), expr(a.expression()), pos(a)))
+                .map(a -> (Assignment) visit(a))
                 .toList();
         Optional<Identifier> alias = ctx.identifier() == null
                 ? Optional.empty() : Optional.of(ident(ctx.identifier()));

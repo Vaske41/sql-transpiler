@@ -194,7 +194,7 @@ public final class AstDumper implements AstVisitor<String> {
     @Override
     public String visitAssignment(Assignment node) {
         return node("Assignment")
-                .child("column", node.column())
+                .children("columns", node.columns())
                 .child("value", node.value())
                 .done();
     }

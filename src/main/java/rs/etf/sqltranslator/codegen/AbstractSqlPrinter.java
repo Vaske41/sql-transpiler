@@ -849,7 +849,13 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
 
     @Override
     public Void visitAssignment(Assignment node) {
-        out.token(dotted(node.column())).token("=");
+        if (node.columns().size() == 1) {
+            out.token(dotted(node.columns().get(0))).token("=");
+        } else {
+            out.token("(");
+            csv(node.columns());
+            out.raw(") =");
+        }
         node.value().accept(this);
         return null;
     }

@@ -1,5 +1,6 @@
 package rs.etf.sqltranslator.transform;
 
+import rs.etf.sqltranslator.ast.Assignment;
 import rs.etf.sqltranslator.ast.AstTransformer;
 import rs.etf.sqltranslator.ast.BooleanLiteral;
 import rs.etf.sqltranslator.ast.CastExpression;
@@ -55,6 +56,17 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
 
         private Validator(TranslationContext ctx) {
             this.ctx = ctx;
+        }
+
+        @Override
+        public Object visitAssignment(Assignment node) {
+            if (node.columns().size() > 1
+                    && (ctx.target() == Dialect.MYSQL || ctx.target() == Dialect.TSQL)) {
+                throw new UnsupportedFeatureException(
+                        "multi-column SET assignment is not supported by " + ctx.target(),
+                        node.pos());
+            }
+            return super.visitAssignment(node);
         }
 
         @Override

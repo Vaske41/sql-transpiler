@@ -54,7 +54,10 @@ updateStatement
       (FROM tableSource)? whereClause?
     ;
 
-assignment : qualifiedName '=' expression ;
+assignment
+    : '(' qualifiedName (',' qualifiedName)* ')' '=' expression
+    | qualifiedName '=' expression
+    ;
 
 deleteStatement : DELETE FROM qualifiedName whereClause? ;
 

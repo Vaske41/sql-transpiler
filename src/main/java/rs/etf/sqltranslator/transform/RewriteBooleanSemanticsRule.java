@@ -200,16 +200,16 @@ public final class RewriteBooleanSemanticsRule implements Rule {
         @Override
         public Object visitAssignment(Assignment node) {
             Assignment assignment = (Assignment) super.visitAssignment(node);
-            if (ctx.target() != Dialect.POSTGRESQL) {
+            if (ctx.target() != Dialect.POSTGRESQL || assignment.columns().size() != 1) {
                 return assignment;
             }
-            ColumnRef ref = syntheticRef(assignment.column());
+            ColumnRef ref = syntheticRef(assignment.columns().get(0));
             boolean isBoolean = resolve(ref)
                     .filter(c -> c.type().type() == GenericType.BOOLEAN).isPresent();
             if (!isBoolean) {
                 return assignment;
             }
-            return new Assignment(assignment.column(),
+            return new Assignment(assignment.columns(),
                     asBooleanLiteral(assignment.value()), assignment.pos());
         }
 

@@ -167,7 +167,7 @@ public class AstTransformer implements AstVisitor<Object> {
 
     @Override
     public Object visitAssignment(Assignment node) {
-        return new Assignment(rebuild(node.column()), rebuild(node.value()), node.pos());
+        return new Assignment(rebuildList(node.columns()), rebuild(node.value()), node.pos());
     }
 
     @Override

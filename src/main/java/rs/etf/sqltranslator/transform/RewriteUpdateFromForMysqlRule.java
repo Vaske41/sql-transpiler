@@ -59,12 +59,15 @@ public final class RewriteUpdateFromForMysqlRule implements Rule {
         }
 
         private static Assignment qualify(Assignment a, Identifier qualifier) {
-            QualifiedName col = a.column();
-            if (col.parts().size() > 1) {
-                return a; // already qualified
+            List<QualifiedName> qualified = new ArrayList<>(a.columns().size());
+            for (QualifiedName col : a.columns()) {
+                if (col.parts().size() > 1) {
+                    qualified.add(col);
+                } else {
+                    qualified.add(new QualifiedName(List.of(qualifier, col.last()), col.pos()));
+                }
             }
-            List<Identifier> parts = List.of(qualifier, col.last());
-            return new Assignment(new QualifiedName(parts, col.pos()), a.value(), a.pos());
+            return new Assignment(List.copyOf(qualified), a.value(), a.pos());
         }
 
         private static void refuseIfUnsupported(QualifiedName target, TableSource from,
