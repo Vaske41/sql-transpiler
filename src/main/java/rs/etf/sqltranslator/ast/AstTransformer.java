@@ -391,6 +391,16 @@ public class AstTransformer implements AstVisitor<Object> {
         return new RowConstructor(rebuildList(node.elements()), node.pos());
     }
 
+    @Override
+    public Object visitArrayLiteral(ArrayLiteral node) {
+        return new ArrayLiteral(rebuildList(node.elements()), node.pos());
+    }
+
+    @Override
+    public Object visitAtTimeZone(AtTimeZone node) {
+        return new AtTimeZone(rebuild(node.value()), rebuild(node.zone()), node.pos());
+    }
+
     // --- literals, identifiers, types (leaves rebuild to themselves) ---
 
     @Override

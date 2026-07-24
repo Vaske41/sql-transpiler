@@ -127,6 +127,10 @@ public interface AstVisitor<R> {
 
     R visitRowConstructor(RowConstructor node);
 
+    R visitArrayLiteral(ArrayLiteral node);
+
+    R visitAtTimeZone(AtTimeZone node);
+
     // --- literals, identifiers, types ---
     R visitNumericLiteral(NumericLiteral node);
 

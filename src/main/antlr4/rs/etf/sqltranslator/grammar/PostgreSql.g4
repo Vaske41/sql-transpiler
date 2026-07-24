@@ -255,9 +255,13 @@ multiplicativeExpression : unaryExpression (('*' | '/' | '%') unaryExpression)* 
 
 unaryExpression : ('-' | '+') unaryExpression | primaryExpression ;
 
-// Postfix :: casts are non-left-recursive: base then zero-or-more COLON_CAST.
+// Postfix :: casts then optional AT TIME ZONE (contextual AT/TIME/ZONE).
 primaryExpression
-    : primaryBase (COLON_CAST dataType)*   # pgColonCastChain
+    : primaryBase (COLON_CAST dataType)* atTimeZone*   # pgColonCastChain
+    ;
+
+atTimeZone
+    : identifier identifier identifier primaryBase
     ;
 
 primaryBase
@@ -270,6 +274,7 @@ primaryBase
     | columnReference
     | subquery
     | '(' expression (',' expression)* ')'
+    | identifier '[' (expression (',' expression)*)? ']'
     ;
 
 // Contextual EXTRACT — builder requires identifier text EXTRACT (no new keyword).

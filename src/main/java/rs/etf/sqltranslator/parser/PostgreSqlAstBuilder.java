@@ -6,7 +6,9 @@ import org.antlr.v4.runtime.tree.TerminalNode;
 import rs.etf.sqltranslator.ast.AddColumn;
 import rs.etf.sqltranslator.ast.AlterAction;
 import rs.etf.sqltranslator.ast.AlterTableStatement;
+import rs.etf.sqltranslator.ast.ArrayLiteral;
 import rs.etf.sqltranslator.ast.Assignment;
+import rs.etf.sqltranslator.ast.AtTimeZone;
 import rs.etf.sqltranslator.ast.BetweenPredicate;
 import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.BooleanLiteral;
@@ -712,7 +714,18 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
         for (PostgreSqlParser.DataTypeContext typeCtx : ctx.dataType()) {
             value = new CastExpression(value, castType(typeCtx), pos(ctx));
         }
+        for (PostgreSqlParser.AtTimeZoneContext atz : ctx.atTimeZone()) {
+            value = buildAtTimeZone(value, atz);
+        }
         return value;
+    }
+
+    private Expression buildAtTimeZone(Expression value,
+                                       PostgreSqlParser.AtTimeZoneContext atz) {
+        support.requireContextualKeyword(ident(atz.identifier(0)), "AT");
+        support.requireContextualKeyword(ident(atz.identifier(1)), "TIME");
+        support.requireContextualKeyword(ident(atz.identifier(2)), "ZONE");
+        return new AtTimeZone(value, (Expression) visit(atz.primaryBase()), pos(atz));
     }
 
     @Override
@@ -746,6 +759,11 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
         }
         if (ctx.subquery() != null) {
             return new SubqueryExpression((Query) visit(ctx.subquery()), pos(ctx));
+        }
+        if (ctx.identifier() != null) {
+            support.requireContextualKeyword(ident(ctx.identifier()), "ARRAY");
+            List<Expression> elems = ctx.expression().stream().map(this::expr).toList();
+            return new ArrayLiteral(elems, pos(ctx));
         }
         List<Expression> elems = ctx.expression().stream().map(this::expr).toList();
         if (elems.size() == 1) {

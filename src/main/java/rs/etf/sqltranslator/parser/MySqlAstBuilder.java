@@ -6,7 +6,9 @@ import org.antlr.v4.runtime.tree.TerminalNode;
 import rs.etf.sqltranslator.ast.AddColumn;
 import rs.etf.sqltranslator.ast.AlterAction;
 import rs.etf.sqltranslator.ast.AlterTableStatement;
+import rs.etf.sqltranslator.ast.ArrayLiteral;
 import rs.etf.sqltranslator.ast.Assignment;
+import rs.etf.sqltranslator.ast.AtTimeZone;
 import rs.etf.sqltranslator.ast.BetweenPredicate;
 import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.BooleanLiteral;
@@ -622,7 +624,26 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
                     ? UnaryOperator.NEG : UnaryOperator.POS;
             return new UnaryOp(op, expr(ctx.unaryExpression()), pos(ctx));
         }
-        return visit(ctx.primaryExpression());
+        return visit(ctx.annotatedPrimary());
+    }
+
+    @Override
+    public Object visitAnnotatedPrimary(MySqlParser.AnnotatedPrimaryContext ctx) {
+        Expression value = expr(ctx.primaryExpression());
+        for (MySqlParser.AtTimeZoneContext atz : ctx.atTimeZone()) {
+            support.requireContextualKeyword(ident(atz.identifier(0)), "AT");
+            support.requireContextualKeyword(ident(atz.identifier(1)), "TIME");
+            support.requireContextualKeyword(ident(atz.identifier(2)), "ZONE");
+            value = new AtTimeZone(value, expr(atz.primaryExpression()), pos(atz));
+        }
+        return value;
+    }
+
+    @Override
+    public Object visitArrayLiteralExpr(MySqlParser.ArrayLiteralExprContext ctx) {
+        support.requireContextualKeyword(ident(ctx.identifier()), "ARRAY");
+        List<Expression> elems = ctx.expression().stream().map(this::expr).toList();
+        return new ArrayLiteral(elems, pos(ctx));
     }
 
     // --- predicates ---

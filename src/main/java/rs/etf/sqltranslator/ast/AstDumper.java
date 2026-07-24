@@ -501,6 +501,19 @@ public final class AstDumper implements AstVisitor<String> {
         return node("RowConstructor").children("elements", node.elements()).done();
     }
 
+    @Override
+    public String visitArrayLiteral(ArrayLiteral node) {
+        return node("ArrayLiteral").children("elements", node.elements()).done();
+    }
+
+    @Override
+    public String visitAtTimeZone(AtTimeZone node) {
+        return node("AtTimeZone")
+                .child("value", node.value())
+                .child("zone", node.zone())
+                .done();
+    }
+
     // --- literals, identifiers, types ---
 
     @Override

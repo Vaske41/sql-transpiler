@@ -251,7 +251,13 @@ additiveExpression : multiplicativeExpression (('+' | '-') multiplicativeExpress
 
 multiplicativeExpression : unaryExpression (('*' | '/' | '%') unaryExpression)* ;
 
-unaryExpression : ('-' | '+') unaryExpression | primaryExpression ;
+unaryExpression : ('-' | '+') unaryExpression | annotatedPrimary ;
+
+annotatedPrimary : primaryExpression atTimeZone* ;
+
+atTimeZone
+    : identifier identifier identifier primaryExpression
+    ;
 
 primaryExpression
     : literal                               # literalExpr
@@ -264,6 +270,7 @@ primaryExpression
     | columnReference                       # columnRefExpr
     | subquery                              # scalarSubqueryExpr
     | '(' expression (',' expression)* ')'  # parenExpr
+    | identifier '[' (expression (',' expression)*)? ']'  # arrayLiteralExpr
     ;
 
 // Contextual EXTRACT — builder requires identifier text EXTRACT (no new keyword).

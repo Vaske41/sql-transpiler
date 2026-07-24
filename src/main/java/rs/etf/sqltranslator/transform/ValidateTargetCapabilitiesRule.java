@@ -111,6 +111,24 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
             return super.visitRowConstructor(node);
         }
 
+        @Override
+        public Object visitArrayLiteral(rs.etf.sqltranslator.ast.ArrayLiteral node) {
+            if (ctx.target() == Dialect.MYSQL || ctx.target() == Dialect.TSQL) {
+                throw new UnsupportedFeatureException(
+                        "ARRAY literal is not supported by " + ctx.target(), node.pos());
+            }
+            return super.visitArrayLiteral(node);
+        }
+
+        @Override
+        public Object visitAtTimeZone(rs.etf.sqltranslator.ast.AtTimeZone node) {
+            if (ctx.target() != Dialect.POSTGRESQL) {
+                throw new UnsupportedFeatureException(
+                        "AT TIME ZONE is not supported by " + ctx.target(), node.pos());
+            }
+            return super.visitAtTimeZone(node);
+        }
+
         /**
          * SQL Server accepts {@code RANGE} only with {@code UNBOUNDED}/{@code CURRENT ROW}
          * extents. Offset bounds under {@code RANGE} are invalid T-SQL; {@code ROWS} frames
