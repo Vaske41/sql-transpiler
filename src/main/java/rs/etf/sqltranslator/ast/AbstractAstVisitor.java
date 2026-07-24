@@ -64,6 +64,9 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitQuerySpecification(QuerySpecification node) {
+        for (Expression on : node.distinctOn()) {
+            on.accept(this);
+        }
         for (SelectItem item : node.items()) {
             item.accept(this);
         }
@@ -296,6 +299,13 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitIsNullPredicate(IsNullPredicate node) {
+        node.value().accept(this);
+        return defaultResult();
+    }
+
+    @Override
+    public R visitIsBoolPredicate(IsBoolPredicate node) {
+        node.value().accept(this);
         return defaultResult();
     }
 

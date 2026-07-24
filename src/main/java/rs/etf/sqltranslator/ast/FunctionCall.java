@@ -11,7 +11,7 @@ import java.util.Optional;
  * {@code quantifier} carries {@code COUNT(DISTINCT x)}. Optional {@code orderBy}
  * holds in-argument {@code ORDER BY} for ordered aggregates; {@code filter} holds
  * a {@code FILTER (WHERE …)} predicate when present. Optional {@code window}
- * holds a frameless {@code OVER (…)} overlay when present.
+ * holds an {@code OVER (…)} overlay (optional frame) when present.
  */
 public record FunctionCall(String name, List<Expression> args, boolean star,
                            Optional<SetQuantifier> quantifier,

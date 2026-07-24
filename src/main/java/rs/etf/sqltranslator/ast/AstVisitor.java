@@ -99,6 +99,8 @@ public interface AstVisitor<R> {
 
     R visitIsNullPredicate(IsNullPredicate node);
 
+    R visitIsBoolPredicate(IsBoolPredicate node);
+
     R visitExistsPredicate(ExistsPredicate node);
 
     R visitFunctionCall(FunctionCall node);

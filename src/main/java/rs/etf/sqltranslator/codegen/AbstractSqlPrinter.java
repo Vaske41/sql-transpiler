@@ -299,6 +299,17 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     }
 
     @Override
+    public Void visitIsBoolPredicate(IsBoolPredicate node) {
+        operand(node.value(), 4, false);
+        out.token("IS");
+        if (node.negated()) {
+            out.token("NOT");
+        }
+        out.token(node.test().name());
+        return null;
+    }
+
+    @Override
     public Void visitExistsPredicate(ExistsPredicate node) {
         out.token("EXISTS");
         subquery(node.subquery());
@@ -359,21 +370,40 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             out.token("ORDER").token("BY");
             csv(node.orderBy());
         }
-        if (node.frame().isPresent()) {
-            throw new IllegalStateException(
-                    "window frames must be refused before print");
-        }
+        node.frame().ifPresent(f -> f.accept(this));
         return null;
     }
 
     @Override
     public Void visitWindowFrame(WindowFrame node) {
-        throw new IllegalStateException("window frames must be refused before print");
+        out.token(node.mode().name());
+        if (node.end().isPresent()) {
+            out.token("BETWEEN");
+            node.start().accept(this);
+            out.token("AND");
+            node.end().get().accept(this);
+        } else {
+            node.start().accept(this);
+        }
+        return null;
     }
 
     @Override
     public Void visitFrameBound(FrameBound node) {
-        throw new IllegalStateException("window frames must be refused before print");
+        switch (node.kind()) {
+            case UNBOUNDED_PRECEDING -> out.token("UNBOUNDED").token("PRECEDING");
+            case UNBOUNDED_FOLLOWING -> out.token("UNBOUNDED").token("FOLLOWING");
+            case CURRENT_ROW -> out.token("CURRENT").token("ROW");
+            case PRECEDING -> {
+                node.offset().orElseThrow().accept(this);
+                out.token("PRECEDING");
+            }
+            case FOLLOWING -> {
+                node.offset().orElseThrow().accept(this);
+                out.token("FOLLOWING");
+            }
+        }
+        return null;
     }
 
     @Override
@@ -546,7 +576,13 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     /** One SELECT block. {@code owner} is non-null only for a query's first spec. */
     protected void renderSpec(QuerySpecification spec, Query owner) {
         out.token("SELECT");
-        spec.quantifier().ifPresent(q -> out.token(q.name()));
+        if (!spec.distinctOn().isEmpty()) {
+            out.token("DISTINCT").token("ON").raw("(");
+            csv(spec.distinctOn());
+            out.raw(")");
+        } else {
+            spec.quantifier().ifPresent(q -> out.token(q.name()));
+        }
         selectModifiers(spec, owner);
         csv(spec.items());
         spec.from().ifPresent(from -> {

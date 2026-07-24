@@ -78,7 +78,7 @@ public final class RewriteBooleanSemanticsRule implements Rule {
                     f.joins().stream().map(j -> new Join(j.kind(), j.table(),
                             j.on().map(this::bool), j.lateral(), j.pos())).toList(),
                     f.pos()));
-            return new QuerySpecification(spec.quantifier(), spec.items(), from,
+            return new QuerySpecification(spec.quantifier(), spec.distinctOn(), spec.items(), from,
                     spec.where().map(this::bool), spec.groupBy(),
                     spec.having().map(this::bool), spec.pos());
         }
@@ -112,6 +112,7 @@ public final class RewriteBooleanSemanticsRule implements Rule {
                     || expr instanceof rs.etf.sqltranslator.ast.InListPredicate
                     || expr instanceof rs.etf.sqltranslator.ast.InSubqueryPredicate
                     || expr instanceof rs.etf.sqltranslator.ast.IsNullPredicate
+                    || expr instanceof rs.etf.sqltranslator.ast.IsBoolPredicate
                     || expr instanceof rs.etf.sqltranslator.ast.ExistsPredicate) {
                 return expr;
             }
@@ -247,7 +248,8 @@ public final class RewriteBooleanSemanticsRule implements Rule {
                         ? asBooleanLiteral(selectExpr.expr()) : selectExpr.expr();
                 items.add(new SelectExpr(expr, selectExpr.alias(), selectExpr.pos()));
             }
-            return new QuerySpecification(spec.quantifier(), items, spec.from(), spec.where(),
+            return new QuerySpecification(spec.quantifier(), spec.distinctOn(), items,
+                    spec.from(), spec.where(),
                     spec.groupBy(), spec.having(), spec.pos());
         }
 

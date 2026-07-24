@@ -36,6 +36,8 @@ import rs.etf.sqltranslator.ast.InSubqueryPredicate;
 import rs.etf.sqltranslator.ast.IndexColumn;
 import rs.etf.sqltranslator.ast.InsertStatement;
 import rs.etf.sqltranslator.ast.IsNullPredicate;
+import rs.etf.sqltranslator.ast.IsBoolPredicate;
+import rs.etf.sqltranslator.ast.BoolTest;
 import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.JoinKind;
 import rs.etf.sqltranslator.ast.RowValue;
@@ -601,6 +603,13 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitIsBoolPredicate(MySqlParser.IsBoolPredicateContext ctx) {
+        BoolTest test = ctx.TRUE() != null ? BoolTest.TRUE
+                : ctx.FALSE() != null ? BoolTest.FALSE : BoolTest.UNKNOWN;
+        return new IsBoolPredicate(expr(ctx.concatExpression()), test, ctx.NOT() != null, pos(ctx));
+    }
+
+    @Override
     public Object visitExistsPredicate(MySqlParser.ExistsPredicateContext ctx) {
         return new ExistsPredicate((Query) visit(ctx.subquery()), pos(ctx));
     }
@@ -700,9 +709,6 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
         FunctionCall call = (FunctionCall) visit(ctx.functionCall());
         if (ctx.windowOverlay() != null) {
             WindowSpec spec = (WindowSpec) visit(ctx.windowOverlay().windowSpecification());
-            if (spec.frame().isPresent()) {
-                throw support.refuse("window frame", spec.frame().get().pos());
-            }
             call = new FunctionCall(call.name(), call.args(), call.star(), call.quantifier(),
                     call.orderBy(), call.filter(), Optional.of(spec), call.pos());
         }

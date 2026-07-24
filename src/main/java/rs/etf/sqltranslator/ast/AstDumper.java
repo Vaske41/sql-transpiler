@@ -62,6 +62,7 @@ public final class AstDumper implements AstVisitor<String> {
     @Override
     public String visitQuerySpecification(QuerySpecification node) {
         return node("QuerySpecification" + optional("quantifier", node.quantifier()))
+                .children("distinctOn", node.distinctOn())
                 .children("items", node.items())
                 .child("from", node.from())
                 .child("where", node.where())
@@ -386,6 +387,13 @@ public final class AstDumper implements AstVisitor<String> {
     @Override
     public String visitIsNullPredicate(IsNullPredicate node) {
         return node("IsNullPredicate negated=" + node.negated())
+                .child("value", node.value())
+                .done();
+    }
+
+    @Override
+    public String visitIsBoolPredicate(IsBoolPredicate node) {
+        return node("IsBoolPredicate test=" + node.test() + " negated=" + node.negated())
                 .child("value", node.value())
                 .done();
     }

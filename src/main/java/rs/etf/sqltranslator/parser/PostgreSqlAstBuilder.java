@@ -36,6 +36,8 @@ import rs.etf.sqltranslator.ast.InSubqueryPredicate;
 import rs.etf.sqltranslator.ast.IndexColumn;
 import rs.etf.sqltranslator.ast.InsertStatement;
 import rs.etf.sqltranslator.ast.IsNullPredicate;
+import rs.etf.sqltranslator.ast.IsBoolPredicate;
+import rs.etf.sqltranslator.ast.BoolTest;
 import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.JoinKind;
 import rs.etf.sqltranslator.ast.RowValue;
@@ -162,7 +164,9 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
                 : ctx.groupByClause().expression().stream().map(this::expr).toList();
         Optional<Expression> having = ctx.havingClause() == null
                 ? Optional.empty() : Optional.of(expr(ctx.havingClause().expression()));
-        return new QuerySpecification(quantifier(ctx.setQuantifier()), items, from, where,
+        Optional<SetQuantifier> quantifier = quantifier(ctx.setQuantifier());
+        List<Expression> distinctOn = distinctOn(ctx.setQuantifier());
+        return new QuerySpecification(quantifier, distinctOn, items, from, where,
                 groupBy, having, pos(ctx));
     }
 
@@ -171,6 +175,13 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
             return Optional.empty();
         }
         return Optional.of(ctx.DISTINCT() != null ? SetQuantifier.DISTINCT : SetQuantifier.ALL);
+    }
+
+    private List<Expression> distinctOn(PostgreSqlParser.SetQuantifierContext ctx) {
+        if (ctx == null || ctx.ON() == null) {
+            return List.of();
+        }
+        return ctx.expression().stream().map(this::expr).toList();
     }
 
     @Override
@@ -618,6 +629,13 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitIsBoolPredicate(PostgreSqlParser.IsBoolPredicateContext ctx) {
+        BoolTest test = ctx.TRUE() != null ? BoolTest.TRUE
+                : ctx.FALSE() != null ? BoolTest.FALSE : BoolTest.UNKNOWN;
+        return new IsBoolPredicate(expr(ctx.concatExpression()), test, ctx.NOT() != null, pos(ctx));
+    }
+
+    @Override
     public Object visitExistsPredicate(PostgreSqlParser.ExistsPredicateContext ctx) {
         return new ExistsPredicate((Query) visit(ctx.subquery()), pos(ctx));
     }
@@ -659,9 +677,6 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
             FunctionCall call = (FunctionCall) visit(ctx.functionCall());
             if (ctx.windowOverlay() != null) {
                 WindowSpec spec = (WindowSpec) visit(ctx.windowOverlay().windowSpecification());
-                if (spec.frame().isPresent()) {
-                    throw support.refuse("window frame", spec.frame().get().pos());
-                }
                 call = new FunctionCall(call.name(), call.args(), call.star(), call.quantifier(),
                         call.orderBy(), call.filter(), Optional.of(spec), call.pos());
             }

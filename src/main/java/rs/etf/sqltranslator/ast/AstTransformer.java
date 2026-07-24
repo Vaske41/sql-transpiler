@@ -75,7 +75,8 @@ public class AstTransformer implements AstVisitor<Object> {
 
     @Override
     public Object visitQuerySpecification(QuerySpecification node) {
-        return new QuerySpecification(node.quantifier(), rebuildList(node.items()),
+        return new QuerySpecification(node.quantifier(), rebuildList(node.distinctOn()),
+                rebuildList(node.items()),
                 rebuildOptional(node.from()), rebuildOptional(node.where()),
                 rebuildList(node.groupBy()), rebuildOptional(node.having()), node.pos());
     }
@@ -308,6 +309,11 @@ public class AstTransformer implements AstVisitor<Object> {
     @Override
     public Object visitIsNullPredicate(IsNullPredicate node) {
         return new IsNullPredicate(rebuild(node.value()), node.negated(), node.pos());
+    }
+
+    @Override
+    public Object visitIsBoolPredicate(IsBoolPredicate node) {
+        return new IsBoolPredicate(rebuild(node.value()), node.test(), node.negated(), node.pos());
     }
 
     @Override
