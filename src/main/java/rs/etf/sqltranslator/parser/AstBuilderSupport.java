@@ -765,7 +765,15 @@ final class AstBuilderSupport {
                     Map.entry("DATETIME", Fold.of(GenericType.TIMESTAMP)),
                     Map.entry("DATE", Fold.of(GenericType.DATE)),
                     Map.entry("TIME", Fold.of(GenericType.TIME)),
-                    Map.entry("IMAGE", Fold.of(GenericType.BLOB)));
+                    Map.entry("IMAGE", Fold.of(GenericType.BLOB)),
+                    Map.entry("UNIQUEIDENTIFIER", Fold.of(GenericType.UUID)),
+                    Map.entry("JSON", Fold.of(GenericType.JSON)),
+                    Map.entry("JSONB", Fold.of(GenericType.JSONB)),
+                    Map.entry("UUID", Fold.of(GenericType.UUID)),
+                    Map.entry("BYTEA", Fold.of(GenericType.BLOB)),
+                    Map.entry("SERIAL", Fold.auto(GenericType.INTEGER)),
+                    Map.entry("BIGSERIAL", Fold.auto(GenericType.BIGINT)),
+                    Map.entry("SMALLSERIAL", Fold.auto(GenericType.SMALLINT)));
             case MYSQL -> Map.ofEntries(
                     Map.entry("INT", Fold.of(GenericType.INTEGER)),
                     Map.entry("INTEGER", Fold.of(GenericType.INTEGER)),
@@ -786,7 +794,14 @@ final class AstBuilderSupport {
                     Map.entry("TIMESTAMP", Fold.of(GenericType.TIMESTAMP)),
                     Map.entry("DATE", Fold.of(GenericType.DATE)),
                     Map.entry("TIME", Fold.of(GenericType.TIME)),
-                    Map.entry("BLOB", Fold.of(GenericType.BLOB)));
+                    Map.entry("BLOB", Fold.of(GenericType.BLOB)),
+                    Map.entry("JSON", Fold.of(GenericType.JSON)),
+                    Map.entry("JSONB", Fold.of(GenericType.JSONB)),
+                    Map.entry("UUID", Fold.of(GenericType.UUID)),
+                    Map.entry("BYTEA", Fold.of(GenericType.BLOB)),
+                    Map.entry("SERIAL", Fold.auto(GenericType.INTEGER)),
+                    Map.entry("BIGSERIAL", Fold.auto(GenericType.BIGINT)),
+                    Map.entry("SMALLSERIAL", Fold.auto(GenericType.SMALLINT)));
             case POSTGRESQL -> Map.ofEntries(
                     Map.entry("INTEGER", Fold.of(GenericType.INTEGER)),
                     Map.entry("INT", Fold.of(GenericType.INTEGER)),
@@ -809,6 +824,9 @@ final class AstBuilderSupport {
                     Map.entry("DATE", Fold.of(GenericType.DATE)),
                     Map.entry("TIME", Fold.of(GenericType.TIME)),
                     Map.entry("BYTEA", Fold.of(GenericType.BLOB)),
+                    Map.entry("JSON", Fold.of(GenericType.JSON)),
+                    Map.entry("JSONB", Fold.of(GenericType.JSONB)),
+                    Map.entry("UUID", Fold.of(GenericType.UUID)),
                     Map.entry("SERIAL", Fold.auto(GenericType.INTEGER)),
                     Map.entry("BIGSERIAL", Fold.auto(GenericType.BIGINT)),
                     Map.entry("SMALLSERIAL", Fold.auto(GenericType.SMALLINT)));

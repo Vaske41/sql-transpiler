@@ -86,9 +86,12 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
             case TIME -> "TIME";
             case TIMESTAMP -> "DATETIME";            // avoids epoch range + tz coercion
             case BLOB -> "BLOB";
+            case JSON, JSONB -> "JSON";
             case BOOLEAN -> throw new AssertionError("handled above");
             case NVARCHAR -> throw new IllegalStateException(
                     "rule engine contract: NVARCHAR must not reach the MySQL printer");
+            case UUID -> throw new IllegalStateException(
+                    "rule engine contract: UUID must be narrowed to CHAR(36) before MySQL print");
         };
         out.token(name);
         renderTypeArgs(type);

@@ -173,6 +173,10 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
             out.token("VARBINARY(MAX)");             // carries no args by construction
             return;
         }
+        if (type.type() == rs.etf.sqltranslator.ast.GenericType.UUID) {
+            out.token("UNIQUEIDENTIFIER");
+            return;
+        }
         String name = switch (type.type()) {
             case TINYINT -> "TINYINT";
             case SMALLINT -> "SMALLINT";
@@ -188,9 +192,11 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
             case DATE -> "DATE";
             case TIME -> "TIME";
             case TIMESTAMP -> "DATETIME2";
-            case BLOB -> throw new AssertionError("handled above");
+            case BLOB, UUID -> throw new AssertionError("handled above");
             case TEXT -> throw new IllegalStateException(
                     "rule engine contract: TEXT must not reach the T-SQL printer");
+            case JSON, JSONB -> throw new IllegalStateException(
+                    "rule engine contract: JSON/JSONB must be narrowed before T-SQL print");
         };
         out.token(name);
         renderTypeArgs(type);

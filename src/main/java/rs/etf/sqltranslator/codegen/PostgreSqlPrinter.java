@@ -42,6 +42,9 @@ public final class PostgreSqlPrinter extends AbstractSqlPrinter {
             case TIME -> "TIME";
             case TIMESTAMP -> "TIMESTAMP";
             case BLOB -> "BYTEA";
+            case JSON -> "JSON";
+            case JSONB -> "JSONB";
+            case UUID -> "UUID";
             case TINYINT, NVARCHAR -> throw new IllegalStateException(
                     "rule engine contract: " + type.type() + " must not reach the PG printer");
         };

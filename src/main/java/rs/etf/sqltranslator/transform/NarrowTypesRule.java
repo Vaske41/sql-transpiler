@@ -5,6 +5,7 @@ import rs.etf.sqltranslator.ast.AstTransformer;
 import rs.etf.sqltranslator.ast.CastExpression;
 import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.DataType;
+import rs.etf.sqltranslator.ast.FixedLength;
 import rs.etf.sqltranslator.ast.GenericType;
 import rs.etf.sqltranslator.ast.MaxLength;
 import rs.etf.sqltranslator.ast.Script;
@@ -94,6 +95,19 @@ public final class NarrowTypesRule implements Rule {
             if (ctx.target() == Dialect.TSQL && type.type() == GenericType.TEXT) {
                 return new DataType(GenericType.NVARCHAR,
                         Optional.of(new MaxLength()), Optional.empty(), type.arrayDims());
+            }
+            if (ctx.target() == Dialect.TSQL
+                    && (type.type() == GenericType.JSON || type.type() == GenericType.JSONB)) {
+                ctx.report().warn("JSON_AS_NVARCHAR",
+                        type.type() + " has no T-SQL equivalent; mapped to NVARCHAR(MAX)", pos);
+                return new DataType(GenericType.NVARCHAR,
+                        Optional.of(new MaxLength()), Optional.empty(), type.arrayDims());
+            }
+            if (ctx.target() == Dialect.MYSQL && type.type() == GenericType.UUID) {
+                ctx.report().warn("UUID_AS_CHAR",
+                        "UUID has no MySQL equivalent; mapped to CHAR(36)", pos);
+                return new DataType(GenericType.CHAR,
+                        Optional.of(new FixedLength(36)), Optional.empty(), type.arrayDims());
             }
             if (type.type() == GenericType.TINYINT) {
                 if (ctx.target() == Dialect.POSTGRESQL) {
