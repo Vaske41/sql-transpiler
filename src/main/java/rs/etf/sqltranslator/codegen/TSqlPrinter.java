@@ -47,6 +47,12 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
         return 6;    // CONCAT renders as ADD's '+' token — same level, or minimal
     }                // parens would drop grouping that changes T-SQL semantics
 
+    /** SQL Server: {@code CREATE OR ALTER VIEW}. */
+    @Override
+    protected void renderCreateOrReplaceView() {
+        out.token("OR").token("ALTER");
+    }
+
     @Override
     public Void visitJoin(rs.etf.sqltranslator.ast.Join node) {
         if (node.lateral()) {

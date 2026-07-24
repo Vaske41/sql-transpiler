@@ -402,6 +402,14 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitCreateViewStatement(MySqlParser.CreateViewStatementContext ctx) {
+        List<Identifier> header = ctx.identifier().stream().map(this::ident).toList();
+        List<Identifier> columns = ctx.columnName().stream().map(this::columnName).toList();
+        return support.createView(header, qname(ctx.qualifiedName()), columns,
+                (Query) visit(ctx.queryExpression()), pos(ctx));
+    }
+
+    @Override
     public Object visitColumnDefinition(MySqlParser.ColumnDefinitionContext ctx) {
         AstBuilderSupport.FoldedType type = columnType(ctx.dataType());
         AstBuilderSupport.ColumnAttributes attributes = new AstBuilderSupport.ColumnAttributes();

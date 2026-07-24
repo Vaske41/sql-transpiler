@@ -424,6 +424,14 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitCreateViewStatement(PostgreSqlParser.CreateViewStatementContext ctx) {
+        List<Identifier> header = ctx.identifier().stream().map(this::ident).toList();
+        List<Identifier> columns = ctx.columnName().stream().map(this::columnName).toList();
+        return support.createView(header, qname(ctx.qualifiedName()), columns,
+                (Query) visit(ctx.queryExpression()), pos(ctx));
+    }
+
+    @Override
     public Object visitColumnDefinition(PostgreSqlParser.ColumnDefinitionContext ctx) {
         AstBuilderSupport.FoldedType type = columnType(ctx.dataType());
         AstBuilderSupport.ColumnAttributes attributes = new AstBuilderSupport.ColumnAttributes();

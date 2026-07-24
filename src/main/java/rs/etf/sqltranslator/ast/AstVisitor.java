@@ -54,6 +54,8 @@ public interface AstVisitor<R> {
     // --- DDL ---
     R visitCreateTableStatement(CreateTableStatement node);
 
+    R visitCreateViewStatement(CreateViewStatement node);
+
     R visitColumnDefinition(ColumnDefinition node);
 
     R visitForeignKeyRef(ForeignKeyRef node);

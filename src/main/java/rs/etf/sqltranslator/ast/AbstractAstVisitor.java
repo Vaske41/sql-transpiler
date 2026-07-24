@@ -191,6 +191,11 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitCreateViewStatement(CreateViewStatement node) {
+        return defaultResult();
+    }
+
+    @Override
     public R visitColumnDefinition(ColumnDefinition node) {
         return defaultResult();
     }

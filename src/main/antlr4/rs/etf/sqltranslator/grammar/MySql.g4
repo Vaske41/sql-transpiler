@@ -12,6 +12,7 @@ statement
     | updateStatement
     | deleteStatement
     | createTableStatement
+    | createViewStatement
     | createIndexStatement
     | dropTableStatement
     | dropIndexStatement
@@ -59,6 +60,16 @@ assignment : qualifiedName '=' expression ;
 deleteStatement : DELETE FROM qualifiedName whereClause? ;
 
 createTableStatement : CREATE TABLE qualifiedName '(' tableElement (',' tableElement)* ')' ;
+
+// VIEW / REPLACE / ALTER are contextual identifiers; OR is the shared keyword.
+createViewStatement
+    : CREATE OR identifier identifier qualifiedName
+      ('(' columnName (',' columnName)* ')')?
+      AS queryExpression
+    | CREATE identifier qualifiedName
+      ('(' columnName (',' columnName)* ')')?
+      AS queryExpression
+    ;
 
 // MySQL: index_type may appear before ON or after the column list.
 createIndexStatement

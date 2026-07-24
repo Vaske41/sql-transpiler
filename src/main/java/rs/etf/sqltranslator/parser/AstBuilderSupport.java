@@ -13,6 +13,7 @@ import rs.etf.sqltranslator.ast.CaseExpression;
 import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.DataType;
+import rs.etf.sqltranslator.ast.CreateViewStatement;
 import rs.etf.sqltranslator.ast.DropRoutineStatement;
 import rs.etf.sqltranslator.ast.DropViewStatement;
 import rs.etf.sqltranslator.ast.Expression;
@@ -262,6 +263,30 @@ final class AstBuilderSupport {
             return new DropRoutineStatement(name, ifExists, cascade, hasSignature, argTypes, position);
         }
         throw refuse("DROP " + kind.value(), kind.pos());
+    }
+
+    /**
+     * {@code CREATE [OR REPLACE|OR ALTER] VIEW}. {@code headerIds} is either
+     * {@code [VIEW]} or {@code [REPLACE|ALTER, VIEW]} (OR is the keyword token).
+     */
+    CreateViewStatement createView(List<Identifier> headerIds, QualifiedName name,
+                                   List<Identifier> columns, Query query,
+                                   SourcePosition position) {
+        if (headerIds.size() == 1) {
+            requireContextualKeyword(headerIds.get(0), "VIEW");
+            return new CreateViewStatement(name, columns, query, false, position);
+        }
+        if (headerIds.size() == 2) {
+            String mid = headerIds.get(0).value();
+            refuseIf(headerIds.get(0).quoted()
+                            || (!"REPLACE".equalsIgnoreCase(mid)
+                            && !"ALTER".equalsIgnoreCase(mid)),
+                    "expected REPLACE or ALTER, got \"" + mid + "\"",
+                    headerIds.get(0).pos());
+            requireContextualKeyword(headerIds.get(1), "VIEW");
+            return new CreateViewStatement(name, columns, query, true, position);
+        }
+        throw refuse("malformed CREATE VIEW header", position);
     }
 
     TruncateStatement truncate(Identifier keyword, QualifiedName table, SourcePosition position) {

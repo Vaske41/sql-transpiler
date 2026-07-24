@@ -185,6 +185,12 @@ public class AstTransformer implements AstVisitor<Object> {
     }
 
     @Override
+    public Object visitCreateViewStatement(CreateViewStatement node) {
+        return new CreateViewStatement(rebuild(node.name()), rebuildList(node.columns()),
+                rebuild(node.query()), node.replaceOrAlter(), node.pos());
+    }
+
+    @Override
     public Object visitColumnDefinition(ColumnDefinition node) {
         return new ColumnDefinition(rebuild(node.name()), rebuild(node.type()),
                 node.autoIncrement(), node.nullable(),

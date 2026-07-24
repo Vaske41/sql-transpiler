@@ -863,6 +863,28 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     }
 
     @Override
+    public Void visitCreateViewStatement(CreateViewStatement node) {
+        out.token("CREATE");
+        if (node.replaceOrAlter()) {
+            renderCreateOrReplaceView();
+        }
+        out.token("VIEW").token(dotted(node.name()));
+        if (!node.columns().isEmpty()) {
+            out.token("(");
+            csv(node.columns());
+            out.raw(")");
+        }
+        out.token("AS");
+        node.query().accept(this);
+        return null;
+    }
+
+    /** PostgreSQL/MySQL: {@code OR REPLACE}; T-SQL overrides to {@code OR ALTER}. */
+    protected void renderCreateOrReplaceView() {
+        out.token("OR").token("REPLACE");
+    }
+
+    @Override
     public Void visitColumnDefinition(ColumnDefinition node) {
         out.token(identifier(node.name()));
         renderDataType(node.type());
