@@ -411,7 +411,7 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     }
 
     @Override
-    public Object visitDeleteStatement(PostgreSqlParser.DeleteStatementContext ctx) {
+    public Object visitDeleteFromUsing(PostgreSqlParser.DeleteFromUsingContext ctx) {
         Optional<Identifier> alias = ctx.identifier() == null
                 ? Optional.empty() : Optional.of(ident(ctx.identifier()));
         Optional<TableSource> using = ctx.tableSource() == null
@@ -419,6 +419,15 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
         Optional<Expression> where = ctx.whereClause() == null
                 ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
         return new DeleteStatement(qname(ctx.qualifiedName()), alias, using, where, pos(ctx));
+    }
+
+    @Override
+    public Object visitDeleteTargetsFrom(PostgreSqlParser.DeleteTargetsFromContext ctx) {
+        List<Identifier> targets = ctx.identifier().stream().map(this::ident).toList();
+        TableSource from = (TableSource) visit(ctx.tableSource());
+        Optional<Expression> where = ctx.whereClause() == null
+                ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
+        return support.deleteFromJoinTargets(targets, from, where, pos(ctx));
     }
 
     // --- DDL ---

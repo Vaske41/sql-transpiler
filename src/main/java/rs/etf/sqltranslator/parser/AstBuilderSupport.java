@@ -13,6 +13,7 @@ import rs.etf.sqltranslator.ast.CaseExpression;
 import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.DataType;
+import rs.etf.sqltranslator.ast.DeleteStatement;
 import rs.etf.sqltranslator.ast.CreateViewStatement;
 import rs.etf.sqltranslator.ast.DropRoutineStatement;
 import rs.etf.sqltranslator.ast.DropViewStatement;
@@ -337,6 +338,45 @@ final class AstBuilderSupport {
                                           SourcePosition position) {
         return updateWithInlineJoins(List.of(), false, table, alias, inlineJoins, from,
                 assignments, where, position);
+    }
+
+    /**
+     * MySQL {@code DELETE alias FROM t alias JOIN …} → {@code DELETE FROM t AS alias USING …}.
+     * Only a single delete target is supported.
+     */
+    DeleteStatement deleteFromJoinTargets(List<Identifier> targets, TableSource from,
+                                          Optional<Expression> where, SourcePosition position) {
+        refuseIf(targets.isEmpty(), "DELETE requires at least one target alias", position);
+        refuseIf(targets.size() > 1,
+                "multi-target DELETE is not supported", position);
+        Identifier targetAlias = targets.get(0);
+        if (!(from.first() instanceof TableRef targetRef)) {
+            throw new UnsupportedFeatureException(
+                    "DELETE target must be a base table", from.pos());
+        }
+        String want = targetAlias.value().toLowerCase(Locale.ROOT);
+        Optional<Identifier> tableAlias = targetRef.alias();
+        String have = tableAlias.map(a -> a.value().toLowerCase(Locale.ROOT))
+                .orElse(targetRef.table().last().value().toLowerCase(Locale.ROOT));
+        refuseIf(!want.equals(have),
+                "DELETE target alias does not match first FROM table", position);
+        refuseIf(from.joins().isEmpty(),
+                "DELETE … FROM without join is not a multi-table delete", position);
+        Join first = from.joins().get(0);
+        refuseIf(first.kind() != JoinKind.INNER && first.kind() != JoinKind.CROSS,
+                "DELETE OUTER JOIN is not supported", first.pos());
+        refuseIf(!first.usingColumns().isEmpty(),
+                "DELETE JOIN USING is not supported; use ON", first.pos());
+        refuseIf(first.lateral(), "DELETE LATERAL join is not supported", first.pos());
+        List<Join> rest = from.joins().subList(1, from.joins().size());
+        Optional<TableSource> using =
+                Optional.of(new TableSource(first.table(), rest, first.pos()));
+        Optional<Expression> normalizedWhere = where;
+        if (first.on().isPresent()) {
+            normalizedWhere = andPredicates(first.on().get(), normalizedWhere, first.pos());
+        }
+        return new DeleteStatement(targetRef.table(), Optional.of(targetAlias), using,
+                normalizedWhere, position);
     }
 
     /** {@code WITH name[(cols)] AS (VALUES …)} → {@code AS (SELECT * FROM (VALUES …) AS name[(cols)])}. */

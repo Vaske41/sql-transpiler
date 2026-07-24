@@ -420,7 +420,7 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     }
 
     @Override
-    public Object visitDeleteStatement(TSqlParser.DeleteStatementContext ctx) {
+    public Object visitDeleteFromUsing(TSqlParser.DeleteFromUsingContext ctx) {
         Optional<Identifier> alias = ctx.identifier() == null
                 ? Optional.empty() : Optional.of(ident(ctx.identifier()));
         Optional<TableSource> using = ctx.tableSource() == null
@@ -428,6 +428,15 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
         Optional<Expression> where = ctx.whereClause() == null
                 ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
         return new DeleteStatement(qname(ctx.qualifiedName()), alias, using, where, pos(ctx));
+    }
+
+    @Override
+    public Object visitDeleteTargetsFrom(TSqlParser.DeleteTargetsFromContext ctx) {
+        List<Identifier> targets = ctx.identifier().stream().map(this::ident).toList();
+        TableSource from = (TableSource) visit(ctx.tableSource());
+        Optional<Expression> where = ctx.whereClause() == null
+                ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
+        return support.deleteFromJoinTargets(targets, from, where, pos(ctx));
     }
 
     // --- DDL ---

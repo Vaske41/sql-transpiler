@@ -60,7 +60,8 @@ assignment
     ;
 
 deleteStatement
-    : DELETE FROM qualifiedName (AS? identifier)? (USING tableSource)? whereClause?
+    : DELETE FROM qualifiedName (AS? identifier)? (USING tableSource)? whereClause?  # deleteFromUsing
+    | DELETE identifier (',' identifier)* FROM tableSource whereClause?             # deleteTargetsFrom
     ;
 
 createTableStatement : CREATE TABLE qualifiedName '(' tableElement (',' tableElement)* ')' ;
