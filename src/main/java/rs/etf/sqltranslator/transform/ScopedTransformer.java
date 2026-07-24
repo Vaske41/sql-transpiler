@@ -107,11 +107,36 @@ public abstract class ScopedTransformer extends rs.etf.sqltranslator.ast.AstTran
 
     @Override
     public final Object visitUpdateStatement(UpdateStatement node) {
-        scopes.push(tableScope(node.table()));
+        boolean pushed = !node.ctes().isEmpty();
+        if (pushed) {
+            pushCteFrame();
+        }
         try {
-            return super.visitUpdateStatement(node);
+            List<Cte> rebuiltCtes = new ArrayList<>(node.ctes().size());
+            for (Cte cte : node.ctes()) {
+                Cte rebuilt = (Cte) cte.accept(this);
+                rebuiltCtes.add(rebuilt);
+                String name = rebuilt.name().value().toLowerCase(Locale.ROOT);
+                cteSchemas().put(name, emptySchema(rebuilt.name()));
+            }
+            scopes.push(tableScope(node.table()));
+            try {
+                return new UpdateStatement(
+                        rebuiltCtes,
+                        node.recursive(),
+                        rebuild(node.table()),
+                        rebuildOptional(node.alias()),
+                        rebuildList(node.assignments()),
+                        rebuildOptional(node.from()),
+                        rebuildOptional(node.where()),
+                        node.pos());
+            } finally {
+                scopes.pop();
+            }
         } finally {
-            scopes.pop();
+            if (pushed) {
+                popCteFrame();
+            }
         }
     }
 

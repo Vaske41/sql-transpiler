@@ -182,7 +182,9 @@ public final class AstDumper implements AstVisitor<String> {
 
     @Override
     public String visitUpdateStatement(UpdateStatement node) {
-        return node("UpdateStatement")
+        return node("UpdateStatement"
+                        + (node.recursive() ? " recursive=true" : ""))
+                .children("ctes", node.ctes())
                 .child("table", node.table())
                 .child("alias", node.alias())
                 .children("assignments", node.assignments())

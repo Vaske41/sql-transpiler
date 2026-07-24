@@ -4,6 +4,7 @@ import rs.etf.sqltranslator.ast.AstTransformer;
 import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.Script;
+import rs.etf.sqltranslator.ast.UpdateStatement;
 import rs.etf.sqltranslator.core.Dialect;
 
 import java.util.ArrayList;
@@ -64,6 +65,43 @@ public final class FlattenNestedCtesForTsqlRule implements Rule {
                     rebuilt.unionArms(),
                     rebuilt.orderBy(),
                     rebuilt.limit(),
+                    rebuilt.pos());
+        }
+
+        @Override
+        public Object visitUpdateStatement(UpdateStatement node) {
+            UpdateStatement rebuilt = (UpdateStatement) super.visitUpdateStatement(node);
+            if (rebuilt.ctes().isEmpty()) {
+                return rebuilt;
+            }
+            List<Cte> flat = new ArrayList<>();
+            boolean recursive = rebuilt.recursive();
+            for (Cte cte : rebuilt.ctes()) {
+                Query body = cte.query();
+                if (!body.ctes().isEmpty()) {
+                    recursive = recursive || body.recursive();
+                    flat.addAll(body.ctes());
+                    Query stripped = new Query(
+                            List.of(),
+                            false,
+                            body.first(),
+                            body.unionArms(),
+                            body.orderBy(),
+                            body.limit(),
+                            body.pos());
+                    flat.add(new Cte(cte.name(), cte.columns(), stripped, cte.pos()));
+                } else {
+                    flat.add(cte);
+                }
+            }
+            return new UpdateStatement(
+                    flat,
+                    recursive,
+                    rebuilt.table(),
+                    rebuilt.alias(),
+                    rebuilt.assignments(),
+                    rebuilt.from(),
+                    rebuilt.where(),
                     rebuilt.pos());
         }
     }

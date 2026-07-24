@@ -2,6 +2,7 @@ package rs.etf.sqltranslator.codegen;
 
 import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.BinaryOperator;
+import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.IntervalLiteral;
 import rs.etf.sqltranslator.ast.NullsOrder;
@@ -127,6 +128,17 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
     public Void visitUpdateStatement(rs.etf.sqltranslator.ast.UpdateStatement node) {
         if (node.from().isEmpty()) {
             return super.visitUpdateStatement(node);
+        }
+        if (!node.ctes().isEmpty()) {
+            renderWithKeyword(node.recursive());
+            boolean first = true;
+            for (Cte cte : node.ctes()) {
+                if (!first) {
+                    out.raw(",");
+                }
+                first = false;
+                cte.accept(this);
+            }
         }
         out.token("UPDATE").token(dotted(node.table()));
         node.alias().ifPresent(alias -> out.token("AS").token(identifier(alias)));

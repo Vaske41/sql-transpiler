@@ -388,6 +388,13 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
 
     @Override
     public Object visitUpdateStatement(TSqlParser.UpdateStatementContext ctx) {
+        List<Cte> ctes = List.of();
+        boolean recursive = false;
+        if (ctx.withClause() != null) {
+            var w = ctx.withClause();
+            ctes = w.commonTableExpression().stream().map(c -> (Cte) visit(c)).toList();
+            recursive = support.isRecursiveWith(w.RECURSIVE() != null, ctes);
+        }
         List<Assignment> assignments = ctx.assignment().stream()
                 .map(a -> (Assignment) visit(a))
                 .toList();
@@ -398,8 +405,8 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
         Optional<TableSource> from = updateFrom(ctx.tableSource(), ctx.FROM() != null);
         Optional<Expression> where = ctx.whereClause() == null
                 ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
-        return support.updateWithInlineJoins(qname(ctx.qualifiedName()), alias, inlineJoins, from,
-                assignments, where, pos(ctx));
+        return support.updateWithInlineJoins(ctes, recursive, qname(ctx.qualifiedName()), alias,
+                inlineJoins, from, assignments, where, pos(ctx));
     }
 
     private Optional<TableSource> updateFrom(

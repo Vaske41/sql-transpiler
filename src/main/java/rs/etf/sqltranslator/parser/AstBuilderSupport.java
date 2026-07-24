@@ -300,12 +300,14 @@ final class AstBuilderSupport {
      * MySQL-style {@code UPDATE t JOIN u ON … SET} → portable {@code UPDATE t SET … FROM …}
      * by folding the first JOIN's ON into WHERE (INNER/CROSS only).
      */
-    UpdateStatement updateWithInlineJoins(QualifiedName table, Optional<Identifier> alias,
+    UpdateStatement updateWithInlineJoins(List<Cte> ctes, boolean recursive,
+                                          QualifiedName table, Optional<Identifier> alias,
                                           List<Join> inlineJoins, Optional<TableSource> from,
                                           List<Assignment> assignments, Optional<Expression> where,
                                           SourcePosition position) {
         if (inlineJoins.isEmpty()) {
-            return new UpdateStatement(table, alias, assignments, from, where, position);
+            return new UpdateStatement(ctes, recursive, table, alias, assignments, from, where,
+                    position);
         }
         refuseIf(from.isPresent(),
                 "UPDATE cannot combine target JOIN with a separate FROM clause", position);
@@ -324,8 +326,16 @@ final class AstBuilderSupport {
         if (first.on().isPresent()) {
             normalizedWhere = andPredicates(first.on().get(), normalizedWhere, first.pos());
         }
-        return new UpdateStatement(table, alias, assignments, normalizedFrom, normalizedWhere,
-                position);
+        return new UpdateStatement(ctes, recursive, table, alias, assignments, normalizedFrom,
+                normalizedWhere, position);
+    }
+
+    UpdateStatement updateWithInlineJoins(QualifiedName table, Optional<Identifier> alias,
+                                          List<Join> inlineJoins, Optional<TableSource> from,
+                                          List<Assignment> assignments, Optional<Expression> where,
+                                          SourcePosition position) {
+        return updateWithInlineJoins(List.of(), false, table, alias, inlineJoins, from,
+                assignments, where, position);
     }
 
     /** {@code WITH name[(cols)] AS (VALUES …)} → {@code AS (SELECT * FROM (VALUES …) AS name[(cols)])}. */

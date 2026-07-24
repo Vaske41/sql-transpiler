@@ -65,4 +65,18 @@ class NonReservedIdentifierTest {
                 "SELECT 1 AS row FROM t;", Dialect.POSTGRESQL);
         assertThat(new AstDumper().dump(s)).contains("row");
     }
+
+    @Test
+    void keywordMaxUsableAsQualifiedColumn() {
+        Script s = AstBuilderFacade.buildScript(
+                "SELECT ranges.max FROM ranges;", Dialect.POSTGRESQL);
+        assertThat(new AstDumper().dump(s)).contains("max");
+    }
+
+    @Test
+    void maxAggregateStillParses() {
+        assertThatCode(() -> AstBuilderFacade.buildScript(
+                "SELECT MAX(x) FROM t;", Dialect.POSTGRESQL))
+                .doesNotThrowAnyException();
+    }
 }

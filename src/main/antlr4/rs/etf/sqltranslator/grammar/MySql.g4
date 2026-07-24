@@ -50,7 +50,7 @@ returningClause : identifier selectItem (',' selectItem)* ;
 rowValue : '(' expression (',' expression)* ')' ;
 
 updateStatement
-    : UPDATE qualifiedName (AS? identifier)? joinedTable* (',' tableSource)?
+    : withClause? UPDATE qualifiedName (AS? identifier)? joinedTable* (',' tableSource)?
       SET assignment (',' assignment)*
       (FROM tableSource)? whereClause?
     ;
@@ -363,7 +363,7 @@ columnName : identifier | nonReservedWord ;
 aliasName  : identifier | nonReservedWord ;
 
 nonReservedWord
-    : KEY | FIRST | LAST | END | ROW
+    : KEY | FIRST | LAST | END | ROW | MAX
     ;
 
 // MySQL: booleans are literals.

@@ -832,6 +832,17 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
 
     @Override
     public Void visitUpdateStatement(UpdateStatement node) {
+        if (!node.ctes().isEmpty()) {
+            renderWithKeyword(node.recursive());
+            boolean first = true;
+            for (Cte cte : node.ctes()) {
+                if (!first) {
+                    out.raw(",");
+                }
+                first = false;
+                cte.accept(this);
+            }
+        }
         out.token("UPDATE").token(dotted(node.table()));
         node.alias().ifPresent(alias -> out.token("AS").token(identifier(alias)));
         out.token("SET");

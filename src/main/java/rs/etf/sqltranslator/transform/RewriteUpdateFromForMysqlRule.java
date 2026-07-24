@@ -54,7 +54,8 @@ public final class RewriteUpdateFromForMysqlRule implements Rule {
             for (Assignment a : updated.assignments()) {
                 qualified.add(qualify(a, qualifier));
             }
-            return new UpdateStatement(updated.table(), updated.alias(),
+            return new UpdateStatement(updated.ctes(), updated.recursive(),
+                    updated.table(), updated.alias(),
                     List.copyOf(qualified), updated.from(), updated.where(), updated.pos());
         }
 

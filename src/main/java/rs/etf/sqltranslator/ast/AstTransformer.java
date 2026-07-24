@@ -160,7 +160,8 @@ public class AstTransformer implements AstVisitor<Object> {
 
     @Override
     public Object visitUpdateStatement(UpdateStatement node) {
-        return new UpdateStatement(rebuild(node.table()), rebuildOptional(node.alias()),
+        return new UpdateStatement(rebuildList(node.ctes()), node.recursive(),
+                rebuild(node.table()), rebuildOptional(node.alias()),
                 rebuildList(node.assignments()), rebuildOptional(node.from()),
                 rebuildOptional(node.where()), node.pos());
     }
