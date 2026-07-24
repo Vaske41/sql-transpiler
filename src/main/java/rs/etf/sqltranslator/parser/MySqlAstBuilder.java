@@ -211,11 +211,18 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     @Override
     public Object visitJoinedTable(MySqlParser.JoinedTableContext ctx) {
         Relation table = (Relation) visit(ctx.tablePrimary());
-        if (ctx.CROSS() != null) {
-            return new Join(JoinKind.CROSS, table, Optional.empty(), pos(ctx));
+        if (ctx.APPLY() != null) {
+            if (ctx.CROSS() != null) {
+                return new Join(JoinKind.CROSS, table, Optional.empty(), true, pos(ctx));
+            }
+            return new Join(JoinKind.LEFT, table, Optional.empty(), true, pos(ctx));
+        }
+        boolean lateral = ctx.LATERAL() != null;
+        if (ctx.CROSS() != null || ctx.joinType() == null) {
+            return new Join(JoinKind.CROSS, table, Optional.empty(), lateral, pos(ctx));
         }
         return new Join(joinKind(ctx.joinType()), table,
-                Optional.of(expr(ctx.expression())), pos(ctx));
+                Optional.of(expr(ctx.expression())), lateral, pos(ctx));
     }
 
     /** MySQL has no FULL [OUTER] JOIN. */

@@ -72,6 +72,7 @@ class CrossDialectAstEqualityTest {
             "joins/inner-join",
             "joins/left-right-join",
             "joins/multi-join-where",
+            "lateral/cross-join-lateral",
             "limits/insert-select-top",
             "literals/exponent",
             "select-basic/group-having",

@@ -636,11 +636,17 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             case FULL -> "FULL JOIN";
             case CROSS -> "CROSS JOIN";
         });
+        if (node.lateral()) {
+            out.token("LATERAL");
+        }
         node.table().accept(this);
-        node.on().ifPresent(on -> {
+        if (node.on().isPresent()) {
             out.token("ON");
-            on.accept(this);
-        });
+            node.on().get().accept(this);
+        } else if (node.lateral() && node.kind() == JoinKind.LEFT) {
+            // OUTER APPLY modeled as LEFT LATERAL with empty ON → emit ON TRUE
+            out.token("ON").token("TRUE");
+        }
         return null;
     }
 

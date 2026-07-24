@@ -1,6 +1,7 @@
 package rs.etf.sqltranslator.transform;
 
 import rs.etf.sqltranslator.ast.AstTransformer;
+import rs.etf.sqltranslator.ast.BooleanLiteral;
 import rs.etf.sqltranslator.ast.CastExpression;
 import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.ColumnRef;
@@ -89,7 +90,24 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
                 throw new UnsupportedFeatureException(
                         "FULL JOIN is not supported by MySQL", node.pos());
             }
+            if (node.lateral() && ctx.target() == Dialect.TSQL
+                    && !isTsqlApplyShape(node)) {
+                throw new UnsupportedFeatureException(
+                        "LATERAL join ON condition cannot fold to APPLY", node.pos());
+            }
             return super.visitJoin(node);
+        }
+
+        /** CROSS APPLY, or OUTER APPLY (= LEFT LATERAL with empty/TRUE ON). */
+        private static boolean isTsqlApplyShape(Join node) {
+            if (node.kind() == JoinKind.CROSS && node.on().isEmpty()) {
+                return true;
+            }
+            if (node.kind() == JoinKind.LEFT) {
+                return node.on().isEmpty()
+                        || (node.on().get() instanceof BooleanLiteral b && b.value());
+            }
+            return false;
         }
 
         @Override

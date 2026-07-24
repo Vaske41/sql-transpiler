@@ -42,6 +42,35 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
     }                // parens would drop grouping that changes T-SQL semantics
 
     @Override
+    public Void visitJoin(rs.etf.sqltranslator.ast.Join node) {
+        if (node.lateral()) {
+            if (node.kind() == rs.etf.sqltranslator.ast.JoinKind.CROSS) {
+                out.token("CROSS APPLY");
+                node.table().accept(this);
+                return null;
+            }
+            if (node.kind() == rs.etf.sqltranslator.ast.JoinKind.LEFT
+                    && (node.on().isEmpty() || isTrueLiteral(node.on().get()))) {
+                out.token("OUTER APPLY");
+                node.table().accept(this);
+                return null;
+            }
+            throw new IllegalStateException(
+                    "rule engine contract: non-foldable LATERAL ON must be refused before T-SQL print");
+        }
+        return super.visitJoin(node);
+    }
+
+    private static boolean isTrueLiteral(rs.etf.sqltranslator.ast.Expression expr) {
+        if (expr instanceof BooleanLiteral b) {
+            return b.value();
+        }
+        // RewriteBooleanSemanticsRule lowers TRUE → 1 before T-SQL print.
+        return expr instanceof rs.etf.sqltranslator.ast.NumericLiteral n
+                && "1".equals(n.text());
+    }
+
+    @Override
     public Void visitBooleanLiteral(BooleanLiteral node) {
         throw new IllegalStateException(
                 "rule engine contract: boolean literals are rewritten to 1/0 for T-SQL");

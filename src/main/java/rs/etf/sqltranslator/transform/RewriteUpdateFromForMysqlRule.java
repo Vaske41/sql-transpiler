@@ -78,7 +78,12 @@ public final class RewriteUpdateFromForMysqlRule implements Rule {
                                 "UPDATE ... FROM self-join to MySQL", pos);
                     }
                 }
-                // Future LATERAL relation kinds refuse here when added to the AST.
+            }
+            for (Join join : from.joins()) {
+                if (join.lateral()) {
+                    throw new UnsupportedFeatureException(
+                            "UPDATE ... FROM LATERAL to MySQL", pos);
+                }
             }
         }
 

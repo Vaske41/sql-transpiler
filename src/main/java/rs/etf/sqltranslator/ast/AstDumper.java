@@ -124,7 +124,9 @@ public final class AstDumper implements AstVisitor<String> {
 
     @Override
     public String visitJoin(Join node) {
-        return node("Join kind=" + node.kind())
+        String label = "Join kind=" + node.kind()
+                + (node.lateral() ? " lateral=true" : "");
+        return node(label)
                 .child("table", node.table())
                 .child("on", node.on())
                 .done();
