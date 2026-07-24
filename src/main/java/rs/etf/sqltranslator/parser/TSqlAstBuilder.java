@@ -300,7 +300,7 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
 
     @Override
     public Object visitInsertStatement(TSqlParser.InsertStatementContext ctx) {
-        List<Identifier> columns = ctx.identifier().stream().map(this::ident).toList();
+        List<Identifier> columns = ctx.columnName().stream().map(this::columnName).toList();
         QualifiedName table = qname(ctx.qualifiedName());
         Optional<Upsert> upsert = ctx.upsertClause() == null
                 ? Optional.empty() : Optional.of((Upsert) visit(ctx.upsertClause()));
@@ -462,7 +462,7 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
                         AstBuilderSupport.ColumnConstraintKind.AUTO_INCREMENT, null, null);
             }
         }
-        return support.columnDefinition(ident(ctx.identifier()), type, attributes, pos(ctx));
+        return support.columnDefinition(columnName(ctx.columnName()), type, attributes, pos(ctx));
     }
 
     @Override

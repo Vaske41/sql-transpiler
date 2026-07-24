@@ -22,7 +22,7 @@ statement
 
 // MySQL: INTO is optional.
 insertStatement
-    : INSERT INTO? qualifiedName ('(' identifier (',' identifier)* ')')?
+    : INSERT INTO? qualifiedName ('(' columnName (',' columnName)* ')')?
       insertSource
       upsertClause?
       returningClause?
@@ -71,7 +71,7 @@ indexColumn : identifier ('(' INTEGER_LITERAL ')')? (ASC | DESC)? ;
 
 tableElement : columnDefinition | tableConstraint ;
 
-columnDefinition : identifier dataType columnConstraint* ;
+columnDefinition : columnName dataType columnConstraint* ;
 
 columnConstraint
     : NOT NULL
@@ -333,7 +333,7 @@ columnName : identifier | nonReservedWord ;
 aliasName  : identifier | nonReservedWord ;
 
 nonReservedWord
-    : KEY | FIRST | LAST | END
+    : KEY | FIRST | LAST | END | ROW
     ;
 
 // MySQL: booleans are literals.

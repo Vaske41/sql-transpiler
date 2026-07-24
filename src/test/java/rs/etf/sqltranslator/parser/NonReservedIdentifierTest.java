@@ -50,4 +50,19 @@ class NonReservedIdentifierTest {
                 Dialect.POSTGRESQL))
                 .doesNotThrowAnyException();
     }
+
+    @Test
+    void endUsableAsCreateTableColumn() {
+        assertThatCode(() -> AstBuilderFacade.buildScript(
+                "CREATE TABLE table1 (id INT, end INT NOT NULL);",
+                Dialect.MYSQL))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void rowUsableAsAlias() {
+        Script s = AstBuilderFacade.buildScript(
+                "SELECT 1 AS row FROM t;", Dialect.POSTGRESQL);
+        assertThat(new AstDumper().dump(s)).contains("row");
+    }
 }
