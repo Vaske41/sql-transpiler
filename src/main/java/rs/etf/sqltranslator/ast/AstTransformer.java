@@ -262,6 +262,11 @@ public class AstTransformer implements AstVisitor<Object> {
     }
 
     @Override
+    public Object visitAddTableConstraint(AddTableConstraint node) {
+        return new AddTableConstraint(rebuild(node.constraint()), node.pos());
+    }
+
+    @Override
     public Object visitCreateIndexStatement(CreateIndexStatement node) {
         return new CreateIndexStatement(rebuild(node.name()), node.unique(),
                 rebuild(node.table()), rebuildList(node.columns()), node.pos());

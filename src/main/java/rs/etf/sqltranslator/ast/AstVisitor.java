@@ -80,6 +80,8 @@ public interface AstVisitor<R> {
 
     R visitAddColumn(AddColumn node);
 
+    R visitAddTableConstraint(AddTableConstraint node);
+
     R visitDropColumn(DropColumn node);
 
     R visitAlterColumnType(AlterColumnType node);

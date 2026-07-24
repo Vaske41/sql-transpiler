@@ -4,6 +4,7 @@ import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import rs.etf.sqltranslator.ast.AddColumn;
+import rs.etf.sqltranslator.ast.AddTableConstraint;
 import rs.etf.sqltranslator.ast.AlterAction;
 import rs.etf.sqltranslator.ast.AlterTableStatement;
 import rs.etf.sqltranslator.ast.ArrayLiteral;
@@ -553,6 +554,11 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     @Override
     public Object visitAlterAddColumn(PostgreSqlParser.AlterAddColumnContext ctx) {
         return new AddColumn((ColumnDefinition) visit(ctx.columnDefinition()), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterAddConstraint(PostgreSqlParser.AlterAddConstraintContext ctx) {
+        return new AddTableConstraint((TableConstraint) visit(ctx.tableConstraint()), pos(ctx));
     }
 
     @Override

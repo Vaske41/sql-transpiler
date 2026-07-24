@@ -6,6 +6,7 @@ import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import rs.etf.sqltranslator.ast.AlterAction;
 import rs.etf.sqltranslator.ast.AddColumn;
+import rs.etf.sqltranslator.ast.AddTableConstraint;
 import rs.etf.sqltranslator.ast.AlterTableStatement;
 import rs.etf.sqltranslator.ast.ArrayLiteral;
 import rs.etf.sqltranslator.ast.Assignment;
@@ -559,6 +560,11 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     @Override
     public Object visitAlterAddColumn(TSqlParser.AlterAddColumnContext ctx) {
         return new AddColumn((ColumnDefinition) visit(ctx.columnDefinition()), pos(ctx));
+    }
+
+    @Override
+    public Object visitAlterAddConstraint(TSqlParser.AlterAddConstraintContext ctx) {
+        return new AddTableConstraint((TableConstraint) visit(ctx.tableConstraint()), pos(ctx));
     }
 
     @Override

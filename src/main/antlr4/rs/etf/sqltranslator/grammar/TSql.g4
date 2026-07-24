@@ -125,6 +125,7 @@ alterTableStatement
 
 alterTableAction
     : ADD COLUMN? columnDefinition                         # alterAddColumn
+    | ADD tableConstraint                                  # alterAddConstraint
     | DROP COLUMN identifier                               # alterDropColumn
     | ALTER COLUMN identifier alterColumnTypeSpec          # alterChangeColumnType
     | identifier COLUMN? identifier dataType               # alterModifyColumn

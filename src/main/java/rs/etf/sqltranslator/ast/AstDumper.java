@@ -328,6 +328,11 @@ public final class AstDumper implements AstVisitor<String> {
     }
 
     @Override
+    public String visitAddTableConstraint(AddTableConstraint node) {
+        return node("AddTableConstraint").child("constraint", node.constraint()).done();
+    }
+
+    @Override
     public String visitDropColumn(DropColumn node) {
         return node("DropColumn").child("column", node.column()).done();
     }

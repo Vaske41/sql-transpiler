@@ -1052,6 +1052,13 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     }
 
     @Override
+    public Void visitAddTableConstraint(AddTableConstraint node) {
+        out.token("ADD");
+        node.constraint().accept(this);
+        return null;
+    }
+
+    @Override
     public Void visitDropColumn(DropColumn node) {
         out.token("DROP COLUMN").token(identifier(node.column()));
         return null;

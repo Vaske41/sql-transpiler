@@ -256,6 +256,11 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitAddTableConstraint(AddTableConstraint node) {
+        return defaultResult();
+    }
+
+    @Override
     public R visitDropColumn(DropColumn node) {
         return defaultResult();
     }
