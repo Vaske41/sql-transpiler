@@ -71,7 +71,13 @@ public final class EvaluationMain {
                 System.exit(3);
             }
             csv = BenchmarkDriver.DEFAULT_PARROT_CSV;
-            driver = BenchmarkDriver.parrotDiverseOffline(jar, csv, casesRoot, sqlglot, limit);
+            int localLatencyRuns = LlmText.fastEval() ? 1 : BenchmarkDriver.LOCAL_LATENCY_RUNS;
+            if (LlmText.fastEval()) {
+                System.err.println(
+                        "note: EVAL_FAST=1 — single local latency run (bulk outcome sweep)");
+            }
+            driver = BenchmarkDriver.parrotDiverseOffline(
+                    jar, csv, casesRoot, sqlglot, limit, localLatencyRuns);
         } else {
             csv = BenchmarkDriver.DEFAULT_CSV;
             driver = BenchmarkDriver.fullOffline(jar, csv, sqlglot, limit);

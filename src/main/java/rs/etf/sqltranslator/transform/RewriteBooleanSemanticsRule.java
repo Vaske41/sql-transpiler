@@ -76,9 +76,9 @@ public final class RewriteBooleanSemanticsRule implements Rule {
             Optional<TableSource> from = spec.from().map(f -> new TableSource(
                     f.first(),
                     f.joins().stream().map(j -> new Join(j.kind(), j.table(),
-                            j.on().map(this::bool), j.pos())).toList(),
+                            j.on().map(this::bool), j.usingColumns(), j.lateral(), j.pos())).toList(),
                     f.pos()));
-            return new QuerySpecification(spec.quantifier(), spec.items(), from,
+            return new QuerySpecification(spec.quantifier(), spec.distinctOn(), spec.items(), from,
                     spec.where().map(this::bool), spec.groupBy(),
                     spec.having().map(this::bool), spec.pos());
         }
@@ -112,6 +112,7 @@ public final class RewriteBooleanSemanticsRule implements Rule {
                     || expr instanceof rs.etf.sqltranslator.ast.InListPredicate
                     || expr instanceof rs.etf.sqltranslator.ast.InSubqueryPredicate
                     || expr instanceof rs.etf.sqltranslator.ast.IsNullPredicate
+                    || expr instanceof rs.etf.sqltranslator.ast.IsBoolPredicate
                     || expr instanceof rs.etf.sqltranslator.ast.ExistsPredicate) {
                 return expr;
             }
@@ -186,28 +187,29 @@ public final class RewriteBooleanSemanticsRule implements Rule {
                 Query query = harmonizeInsertQuery(
                         insert.query().get(), insert.columns(), schema.get());
                 return new InsertStatement(insert.table(), insert.columns(), List.of(),
-                        Optional.of(query), insert.pos());
+                        Optional.of(query), insert.upsert(), insert.returning(),
+                        insert.pos());
             }
             List<List<Expression>> rows = insert.rows().stream()
                     .map(row -> harmonizeRow(row, insert.columns(), schema.get()))
                     .toList();
             return new InsertStatement(insert.table(), insert.columns(), rows,
-                    Optional.empty(), insert.pos());
+                    Optional.empty(), insert.upsert(), insert.returning(), insert.pos());
         }
 
         @Override
         public Object visitAssignment(Assignment node) {
             Assignment assignment = (Assignment) super.visitAssignment(node);
-            if (ctx.target() != Dialect.POSTGRESQL) {
+            if (ctx.target() != Dialect.POSTGRESQL || assignment.columns().size() != 1) {
                 return assignment;
             }
-            ColumnRef ref = syntheticRef(assignment.column());
+            ColumnRef ref = syntheticRef(assignment.columns().get(0));
             boolean isBoolean = resolve(ref)
                     .filter(c -> c.type().type() == GenericType.BOOLEAN).isPresent();
             if (!isBoolean) {
                 return assignment;
             }
-            return new Assignment(assignment.column(),
+            return new Assignment(assignment.columns(),
                     asBooleanLiteral(assignment.value()), assignment.pos());
         }
 
@@ -222,10 +224,11 @@ public final class RewriteBooleanSemanticsRule implements Rule {
                                            TableSchema schema) {
             QuerySpecification first = harmonizeSelectList(query.first(), namedColumns, schema);
             List<UnionArm> arms = query.unionArms().stream()
-                    .map(arm -> new UnionArm(arm.all(),
+                    .map(arm -> new UnionArm(arm.operator(), arm.all(),
                             harmonizeSelectList(arm.spec(), namedColumns, schema), arm.pos()))
                     .toList();
-            return new Query(query.ctes(), first, arms, query.orderBy(), query.limit(), query.pos());
+            return new Query(query.ctes(), query.recursive(), first, arms, query.orderBy(),
+                    query.limit(), query.pos());
         }
 
         private QuerySpecification harmonizeSelectList(QuerySpecification spec,
@@ -246,7 +249,8 @@ public final class RewriteBooleanSemanticsRule implements Rule {
                         ? asBooleanLiteral(selectExpr.expr()) : selectExpr.expr();
                 items.add(new SelectExpr(expr, selectExpr.alias(), selectExpr.pos()));
             }
-            return new QuerySpecification(spec.quantifier(), items, spec.from(), spec.where(),
+            return new QuerySpecification(spec.quantifier(), spec.distinctOn(), items,
+                    spec.from(), spec.where(),
                     spec.groupBy(), spec.having(), spec.pos());
         }
 
@@ -292,10 +296,9 @@ public final class RewriteBooleanSemanticsRule implements Rule {
                     .filter(c -> c.type().type() == GenericType.BOOLEAN).isPresent();
         }
 
-        /** Wraps an assignment's bare Identifier as a ColumnRef so resolve() applies. */
-        private static ColumnRef syntheticRef(Identifier column) {
-            SourcePosition pos = column.pos();
-            return new ColumnRef(new QualifiedName(List.of(column), pos), pos);
+        /** Assignment column is already a {@link QualifiedName} — wrap as ColumnRef. */
+        private static ColumnRef syntheticRef(QualifiedName column) {
+            return new ColumnRef(column, column.pos());
         }
 
         private static SourcePosition exprPos(Expression expr) {

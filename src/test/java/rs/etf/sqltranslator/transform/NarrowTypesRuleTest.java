@@ -97,4 +97,25 @@ class NarrowTypesRuleTest {
                 Dialect.POSTGRESQL, Dialect.MYSQL);
         assertThat(columnType(r.script(), 0, 0).type()).isEqualTo(GenericType.VARCHAR);
     }
+
+    @Test
+    void jsonBecomesNvarcharMaxForTsqlWithWarning() {
+        TranslationResult r = runRule(rule, "CREATE TABLE t (a JSONB, b JSON);",
+                Dialect.POSTGRESQL, Dialect.TSQL);
+        assertThat(columnType(r.script(), 0, 0).type()).isEqualTo(GenericType.NVARCHAR);
+        assertThat(columnType(r.script(), 0, 0).length().orElseThrow())
+                .isEqualTo(new MaxLength());
+        assertThat(columnType(r.script(), 0, 1).type()).isEqualTo(GenericType.NVARCHAR);
+        assertThat(r.report().warnings()).anyMatch(w -> w.code().equals("JSON_AS_NVARCHAR"));
+    }
+
+    @Test
+    void uuidBecomesChar36ForMysqlWithWarning() {
+        TranslationResult r = runRule(rule, "CREATE TABLE t (a UUID);",
+                Dialect.POSTGRESQL, Dialect.MYSQL);
+        assertThat(columnType(r.script(), 0, 0).type()).isEqualTo(GenericType.CHAR);
+        assertThat(columnType(r.script(), 0, 0).length().orElseThrow())
+                .isEqualTo(new FixedLength(36));
+        assertThat(r.report().warnings()).anyMatch(w -> w.code().equals("UUID_AS_CHAR"));
+    }
 }

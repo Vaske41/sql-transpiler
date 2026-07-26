@@ -1,0 +1,1 @@
+CREATE TABLE t (id INT AUTO_INCREMENT, big_id BIGINT AUTO_INCREMENT, payload JSON, meta JSON, guid CHAR(36), bin BLOB);

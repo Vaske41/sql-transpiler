@@ -1,0 +1,1 @@
+UPDATE card AS c SET disp_id = CASE WHEN c.disp_id = sub.disp_id THEN 1 WHEN c.disp_id < sub.disp_id THEN c.disp_id + 1 ELSE c.disp_id END FROM (SELECT disp_id, type FROM other_card WHERE disp_id = 41) AS sub WHERE c.type = sub.type AND c.disp_id <= sub.disp_id;

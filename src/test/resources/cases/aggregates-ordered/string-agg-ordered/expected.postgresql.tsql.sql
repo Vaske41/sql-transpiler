@@ -1,0 +1,1 @@
+SELECT STRING_AGG(name, ',') WITHIN GROUP(ORDER BY name) FROM users;

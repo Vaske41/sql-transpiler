@@ -6,28 +6,50 @@ import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.ParseTreeVisitor;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import rs.etf.sqltranslator.ast.AbstractAstVisitor;
+import rs.etf.sqltranslator.ast.AlterColumnType;
 import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.BinaryOperator;
 import rs.etf.sqltranslator.ast.CaseExpression;
 import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.DataType;
+import rs.etf.sqltranslator.ast.DeleteStatement;
+import rs.etf.sqltranslator.ast.CreateViewStatement;
+import rs.etf.sqltranslator.ast.DropRoutineStatement;
+import rs.etf.sqltranslator.ast.DropViewStatement;
 import rs.etf.sqltranslator.ast.Expression;
+import rs.etf.sqltranslator.ast.ExtractExpression;
 import rs.etf.sqltranslator.ast.FixedLength;
 import rs.etf.sqltranslator.ast.ForeignKeyRef;
 import rs.etf.sqltranslator.ast.GenericType;
 import rs.etf.sqltranslator.ast.Identifier;
+import rs.etf.sqltranslator.ast.InSubqueryPredicate;
+import rs.etf.sqltranslator.ast.IntervalLiteral;
+import rs.etf.sqltranslator.ast.Join;
+import rs.etf.sqltranslator.ast.JoinKind;
 import rs.etf.sqltranslator.ast.MaxLength;
 import rs.etf.sqltranslator.ast.NumericLiteral;
 import rs.etf.sqltranslator.ast.QualifiedName;
 import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.QuerySpecification;
 import rs.etf.sqltranslator.ast.RowLimit;
+import rs.etf.sqltranslator.ast.RowValue;
+import rs.etf.sqltranslator.ast.SelectStar;
+import rs.etf.sqltranslator.ast.Statement;
 import rs.etf.sqltranslator.ast.StringLiteral;
 import rs.etf.sqltranslator.ast.TableRef;
+import rs.etf.sqltranslator.ast.TableSource;
+import rs.etf.sqltranslator.ast.SelectItem;
+import rs.etf.sqltranslator.ast.TruncateStatement;
 import rs.etf.sqltranslator.ast.TypeLength;
 import rs.etf.sqltranslator.ast.UnionArm;
+import rs.etf.sqltranslator.ast.SetOperator;
+import rs.etf.sqltranslator.ast.UpdateStatement;
+import rs.etf.sqltranslator.ast.Upsert;
+import rs.etf.sqltranslator.ast.UpsertKind;
+import rs.etf.sqltranslator.ast.ValuesTable;
 import rs.etf.sqltranslator.ast.WhenClause;
+import rs.etf.sqltranslator.ast.Assignment;
 import rs.etf.sqltranslator.core.Dialect;
 import rs.etf.sqltranslator.core.SourcePosition;
 import rs.etf.sqltranslator.core.UnsupportedFeatureException;
@@ -87,18 +109,69 @@ final class AstBuilderSupport {
         }
     }
 
-    void refuseIfRecursiveKeyword(ParserRuleContext withClause, boolean recursive) {
-        if (recursive) {
-            refuse("recursive CTE", pos(withClause));
-        }
+    /**
+     * Build {@link Upsert} from an {@code ON DUPLICATE KEY UPDATE} clause
+     * ({@code kindToken} must read DUPLICATE).
+     */
+    Upsert duplicateKeyUpsert(Token kindToken, List<Assignment> assignments,
+                              SourcePosition pos) {
+        requireWord(kindToken, "DUPLICATE", pos);
+        return new Upsert(UpsertKind.ON_DUPLICATE_KEY, List.of(), assignments,
+                Optional.empty(), pos);
     }
 
-    /** T-SQL (and others) may omit RECURSIVE; refuse self-reference in the CTE body. */
-    void refuseIfCteSelfReference(Cte cte) {
-        String name = cte.name().value().toLowerCase(Locale.ROOT);
-        if (referencesTableName(cte.query(), name)) {
-            refuse("recursive CTE", cte.pos());
+    /**
+     * Build {@link Upsert} from {@code ON CONFLICT … DO NOTHING|UPDATE}.
+     * {@code conflictToken} must read CONFLICT; {@code doToken} must read DO.
+     * For DO NOTHING, {@code nothingToken} must read NOTHING and assignments/where
+     * must be empty; for DO UPDATE pass {@code nothingToken == null}.
+     */
+    Upsert conflictUpsert(Token conflictToken, List<Identifier> target,
+                          Token doToken, Token nothingToken,
+                          List<Assignment> assignments, Optional<Expression> where,
+                          SourcePosition pos) {
+        requireWord(conflictToken, "CONFLICT", pos);
+        requireWord(doToken, "DO", pos);
+        if (nothingToken != null) {
+            requireWord(nothingToken, "NOTHING", pos);
+            refuseIf(!assignments.isEmpty() || where.isPresent(),
+                    "ON CONFLICT DO NOTHING with UPDATE payload", pos);
+            return new Upsert(UpsertKind.ON_CONFLICT_NOTHING, target, List.of(),
+                    Optional.empty(), pos);
         }
+        refuseIf(assignments.isEmpty(), "ON CONFLICT DO UPDATE without assignments", pos);
+        return new Upsert(UpsertKind.ON_CONFLICT_UPDATE, target, assignments, where, pos);
+    }
+
+    /** {@code RETURNING} list — contextual keyword checked here. */
+    List<SelectItem> returningItems(Token returningToken, List<SelectItem> items,
+                                    SourcePosition pos) {
+        requireWord(returningToken, "RETURNING", pos);
+        return List.copyOf(items);
+    }
+
+    private void requireWord(Token token, String expected, SourcePosition pos) {
+        String text = token.getText();
+        refuseIf(text == null || !expected.equalsIgnoreCase(text),
+                "expected " + expected + " (got '" + text + "')", pos);
+    }
+
+    /**
+     * Structural recursion flag for coverage render: {@code WITH RECURSIVE} keyword
+     * or any CTE body that references its own name (T-SQL omits the keyword).
+     * Does not validate recursion semantics.
+     */
+    boolean isRecursiveWith(boolean recursiveKeyword, List<Cte> ctes) {
+        if (recursiveKeyword) {
+            return true;
+        }
+        for (Cte cte : ctes) {
+            String name = cte.name().value().toLowerCase(Locale.ROOT);
+            if (referencesTableName(cte.query(), name)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean referencesTableName(Query query, String lowerName) {
@@ -119,7 +192,9 @@ final class AstBuilderSupport {
     // Identifiers, names, function names
     // ------------------------------------------------------------------
 
-    /** Unquotes/unescapes one identifier token per this dialect's rules (D6). */
+    /** Unquotes/unescapes one identifier token per this dialect's rules (D6).
+     *  Also maps {@code nonReservedWord} tokens (KEY/FIRST/LAST/…) to plain Identifiers —
+     *  downstream is oblivious to how the name lexed. */
     Identifier identifier(Token token) {
         String text = token.getText();
         SourcePosition p = pos(token);
@@ -154,6 +229,209 @@ final class AstBuilderSupport {
         return name.value().toUpperCase(Locale.ROOT);
     }
 
+    /**
+     * Contextual {@code FILTER (WHERE …)} — {@code name} must be the unquoted identifier
+     * {@code FILTER}. Avoids reserving {@code FILTER} as a keyword in the shared block.
+     */
+    Expression aggregateFilterKeyword(Identifier name, Expression predicate) {
+        refuseIf(name.quoted() || !name.value().equalsIgnoreCase("FILTER"),
+                "aggregate filter keyword \"" + name.value() + "\"", name.pos());
+        return predicate;
+    }
+
+    /**
+     * Contextual {@code EXTRACT(field FROM source)} — {@code name} must be the unquoted
+     * identifier {@code EXTRACT}. Avoids reserving {@code EXTRACT} as a keyword.
+     */
+    ExtractExpression extractExpression(Identifier name, Identifier field, Expression source,
+                                        SourcePosition position) {
+        requireContextualKeyword(name, "EXTRACT");
+        return new ExtractExpression(field.value(), source, position);
+    }
+
+    /** Requires an unquoted contextual keyword (VIEW / FUNCTION / TRUNCATE / …). */
+    void requireContextualKeyword(Identifier name, String expected) {
+        refuseIf(name.quoted() || !name.value().equalsIgnoreCase(expected),
+                "expected " + expected + ", got \"" + name.value() + "\"", name.pos());
+    }
+
+    Statement dropViewOrRoutine(Identifier kind, QualifiedName name, boolean ifExists,
+                                boolean hasSignature, List<DataType> argTypes,
+                                Optional<Identifier> cascadeToken, SourcePosition position) {
+        boolean cascade = false;
+        if (cascadeToken.isPresent()) {
+            requireContextualKeyword(cascadeToken.get(), "CASCADE");
+            cascade = true;
+        }
+        if (kind.value().equalsIgnoreCase("VIEW")) {
+            refuseIf(kind.quoted(), "quoted DROP object kind", kind.pos());
+            refuseIf(hasSignature, "DROP VIEW with argument list", position);
+            return new DropViewStatement(name, ifExists, cascade, position);
+        }
+        if (kind.value().equalsIgnoreCase("FUNCTION")) {
+            refuseIf(kind.quoted(), "quoted DROP object kind", kind.pos());
+            return new DropRoutineStatement(name, ifExists, cascade, hasSignature, argTypes, position);
+        }
+        throw refuse("DROP " + kind.value(), kind.pos());
+    }
+
+    /**
+     * {@code CREATE [OR REPLACE|OR ALTER] VIEW}. {@code headerIds} is either
+     * {@code [VIEW]} or {@code [REPLACE|ALTER, VIEW]} (OR is the keyword token).
+     */
+    CreateViewStatement createView(List<Identifier> headerIds, QualifiedName name,
+                                   List<Identifier> columns, Query query,
+                                   SourcePosition position) {
+        if (headerIds.size() == 1) {
+            requireContextualKeyword(headerIds.get(0), "VIEW");
+            return new CreateViewStatement(name, columns, query, false, position);
+        }
+        if (headerIds.size() == 2) {
+            String mid = headerIds.get(0).value();
+            refuseIf(headerIds.get(0).quoted()
+                            || (!"REPLACE".equalsIgnoreCase(mid)
+                            && !"ALTER".equalsIgnoreCase(mid)),
+                    "expected REPLACE or ALTER, got \"" + mid + "\"",
+                    headerIds.get(0).pos());
+            requireContextualKeyword(headerIds.get(1), "VIEW");
+            return new CreateViewStatement(name, columns, query, true, position);
+        }
+        throw refuse("malformed CREATE VIEW header", position);
+    }
+
+    /**
+     * MySQL-style {@code UPDATE t JOIN u ON … SET} → portable {@code UPDATE t SET … FROM …}
+     * by folding the first JOIN's ON into WHERE (INNER/CROSS only).
+     */
+    UpdateStatement updateWithInlineJoins(List<Cte> ctes, boolean recursive,
+                                          QualifiedName table, Optional<Identifier> alias,
+                                          List<Join> inlineJoins, Optional<TableSource> from,
+                                          List<Assignment> assignments, Optional<Expression> where,
+                                          SourcePosition position) {
+        if (inlineJoins.isEmpty()) {
+            return new UpdateStatement(ctes, recursive, table, alias, assignments, from, where,
+                    position);
+        }
+        refuseIf(from.isPresent(),
+                "UPDATE cannot combine target JOIN with a separate FROM clause", position);
+        for (Join join : inlineJoins) {
+            refuseIf(join.kind() != JoinKind.INNER && join.kind() != JoinKind.CROSS,
+                    "UPDATE target OUTER JOIN is not supported", join.pos());
+            refuseIf(!join.usingColumns().isEmpty(),
+                    "UPDATE JOIN USING is not supported; use ON", join.pos());
+            refuseIf(join.lateral(), "UPDATE LATERAL join is not supported", join.pos());
+        }
+        Join first = inlineJoins.get(0);
+        List<Join> rest = inlineJoins.subList(1, inlineJoins.size());
+        Optional<TableSource> normalizedFrom =
+                Optional.of(new TableSource(first.table(), rest, position));
+        Optional<Expression> normalizedWhere = where;
+        if (first.on().isPresent()) {
+            normalizedWhere = andPredicates(first.on().get(), normalizedWhere, first.pos());
+        }
+        return new UpdateStatement(ctes, recursive, table, alias, assignments, normalizedFrom,
+                normalizedWhere, position);
+    }
+
+    UpdateStatement updateWithInlineJoins(QualifiedName table, Optional<Identifier> alias,
+                                          List<Join> inlineJoins, Optional<TableSource> from,
+                                          List<Assignment> assignments, Optional<Expression> where,
+                                          SourcePosition position) {
+        return updateWithInlineJoins(List.of(), false, table, alias, inlineJoins, from,
+                assignments, where, position);
+    }
+
+    /**
+     * MySQL {@code DELETE alias FROM t alias JOIN …} → {@code DELETE FROM t AS alias USING …}.
+     * Only a single delete target is supported.
+     */
+    DeleteStatement deleteFromJoinTargets(List<Identifier> targets, TableSource from,
+                                          Optional<Expression> where, SourcePosition position) {
+        refuseIf(targets.isEmpty(), "DELETE requires at least one target alias", position);
+        refuseIf(targets.size() > 1,
+                "multi-target DELETE is not supported", position);
+        Identifier targetAlias = targets.get(0);
+        if (!(from.first() instanceof TableRef targetRef)) {
+            throw new UnsupportedFeatureException(
+                    "DELETE target must be a base table", from.pos());
+        }
+        String want = targetAlias.value().toLowerCase(Locale.ROOT);
+        Optional<Identifier> tableAlias = targetRef.alias();
+        String have = tableAlias.map(a -> a.value().toLowerCase(Locale.ROOT))
+                .orElse(targetRef.table().last().value().toLowerCase(Locale.ROOT));
+        refuseIf(!want.equals(have),
+                "DELETE target alias does not match first FROM table", position);
+        refuseIf(from.joins().isEmpty(),
+                "DELETE … FROM without join is not a multi-table delete", position);
+        Join first = from.joins().get(0);
+        refuseIf(first.kind() != JoinKind.INNER && first.kind() != JoinKind.CROSS,
+                "DELETE OUTER JOIN is not supported", first.pos());
+        refuseIf(!first.usingColumns().isEmpty(),
+                "DELETE JOIN USING is not supported; use ON", first.pos());
+        refuseIf(first.lateral(), "DELETE LATERAL join is not supported", first.pos());
+        List<Join> rest = from.joins().subList(1, from.joins().size());
+        Optional<TableSource> using =
+                Optional.of(new TableSource(first.table(), rest, first.pos()));
+        Optional<Expression> normalizedWhere = where;
+        if (first.on().isPresent()) {
+            normalizedWhere = andPredicates(first.on().get(), normalizedWhere, first.pos());
+        }
+        return new DeleteStatement(targetRef.table(), Optional.of(targetAlias), using,
+                normalizedWhere, position);
+    }
+
+    /** {@code WITH name[(cols)] AS (VALUES …)} → {@code AS (SELECT * FROM (VALUES …) AS name[(cols)])}. */
+    Query valuesCteBody(List<RowValue> rows, Identifier alias, Optional<List<Identifier>> columns,
+                        SourcePosition position) {
+        List<Identifier> cols = columns.orElse(List.of());
+        ValuesTable values = new ValuesTable(rows, alias, cols, position);
+        QuerySpecification spec = new QuerySpecification(
+                Optional.empty(),
+                List.of(new SelectStar(Optional.empty(), position)),
+                Optional.of(new TableSource(values, List.of(), position)),
+                Optional.empty(),
+                List.of(),
+                Optional.empty(),
+                position);
+        return new Query(List.of(), false, spec, List.of(), List.of(), Optional.empty(), position);
+    }
+
+    private Optional<Expression> andPredicates(Expression left, Optional<Expression> right,
+                                               SourcePosition position) {
+        if (right.isEmpty()) {
+            return Optional.of(left);
+        }
+        return Optional.of(new BinaryOp(BinaryOperator.AND, left, right.get(), position));
+    }
+
+    TruncateStatement truncate(Identifier keyword, QualifiedName table, SourcePosition position) {
+        requireContextualKeyword(keyword, "TRUNCATE");
+        return new TruncateStatement(table, position);
+    }
+
+    AlterColumnType alterColumnType(Identifier column, DataType type,
+                                    Optional<Expression> using, SourcePosition position) {
+        return new AlterColumnType(column, type, using, position);
+    }
+
+    Optional<Expression> usingClause(Identifier keyword, Expression expression) {
+        requireContextualKeyword(keyword, "USING");
+        return Optional.of(expression);
+    }
+
+    void requireModifyKeyword(Identifier keyword) {
+        requireContextualKeyword(keyword, "MODIFY");
+    }
+
+    void requireTypeKeyword(Identifier keyword) {
+        requireContextualKeyword(keyword, "TYPE");
+    }
+
+    void requireDataTypeKeywords(Identifier data, Identifier type) {
+        requireContextualKeyword(data, "DATA");
+        requireContextualKeyword(type, "TYPE");
+    }
+
     // ------------------------------------------------------------------
     // Literals
     // ------------------------------------------------------------------
@@ -181,6 +459,61 @@ final class AstBuilderSupport {
                                 : undouble(body(text, 1), '\''),
                         false, p);
             }
+        };
+    }
+
+    /**
+     * Builds an {@link IntervalLiteral} from {@code INTERVAL '…'} [unit], normalizing
+     * simple {@code 'N unit'} strings to {@code {value, unit}}.
+     */
+    IntervalLiteral intervalFromString(String content, Optional<String> explicitUnit,
+                                       SourcePosition position) {
+        if (explicitUnit.isPresent()) {
+            return new IntervalLiteral(content.trim(),
+                    Optional.of(normalizeIntervalUnit(explicitUnit.get())), position);
+        }
+        java.util.regex.Matcher m = SIMPLE_INTERVAL.matcher(content.trim());
+        if (m.matches()) {
+            return new IntervalLiteral(m.group(1),
+                    Optional.of(normalizeIntervalUnit(m.group(2))), position);
+        }
+        return new IntervalLiteral(content, Optional.empty(), position);
+    }
+
+    /**
+     * Builds an {@link IntervalLiteral} from MySQL-style {@code INTERVAL expr unit}.
+     * Non-literal values are refused — the AST carries only a string value.
+     */
+    IntervalLiteral intervalFromExpression(Expression value, String unit,
+                                           SourcePosition position) {
+        if (value instanceof NumericLiteral num) {
+            return new IntervalLiteral(num.text(),
+                    Optional.of(normalizeIntervalUnit(unit)), position);
+        }
+        if (value instanceof StringLiteral str) {
+            return new IntervalLiteral(str.value(),
+                    Optional.of(normalizeIntervalUnit(unit)), position);
+        }
+        throw refuse("INTERVAL with non-literal value", position);
+    }
+
+    private static final java.util.regex.Pattern SIMPLE_INTERVAL =
+            java.util.regex.Pattern.compile(
+                    "^([+-]?\\d+(?:\\.\\d+)?)\\s+([A-Za-z]+)$");
+
+    static String normalizeIntervalUnit(String unit) {
+        String u = unit.toLowerCase(Locale.ROOT);
+        return switch (u) {
+            case "years", "year" -> "year";
+            case "months", "month" -> "month";
+            case "days", "day" -> "day";
+            case "hours", "hour" -> "hour";
+            case "minutes", "minute" -> "minute";
+            case "seconds", "second" -> "second";
+            case "weeks", "week" -> "week";
+            case "quarters", "quarter" -> "quarter";
+            case "milliseconds", "millisecond", "ms" -> "millisecond";
+            default -> u;
         };
     }
 
@@ -262,26 +595,34 @@ final class AstBuilderSupport {
 
     /**
      * Walks a {@code queryExpression} child list and builds {@link UnionArm}s after
-     * each {@code UNION [ALL]}. Token type ids differ per dialect grammar; the
-     * structural walk is shared.
+     * each {@code UNION|EXCEPT|INTERSECT [ALL]}. Token type ids differ per dialect
+     * grammar; the structural walk is shared.
      */
-    List<UnionArm> unionArms(ParserRuleContext ctx, int unionTokenType, int allTokenType,
-                             ParseTreeVisitor<Object> builder) {
+    List<UnionArm> unionArms(ParserRuleContext ctx,
+                             int unionTokenType, int exceptTokenType, int intersectTokenType,
+                             int allTokenType, ParseTreeVisitor<Object> builder) {
         List<UnionArm> arms = new ArrayList<>();
-        boolean afterUnion = false;
+        SetOperator op = null;
         boolean all = false;
         for (ParseTree child : ctx.children) {
             if (child instanceof TerminalNode terminal) {
-                if (terminal.getSymbol().getType() == unionTokenType) {
-                    afterUnion = true;
+                int type = terminal.getSymbol().getType();
+                if (type == unionTokenType) {
+                    op = SetOperator.UNION;
                     all = false;
-                } else if (afterUnion && terminal.getSymbol().getType() == allTokenType) {
+                } else if (type == exceptTokenType) {
+                    op = SetOperator.EXCEPT;
+                    all = false;
+                } else if (type == intersectTokenType) {
+                    op = SetOperator.INTERSECT;
+                    all = false;
+                } else if (op != null && type == allTokenType) {
                     all = true;
                 }
-            } else if (afterUnion && child instanceof ParserRuleContext spec) {
-                arms.add(new UnionArm(all, (QuerySpecification) spec.accept(builder),
+            } else if (op != null && child instanceof ParserRuleContext spec) {
+                arms.add(new UnionArm(op, all, (QuerySpecification) spec.accept(builder),
                         pos(spec)));
-                afterUnion = false;
+                op = null;
             }
         }
         return arms;
@@ -298,8 +639,38 @@ final class AstBuilderSupport {
             case "%" -> BinaryOperator.MOD;
             // MySQL under default sql_mode: logical OR; PostgreSQL: string concat.
             case "||" -> dialect == Dialect.MYSQL ? BinaryOperator.OR : BinaryOperator.CONCAT;
+            case "->" -> BinaryOperator.JSON_GET;
+            case "->>" -> BinaryOperator.JSON_GET_TEXT;
+            case "#>" -> BinaryOperator.JSON_PATH;
+            case "#>>" -> BinaryOperator.JSON_PATH_TEXT;
+            case "@>" -> BinaryOperator.JSON_CONTAINS;
             default -> throw new IllegalStateException("Unmapped binary operator: " + text);
         };
+    }
+
+    /**
+     * Fold {@code expr <op> ANY|SOME (subquery)} and {@code expr <op> ALL (subquery)}
+     * into IN / NOT IN when the rewrite is faithful; refuse other combinations.
+     */
+    Expression quantifiedComparison(Expression value, String opText, String quantifier,
+                                    Query subquery, SourcePosition position) {
+        String q = quantifier == null ? "" : quantifier.trim().toUpperCase(Locale.ROOT);
+        BinaryOperator op = comparisonOperator(opText);
+        if (("ANY".equals(q) || "SOME".equals(q)) && op == BinaryOperator.EQ) {
+            return new InSubqueryPredicate(value, subquery, false, position);
+        }
+        if ("ALL".equals(q) && op == BinaryOperator.NEQ) {
+            return new InSubqueryPredicate(value, subquery, true, position);
+        }
+        throw refuse(opText + " " + q + " (subquery)", position);
+    }
+
+    /** Synthesize a stable alias when a derived table omits one (MySQL-tolerant corpus). */
+    Identifier derivedAliasOrSynthetic(Identifier alias, SourcePosition position) {
+        if (alias != null) {
+            return alias;
+        }
+        return new Identifier("_dt", false, position);
     }
 
     BinaryOperator comparisonOperator(String text) {
@@ -350,14 +721,15 @@ final class AstBuilderSupport {
      */
     Optional<RowLimit> tsqlRowLimit(Expression top, SourcePosition topPosition,
                                     Expression offset, Expression fetch,
-                                    SourcePosition offsetPosition) {
+                                    boolean withTies, SourcePosition offsetPosition) {
         refuseIf(top != null && offset != null, "TOP combined with OFFSET/FETCH", topPosition);
+        refuseIf(withTies && offset != null, "OFFSET/FETCH WITH TIES", offsetPosition);
         if (top != null) {
-            return Optional.of(new RowLimit(Optional.of(top), Optional.empty(), topPosition));
+            return Optional.of(new RowLimit(Optional.of(top), Optional.empty(), withTies, topPosition));
         }
         if (offset != null) {
             return Optional.of(new RowLimit(Optional.ofNullable(fetch), Optional.of(offset),
-                    offsetPosition));
+                    false, offsetPosition));
         }
         return Optional.empty();
     }
@@ -379,25 +751,35 @@ final class AstBuilderSupport {
     }
 
     /** One T-SQL {@code TOP} clause extracted by the dialect builder. */
-    record ExtractedTop(Expression count, SourcePosition position) {
+    record ExtractedTop(Expression count, boolean withTies, SourcePosition position) {
+        ExtractedTop(Expression count, SourcePosition position) {
+            this(count, false, position);
+        }
     }
 
-    /** MySQL: {@code LIMIT n [OFFSET m]} or {@code LIMIT m, n} (operand swap). */
+    /** MySQL: {@code LIMIT n [OFFSET m] [WITH TIES]} or {@code LIMIT m, n} (operand swap). */
     RowLimit mysqlRowLimit(Expression first, Expression second, boolean commaForm,
-                           SourcePosition position) {
+                           boolean withTies, SourcePosition position) {
+        refuseIf(commaForm && withTies, "LIMIT m,n WITH TIES", position);
+        refuseIf(withTies && second != null && !commaForm, "LIMIT OFFSET WITH TIES", position);
         if (commaForm) {
-            return new RowLimit(Optional.of(second), Optional.of(first), position);
+            return new RowLimit(Optional.of(second), Optional.of(first), false, position);
         }
-        return new RowLimit(Optional.of(first), Optional.ofNullable(second), position);
+        return new RowLimit(Optional.of(first), Optional.ofNullable(second), withTies, position);
     }
 
-    /** PostgreSQL: LIMIT and OFFSET in either order. */
+    /** PostgreSQL: LIMIT and OFFSET in either order; FETCH may omit count (means 1). */
     RowLimit pgRowLimit(Expression first, Expression second, boolean limitFirst,
-                        SourcePosition position) {
+                        boolean withTies, SourcePosition position) {
         if (limitFirst) {
-            return new RowLimit(Optional.of(first), Optional.ofNullable(second), position);
+            return new RowLimit(Optional.of(first), Optional.ofNullable(second), withTies, position);
         }
-        return new RowLimit(Optional.ofNullable(second), Optional.of(first), position);
+        return new RowLimit(Optional.ofNullable(second), Optional.of(first), withTies, position);
+    }
+
+    void requireTiesKeyword(Identifier id) {
+        refuseIf(id.quoted() || !id.value().equalsIgnoreCase("TIES"),
+                "WITH " + id.value() + " (expected TIES)", id.pos());
     }
 
     // ------------------------------------------------------------------
@@ -507,6 +889,27 @@ final class AstBuilderSupport {
         return folded.dataType();
     }
 
+    /** Counts {@code []} suffixes on a {@code dataType} parse tree. */
+    static int arrayDims(ParserRuleContext ctx) {
+        int dims = 0;
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            if ("[".equals(ctx.getChild(i).getText())) {
+                dims++;
+            }
+        }
+        return dims;
+    }
+
+    static DataType withArrayDims(DataType type, int dims) {
+        return dims == 0 ? type
+                : new DataType(type.type(), type.length(), type.scale(), dims);
+    }
+
+    static FoldedType withArrayDims(FoldedType folded, int dims) {
+        return dims == 0 ? folded
+                : new FoldedType(withArrayDims(folded.dataType(), dims), folded.autoIncrement());
+    }
+
     private FoldedType fold(String word1, String word2, List<String> args,
                             SourcePosition position) {
         String name = word1.toUpperCase(Locale.ROOT);
@@ -601,7 +1004,15 @@ final class AstBuilderSupport {
                     Map.entry("DATETIME", Fold.of(GenericType.TIMESTAMP)),
                     Map.entry("DATE", Fold.of(GenericType.DATE)),
                     Map.entry("TIME", Fold.of(GenericType.TIME)),
-                    Map.entry("IMAGE", Fold.of(GenericType.BLOB)));
+                    Map.entry("IMAGE", Fold.of(GenericType.BLOB)),
+                    Map.entry("UNIQUEIDENTIFIER", Fold.of(GenericType.UUID)),
+                    Map.entry("JSON", Fold.of(GenericType.JSON)),
+                    Map.entry("JSONB", Fold.of(GenericType.JSONB)),
+                    Map.entry("UUID", Fold.of(GenericType.UUID)),
+                    Map.entry("BYTEA", Fold.of(GenericType.BLOB)),
+                    Map.entry("SERIAL", Fold.auto(GenericType.INTEGER)),
+                    Map.entry("BIGSERIAL", Fold.auto(GenericType.BIGINT)),
+                    Map.entry("SMALLSERIAL", Fold.auto(GenericType.SMALLINT)));
             case MYSQL -> Map.ofEntries(
                     Map.entry("INT", Fold.of(GenericType.INTEGER)),
                     Map.entry("INTEGER", Fold.of(GenericType.INTEGER)),
@@ -622,7 +1033,14 @@ final class AstBuilderSupport {
                     Map.entry("TIMESTAMP", Fold.of(GenericType.TIMESTAMP)),
                     Map.entry("DATE", Fold.of(GenericType.DATE)),
                     Map.entry("TIME", Fold.of(GenericType.TIME)),
-                    Map.entry("BLOB", Fold.of(GenericType.BLOB)));
+                    Map.entry("BLOB", Fold.of(GenericType.BLOB)),
+                    Map.entry("JSON", Fold.of(GenericType.JSON)),
+                    Map.entry("JSONB", Fold.of(GenericType.JSONB)),
+                    Map.entry("UUID", Fold.of(GenericType.UUID)),
+                    Map.entry("BYTEA", Fold.of(GenericType.BLOB)),
+                    Map.entry("SERIAL", Fold.auto(GenericType.INTEGER)),
+                    Map.entry("BIGSERIAL", Fold.auto(GenericType.BIGINT)),
+                    Map.entry("SMALLSERIAL", Fold.auto(GenericType.SMALLINT)));
             case POSTGRESQL -> Map.ofEntries(
                     Map.entry("INTEGER", Fold.of(GenericType.INTEGER)),
                     Map.entry("INT", Fold.of(GenericType.INTEGER)),
@@ -645,6 +1063,9 @@ final class AstBuilderSupport {
                     Map.entry("DATE", Fold.of(GenericType.DATE)),
                     Map.entry("TIME", Fold.of(GenericType.TIME)),
                     Map.entry("BYTEA", Fold.of(GenericType.BLOB)),
+                    Map.entry("JSON", Fold.of(GenericType.JSON)),
+                    Map.entry("JSONB", Fold.of(GenericType.JSONB)),
+                    Map.entry("UUID", Fold.of(GenericType.UUID)),
                     Map.entry("SERIAL", Fold.auto(GenericType.INTEGER)),
                     Map.entry("BIGSERIAL", Fold.auto(GenericType.BIGINT)),
                     Map.entry("SMALLSERIAL", Fold.auto(GenericType.SMALLINT)));

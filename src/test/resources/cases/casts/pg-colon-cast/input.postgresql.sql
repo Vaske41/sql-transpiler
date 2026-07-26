@@ -1,1 +1,1 @@
-SELECT id::TEXT FROM t;
+SELECT x::varchar, p.uuid::varchar, col::numeric(10,2), upper(name)::text, (id + 1)::integer FROM t;

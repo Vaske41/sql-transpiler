@@ -51,6 +51,7 @@ public class AstTransformer implements AstVisitor<Object> {
     public Object visitQuery(Query node) {
         return new Query(
                 rebuildList(node.ctes()),
+                node.recursive(),
                 rebuild(node.first()),
                 rebuildList(node.unionArms()),
                 rebuildList(node.orderBy()),
@@ -69,12 +70,13 @@ public class AstTransformer implements AstVisitor<Object> {
 
     @Override
     public Object visitUnionArm(UnionArm node) {
-        return new UnionArm(node.all(), rebuild(node.spec()), node.pos());
+        return new UnionArm(node.operator(), node.all(), rebuild(node.spec()), node.pos());
     }
 
     @Override
     public Object visitQuerySpecification(QuerySpecification node) {
-        return new QuerySpecification(node.quantifier(), rebuildList(node.items()),
+        return new QuerySpecification(node.quantifier(), rebuildList(node.distinctOn()),
+                rebuildList(node.items()),
                 rebuildOptional(node.from()), rebuildOptional(node.where()),
                 rebuildList(node.groupBy()), rebuildOptional(node.having()), node.pos());
     }
@@ -82,7 +84,7 @@ public class AstTransformer implements AstVisitor<Object> {
     @Override
     public Object visitRowLimit(RowLimit node) {
         return new RowLimit(rebuildOptional(node.count()), rebuildOptional(node.offset()),
-                node.pos());
+                node.withTies(), node.pos());
     }
 
     @Override
@@ -120,35 +122,69 @@ public class AstTransformer implements AstVisitor<Object> {
     }
 
     @Override
+    public Object visitValuesTable(ValuesTable node) {
+        return new ValuesTable(
+                rebuildList(node.rows()),
+                rebuild(node.alias()),
+                rebuildList(node.columns()),
+                node.pos());
+    }
+
+    @Override
+    public Object visitTableFunction(TableFunction node) {
+        return new TableFunction(
+                rebuild(node.name()),
+                rebuildList(node.args()),
+                rebuildOptional(node.alias()),
+                node.columnAliases().map(this::rebuildList),
+                node.pos());
+    }
+
+    @Override
+    public Object visitRowValue(RowValue node) {
+        return new RowValue(rebuildList(node.values()), node.pos());
+    }
+
+    @Override
     public Object visitJoin(Join node) {
         return new Join(node.kind(), rebuild(node.table()), rebuildOptional(node.on()),
-                node.pos());
+                rebuildList(node.usingColumns()), node.lateral(), node.pos());
     }
 
     // --- DML ---
 
     @Override
     public Object visitInsertStatement(InsertStatement node) {
+        Optional<List<SelectItem>> returning = node.returning().map(this::rebuildList);
         return new InsertStatement(rebuild(node.table()), rebuildList(node.columns()),
                 node.rows().stream().map(this::rebuildList).toList(),
-                rebuildOptional(node.query()), node.pos());
+                rebuildOptional(node.query()), rebuildOptional(node.upsert()),
+                returning, node.pos());
+    }
+
+    @Override
+    public Object visitUpsert(Upsert node) {
+        return new Upsert(node.kind(), rebuildList(node.conflictTarget()),
+                rebuildList(node.assignments()), rebuildOptional(node.where()), node.pos());
     }
 
     @Override
     public Object visitUpdateStatement(UpdateStatement node) {
-        return new UpdateStatement(rebuild(node.table()), rebuildList(node.assignments()),
+        return new UpdateStatement(rebuildList(node.ctes()), node.recursive(),
+                rebuild(node.table()), rebuildOptional(node.alias()),
+                rebuildList(node.assignments()), rebuildOptional(node.from()),
                 rebuildOptional(node.where()), node.pos());
     }
 
     @Override
     public Object visitAssignment(Assignment node) {
-        return new Assignment(rebuild(node.column()), rebuild(node.value()), node.pos());
+        return new Assignment(rebuildList(node.columns()), rebuild(node.value()), node.pos());
     }
 
     @Override
     public Object visitDeleteStatement(DeleteStatement node) {
-        return new DeleteStatement(rebuild(node.table()), rebuildOptional(node.where()),
-                node.pos());
+        return new DeleteStatement(rebuild(node.table()), rebuildOptional(node.alias()),
+                rebuildOptional(node.usingClause()), rebuildOptional(node.where()), node.pos());
     }
 
     // --- DDL ---
@@ -157,6 +193,12 @@ public class AstTransformer implements AstVisitor<Object> {
     public Object visitCreateTableStatement(CreateTableStatement node) {
         return new CreateTableStatement(rebuild(node.table()), rebuildList(node.columns()),
                 rebuildList(node.constraints()), node.pos());
+    }
+
+    @Override
+    public Object visitCreateViewStatement(CreateViewStatement node) {
+        return new CreateViewStatement(rebuild(node.name()), rebuildList(node.columns()),
+                rebuild(node.query()), node.replaceOrAlter(), node.pos());
     }
 
     @Override
@@ -198,6 +240,28 @@ public class AstTransformer implements AstVisitor<Object> {
     }
 
     @Override
+    public Object visitDropViewStatement(DropViewStatement node) {
+        return new DropViewStatement(rebuild(node.name()), node.ifExists(), node.cascade(), node.pos());
+    }
+
+    @Override
+    public Object visitDropRoutineStatement(DropRoutineStatement node) {
+        return new DropRoutineStatement(rebuild(node.name()), node.ifExists(), node.cascade(),
+                node.hasSignature(), rebuildList(node.argTypes()), node.pos());
+    }
+
+    @Override
+    public Object visitDropIndexStatement(DropIndexStatement node) {
+        return new DropIndexStatement(rebuild(node.name()), node.ifExists(),
+                node.table().map(this::rebuild), node.pos());
+    }
+
+    @Override
+    public Object visitTruncateStatement(TruncateStatement node) {
+        return new TruncateStatement(rebuild(node.table()), node.pos());
+    }
+
+    @Override
     public Object visitAlterTableStatement(AlterTableStatement node) {
         return new AlterTableStatement(rebuild(node.table()), rebuild(node.action()),
                 node.pos());
@@ -206,6 +270,11 @@ public class AstTransformer implements AstVisitor<Object> {
     @Override
     public Object visitAddColumn(AddColumn node) {
         return new AddColumn(rebuild(node.column()), node.pos());
+    }
+
+    @Override
+    public Object visitAddTableConstraint(AddTableConstraint node) {
+        return new AddTableConstraint(rebuild(node.constraint()), node.pos());
     }
 
     @Override
@@ -222,6 +291,12 @@ public class AstTransformer implements AstVisitor<Object> {
     @Override
     public Object visitDropColumn(DropColumn node) {
         return new DropColumn(rebuild(node.column()), node.pos());
+    }
+
+    @Override
+    public Object visitAlterColumnType(AlterColumnType node) {
+        return new AlterColumnType(rebuild(node.column()), rebuild(node.type()),
+                node.using().map(this::rebuild), node.pos());
     }
 
     // --- expressions ---
@@ -267,6 +342,11 @@ public class AstTransformer implements AstVisitor<Object> {
     }
 
     @Override
+    public Object visitIsBoolPredicate(IsBoolPredicate node) {
+        return new IsBoolPredicate(rebuild(node.value()), node.test(), node.negated(), node.pos());
+    }
+
+    @Override
     public Object visitExistsPredicate(ExistsPredicate node) {
         return new ExistsPredicate(rebuild(node.subquery()), node.pos());
     }
@@ -274,7 +354,8 @@ public class AstTransformer implements AstVisitor<Object> {
     @Override
     public Object visitFunctionCall(FunctionCall node) {
         return new FunctionCall(node.name(), rebuildList(node.args()), node.star(),
-                node.quantifier(), rebuildOptional(node.window()), node.pos());
+                node.quantifier(), rebuildList(node.orderBy()),
+                rebuildOptional(node.filter()), rebuildOptional(node.window()), node.pos());
     }
 
     @Override
@@ -312,8 +393,28 @@ public class AstTransformer implements AstVisitor<Object> {
     }
 
     @Override
+    public Object visitExtractExpression(ExtractExpression node) {
+        return new ExtractExpression(node.field(), rebuild(node.source()), node.pos());
+    }
+
+    @Override
     public Object visitSubqueryExpression(SubqueryExpression node) {
         return new SubqueryExpression(rebuild(node.query()), node.pos());
+    }
+
+    @Override
+    public Object visitRowConstructor(RowConstructor node) {
+        return new RowConstructor(rebuildList(node.elements()), node.pos());
+    }
+
+    @Override
+    public Object visitArrayLiteral(ArrayLiteral node) {
+        return new ArrayLiteral(rebuildList(node.elements()), node.pos());
+    }
+
+    @Override
+    public Object visitAtTimeZone(AtTimeZone node) {
+        return new AtTimeZone(rebuild(node.value()), rebuild(node.zone()), node.pos());
     }
 
     // --- literals, identifiers, types (leaves rebuild to themselves) ---
@@ -339,6 +440,11 @@ public class AstTransformer implements AstVisitor<Object> {
     }
 
     @Override
+    public Object visitIntervalLiteral(IntervalLiteral node) {
+        return node;
+    }
+
+    @Override
     public Object visitIdentifier(Identifier node) {
         return node;
     }
@@ -355,7 +461,8 @@ public class AstTransformer implements AstVisitor<Object> {
 
     @Override
     public Object visitDataType(DataType node) {
-        return new DataType(node.type(), rebuildOptional(node.length()), node.scale());
+        return new DataType(node.type(), rebuildOptional(node.length()), node.scale(),
+                node.arrayDims());
     }
 
     @Override

@@ -19,7 +19,7 @@ To fit 2 weeks, fix the supported SQL subset **up front** and refuse everything 
 
 | Category | In scope (v1) | Out of scope |
 |---|---|---|
-| DML | `SELECT` (joins, `WHERE`, `GROUP BY`/`HAVING`, `ORDER BY`, `LIMIT`/`TOP`/`FETCH`), non-recursive CTEs (`WITH`), `INSERT ... VALUES` (incl. multi-row), `INSERT ... SELECT`, `UPDATE`, `DELETE` | Recursive CTEs (`WITH RECURSIVE` / CTE self-reference), window frames, `MERGE` |
+| DML | `SELECT` (joins, `WHERE`, `GROUP BY`/`HAVING`, `ORDER BY`, `LIMIT`/`TOP`/`FETCH`), CTEs (`WITH`, incl. recursive structural render), `INSERT ... VALUES` (incl. multi-row), `INSERT ... SELECT`, `UPDATE`, `DELETE` | Window frames, `MERGE` |
 | DDL | `CREATE TABLE` (columns, types, `NOT NULL`, `DEFAULT`, `PRIMARY KEY`, `FOREIGN KEY`, `UNIQUE`, auto-increment), `CREATE INDEX` / `CREATE UNIQUE INDEX` (column list + optional `DESC`; dialect-only options refused — see README), `DROP TABLE`, basic `ALTER TABLE ADD/DROP COLUMN` | Partitioning, triggers, procedures; index options beyond the shared shape (`CLUSTERED`, `USING`, partial `WHERE`, index `NULLS`, prefix lengths) |
 | Expressions | Literals, identifiers, arithmetic/comparison/logical ops, `CASE`, `CAST`, subqueries in expression position (scalar, `IN (SELECT …)`, `EXISTS`), derived tables in `FROM`/`JOIN`, frameless window functions (`OVER`), ~15 common functions (see Phase 4) | Vendor-specific function long tail; framed windows (`ROWS`/`RANGE`) |
 
@@ -359,7 +359,7 @@ Adding statement N+1 is this ordered touch-list — a ~30-minute checklist, not 
 ### The ranked queue (value-per-hour order)
 1. ~~`INSERT ... SELECT`~~ — shipped (2026-07) — nearly free: one grammar alternative + one AST field reusing `Query`
 2. ~~`CREATE INDEX`~~ — shipped (2026-07) — small grammar surface, high practical relevance
-3. ~~CTEs (`WITH`)~~ — shipped (Wave 1) — `WITH RECURSIVE` and CTE self-reference refused (T-SQL recursion without keyword included)
+3. ~~CTEs (`WITH`)~~ — shipped (Wave 1); recursive forms rendered structurally (Wave 2 Task 11; coverage ≠ AccEX)
 4. ~~Derived tables in `FROM`~~ — shipped (Wave 1)
 5. ~~Window functions~~ — shipped (Wave 1) — frames refused
 
@@ -367,7 +367,9 @@ Adding statement N+1 is this ordered touch-list — a ~30-minute checklist, not 
 
 **Wave 1 PG quick wins (PARSE coverage):** PostgreSQL `FETCH FIRST`/`NEXT … ROWS ONLY` folds into existing `RowLimit`; postfix `expr::type` folds into `CastExpression`.
 
-**Wave 1 remeasure (2026-07-23, frozen 1426):** baseline 345/1057/24 → **654/666/106** SUCCESS/PARSE/REFUSED (**45.9%** SUCCESS, Δ **+309**). Option B bar ≥~927 (~65%) **not met**. Remaining PARSE dominated by out-of-scope long-tail (DDL/routines, vendor functions, JSON, …); Wave 1 token residuals are small. Honest refusals include recursive CTE / window frames. See `evaluation/datasets/parrot/README.md` Wave 1 caption — do not silently revise the bar. Caption: parse/print coverage, not AccEX. Run: `python evaluation/bin/remeasure_parrot_wave1.py` (`--corpus parrot-diverse`, no `--sqlglot`).
+**Wave 1 remeasure (2026-07-23, frozen 1426):** baseline 345/1057/24 → **655/665/106** SUCCESS/PARSE/REFUSED (**45.9%** SUCCESS, Δ **+310**). Option B bar ≥~927 (~65%) **not met**. Remaining PARSE dominated by out-of-scope long-tail (DDL/routines, vendor functions, JSON, …); Wave 1 token residuals are small. Honest refusals include recursive CTE / window frames. See `evaluation/datasets/parrot/README.md` Wave 1 caption — do not silently revise the bar. Caption: parse/print coverage, not AccEX. Run: `python evaluation/bin/remeasure_parrot_wave1.py` (`--corpus parrot-diverse`, no `--sqlglot`).
+
+**Wave 2 remeasure (HEAD, frozen 1426):** Wave 1 pin 655 → **966/309/151** (**67.74%** SUCCESS, Δ **+311**). Wave 2 bar ≥998 (70%) **not met (−32)**. Pre–review-fix pin was 963. Canonical CSV: evaluation/results-local/parrot-wave2-latest.csv; remainder: parrot-wave2-remainder.md. Historical wrap pin was 928 (65.1%). Caption: coverage exit 0, **not** AccEX. Run: EVAL_FAST=1 python evaluation/bin/wave2_measure.py (or jar resumable harness).
 
 ---
 

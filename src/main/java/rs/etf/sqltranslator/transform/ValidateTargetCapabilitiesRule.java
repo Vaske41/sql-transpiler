@@ -1,8 +1,18 @@
 package rs.etf.sqltranslator.transform;
 
+import rs.etf.sqltranslator.ast.Assignment;
 import rs.etf.sqltranslator.ast.AstTransformer;
+import rs.etf.sqltranslator.ast.BooleanLiteral;
+import rs.etf.sqltranslator.ast.CastExpression;
+import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.ColumnRef;
+import rs.etf.sqltranslator.ast.DataType;
+import rs.etf.sqltranslator.ast.DeleteStatement;
 import rs.etf.sqltranslator.ast.Expression;
+import rs.etf.sqltranslator.ast.FrameBound;
+import rs.etf.sqltranslator.ast.FrameBoundKind;
+import rs.etf.sqltranslator.ast.FrameMode;
+import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.JoinKind;
 import rs.etf.sqltranslator.ast.Query;
@@ -11,7 +21,12 @@ import rs.etf.sqltranslator.ast.RowLimit;
 import rs.etf.sqltranslator.ast.Script;
 import rs.etf.sqltranslator.ast.SelectExpr;
 import rs.etf.sqltranslator.ast.SelectItem;
+import rs.etf.sqltranslator.ast.SetOperator;
+import rs.etf.sqltranslator.ast.TableFunction;
+import rs.etf.sqltranslator.ast.UnionArm;
+import rs.etf.sqltranslator.ast.WindowFrame;
 import rs.etf.sqltranslator.core.Dialect;
+import rs.etf.sqltranslator.core.SourcePosition;
 import rs.etf.sqltranslator.core.UnsupportedFeatureException;
 
 import java.util.Locale;
@@ -25,6 +40,9 @@ import java.util.stream.Collectors;
  * never a silent wrong translation.
  */
 public final class ValidateTargetCapabilitiesRule implements Rule {
+
+    private static final Set<String> ARRAY_AGGREGATES =
+            Set.of("ARRAY_AGG", "JSON_AGG", "JSONB_AGG");
 
     @Override
     public String name() {
@@ -45,12 +63,157 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
         }
 
         @Override
+        public Object visitAssignment(Assignment node) {
+            if (node.columns().size() > 1
+                    && (ctx.target() == Dialect.MYSQL || ctx.target() == Dialect.TSQL)) {
+                throw new UnsupportedFeatureException(
+                        "multi-column SET assignment is not supported by " + ctx.target(),
+                        node.pos());
+            }
+            return super.visitAssignment(node);
+        }
+
+        @Override
+        public Object visitFunctionCall(FunctionCall node) {
+            if ((ctx.target() == Dialect.MYSQL || ctx.target() == Dialect.TSQL)
+                    && ARRAY_AGGREGATES.contains(node.name())) {
+                throw new UnsupportedFeatureException(
+                        "aggregate " + node.name() + " (no array type in target)",
+                        node.pos());
+            }
+            return super.visitFunctionCall(node);
+        }
+
+        @Override
+        public Object visitCastExpression(CastExpression node) {
+            refuseArrayType(node.targetType(), node.pos());
+            return super.visitCastExpression(node);
+        }
+
+        @Override
+        public Object visitColumnDefinition(ColumnDefinition node) {
+            refuseArrayType(node.type(), node.pos());
+            return super.visitColumnDefinition(node);
+        }
+
+        private void refuseArrayType(DataType type, SourcePosition pos) {
+            if (type.arrayDims() > 0
+                    && (ctx.target() == Dialect.MYSQL || ctx.target() == Dialect.TSQL)) {
+                throw new UnsupportedFeatureException(
+                        "array type (no array type in target)", pos);
+            }
+        }
+
+        @Override
+        public Object visitDeleteStatement(DeleteStatement node) {
+            if (ctx.target() == Dialect.TSQL && node.usingClause().isPresent()) {
+                throw new UnsupportedFeatureException(
+                        "DELETE USING is not supported by T-SQL", node.pos());
+            }
+            return super.visitDeleteStatement(node);
+        }
+
+        @Override
+        public Object visitTableFunction(TableFunction node) {
+            if (ctx.target() == Dialect.MYSQL || ctx.target() == Dialect.TSQL) {
+                throw new UnsupportedFeatureException(
+                        "table function (no SRF-in-FROM in target)", node.pos());
+            }
+            return super.visitTableFunction(node);
+        }
+
+        @Override
+        public Object visitUnionArm(UnionArm node) {
+            if (ctx.target() == Dialect.TSQL && node.all()
+                    && (node.operator() == SetOperator.EXCEPT
+                    || node.operator() == SetOperator.INTERSECT)) {
+                throw new UnsupportedFeatureException(
+                        node.operator() + " ALL is not supported by T-SQL", node.pos());
+            }
+            return super.visitUnionArm(node);
+        }
+
+        @Override
         public Object visitJoin(Join node) {
             if (node.kind() == JoinKind.FULL && ctx.target() == Dialect.MYSQL) {
                 throw new UnsupportedFeatureException(
                         "FULL JOIN is not supported by MySQL", node.pos());
             }
+            if (node.lateral() && ctx.target() == Dialect.TSQL
+                    && !isTsqlApplyShape(node)) {
+                throw new UnsupportedFeatureException(
+                        "LATERAL join ON condition cannot fold to APPLY", node.pos());
+            }
             return super.visitJoin(node);
+        }
+
+        @Override
+        public Object visitRowConstructor(rs.etf.sqltranslator.ast.RowConstructor node) {
+            if (ctx.target() == Dialect.TSQL) {
+                throw new UnsupportedFeatureException(
+                        "row constructor is not supported by T-SQL", node.pos());
+            }
+            return super.visitRowConstructor(node);
+        }
+
+        @Override
+        public Object visitArrayLiteral(rs.etf.sqltranslator.ast.ArrayLiteral node) {
+            if (ctx.target() == Dialect.MYSQL || ctx.target() == Dialect.TSQL) {
+                throw new UnsupportedFeatureException(
+                        "ARRAY literal is not supported by " + ctx.target(), node.pos());
+            }
+            return super.visitArrayLiteral(node);
+        }
+
+        @Override
+        public Object visitAtTimeZone(rs.etf.sqltranslator.ast.AtTimeZone node) {
+            if (ctx.target() != Dialect.POSTGRESQL) {
+                throw new UnsupportedFeatureException(
+                        "AT TIME ZONE is not supported by " + ctx.target(), node.pos());
+            }
+            return super.visitAtTimeZone(node);
+        }
+
+        /**
+         * SQL Server accepts {@code RANGE} only with {@code UNBOUNDED}/{@code CURRENT ROW}
+         * extents. Offset bounds under {@code RANGE} are invalid T-SQL; {@code ROWS} frames
+         * (and portable {@code RANGE UNBOUNDED…CURRENT ROW}) print structurally.
+         */
+        @Override
+        public Object visitWindowFrame(WindowFrame node) {
+            if (ctx.target() == Dialect.TSQL
+                    && node.mode() == FrameMode.RANGE
+                    && hasOffsetBound(node)) {
+                throw new UnsupportedFeatureException(
+                        "RANGE frame with offset bounds is not supported by T-SQL",
+                        node.pos());
+            }
+            return super.visitWindowFrame(node);
+        }
+
+        private static boolean hasOffsetBound(WindowFrame frame) {
+            if (isOffsetBound(frame.start())) {
+                return true;
+            }
+            return frame.end().map(ValidateTargetCapabilitiesRule.Validator::isOffsetBound)
+                    .orElse(false);
+        }
+
+        private static boolean isOffsetBound(FrameBound bound) {
+            return bound.kind() == FrameBoundKind.PRECEDING
+                    || bound.kind() == FrameBoundKind.FOLLOWING;
+        }
+
+        /** CROSS APPLY, or OUTER APPLY (= LEFT LATERAL with empty/TRUE ON). */
+        private static boolean isTsqlApplyShape(Join node) {
+            if (node.kind() == JoinKind.CROSS && node.on().isEmpty()) {
+                return true;
+            }
+            if (node.kind() == JoinKind.LEFT) {
+                return node.on().isEmpty()
+                        || (node.on().get() instanceof BooleanLiteral b && b.value());
+            }
+            return false;
         }
 
         @Override
@@ -100,6 +263,16 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
                 throw new UnsupportedFeatureException(
                         "row limit over UNION requires ORDER BY on SQL Server",
                         limit.pos());
+            }
+            if (limit.withTies() && limit.offset().isPresent()
+                    && ctx.target() == Dialect.TSQL) {
+                throw new UnsupportedFeatureException(
+                        "OFFSET/FETCH WITH TIES is not supported by T-SQL", limit.pos());
+            }
+            if (limit.withTies() && limit.offset().isPresent()
+                    && ctx.target() == Dialect.MYSQL) {
+                throw new UnsupportedFeatureException(
+                        "LIMIT OFFSET WITH TIES is not supported by MySQL", limit.pos());
             }
             if (limit.offset().isEmpty()) {
                 return;

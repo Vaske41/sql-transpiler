@@ -36,4 +36,17 @@ final class LlmText {
         String env = System.getenv("EVAL_LIVE");
         return "1".equals(env) || "true".equalsIgnoreCase(env);
     }
+
+    /**
+     * Bulk coverage sweeps: one local jar run per case ({@code EVAL_FAST=1} /
+     * {@code -Deval.fast=true}). Default is the thesis median protocol
+     * ({@link BenchmarkDriver#LOCAL_LATENCY_RUNS}).
+     */
+    static boolean fastEval() {
+        if (Boolean.getBoolean("eval.fast")) {
+            return true;
+        }
+        String env = System.getenv("EVAL_FAST");
+        return "1".equals(env) || "true".equalsIgnoreCase(env);
+    }
 }

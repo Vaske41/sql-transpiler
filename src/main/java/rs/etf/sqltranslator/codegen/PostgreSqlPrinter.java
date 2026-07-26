@@ -1,6 +1,7 @@
 package rs.etf.sqltranslator.codegen;
 
 import rs.etf.sqltranslator.ast.DataType;
+import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.StringLiteral;
 
 /**
@@ -9,6 +10,27 @@ import rs.etf.sqltranslator.ast.StringLiteral;
  * printer (Phase 4 narrows them) — reaching them is a contract violation.
  */
 public final class PostgreSqlPrinter extends AbstractSqlPrinter {
+
+    @Override
+    protected void renderRowLimit(Query query) {
+        query.limit().ifPresent(limit -> {
+            if (!limit.withTies()) {
+                super.renderRowLimit(query);
+                return;
+            }
+            // PG supports WITH TIES only on FETCH, not LIMIT.
+            limit.offset().ifPresent(offset -> {
+                out.token("OFFSET");
+                offset.accept(this);
+                out.token("ROWS");
+            });
+            out.token("FETCH FIRST");
+            limit.count().ifPresentOrElse(
+                    count -> count.accept(this),
+                    () -> out.token("1"));
+            out.token("ROWS").token("WITH").token("TIES");
+        });
+    }
 
     @Override
     protected String quoteIdentifier(String value) {
@@ -42,11 +64,17 @@ public final class PostgreSqlPrinter extends AbstractSqlPrinter {
             case TIME -> "TIME";
             case TIMESTAMP -> "TIMESTAMP";
             case BLOB -> "BYTEA";
+            case JSON -> "JSON";
+            case JSONB -> "JSONB";
+            case UUID -> "UUID";
             case TINYINT, NVARCHAR -> throw new IllegalStateException(
                     "rule engine contract: " + type.type() + " must not reach the PG printer");
         };
         out.token(name);
         renderTypeArgs(type);
+        for (int i = 0; i < type.arrayDims(); i++) {
+            out.raw("[]");
+        }
     }
 
     @Override

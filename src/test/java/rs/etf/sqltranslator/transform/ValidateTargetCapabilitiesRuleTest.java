@@ -82,4 +82,80 @@ class ValidateTargetCapabilitiesRuleTest {
                 .isInstanceOf(UnsupportedFeatureException.class)
                 .hasMessageContaining("UNION requires ORDER BY");
     }
+
+    @Test
+    void arrayAggToMysqlIsRefused() {
+        assertThatThrownBy(() -> runRule(rule,
+                "SELECT ARRAY_AGG(x ORDER BY x) FROM t;",
+                Dialect.POSTGRESQL, Dialect.MYSQL))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("ARRAY_AGG");
+    }
+
+    @Test
+    void arrayAggToPostgresIsFine() {
+        assertThatCode(() -> runRule(rule,
+                "SELECT ARRAY_AGG(x ORDER BY x) FROM t;",
+                Dialect.POSTGRESQL, Dialect.POSTGRESQL))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void arrayTypeColonCastToMysqlIsRefused() {
+        assertThatThrownBy(() -> runRule(rule,
+                "SELECT '{}'::text[] FROM t;",
+                Dialect.POSTGRESQL, Dialect.MYSQL))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("array type");
+    }
+
+    @Test
+    void arrayTypeColonCastToTsqlIsRefused() {
+        assertThatThrownBy(() -> runRule(rule,
+                "SELECT '{}'::text[] FROM t;",
+                Dialect.POSTGRESQL, Dialect.TSQL))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("array type");
+    }
+
+    @Test
+    void arrayTypeColonCastToPostgresIsFine() {
+        assertThatCode(() -> runRule(rule,
+                "SELECT '{}'::text[] FROM t;",
+                Dialect.POSTGRESQL, Dialect.POSTGRESQL))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void rangeFrameWithOffsetToTsqlIsRefused() {
+        assertThatThrownBy(() -> runRule(rule,
+                "SELECT SUM(x) OVER (ORDER BY y RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM t;",
+                Dialect.POSTGRESQL, Dialect.TSQL))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("RANGE frame with offset bounds");
+    }
+
+    @Test
+    void rangeFrameUnboundedToTsqlIsFine() {
+        assertThatCode(() -> runRule(rule,
+                "SELECT SUM(x) OVER (ORDER BY y RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t;",
+                Dialect.POSTGRESQL, Dialect.TSQL))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void rowsFrameWithOffsetToTsqlIsFine() {
+        assertThatCode(() -> runRule(rule,
+                "SELECT SUM(x) OVER (ORDER BY y ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) FROM t;",
+                Dialect.POSTGRESQL, Dialect.TSQL))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void rangeFrameWithOffsetToMysqlIsFine() {
+        assertThatCode(() -> runRule(rule,
+                "SELECT SUM(x) OVER (ORDER BY y RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM t;",
+                Dialect.POSTGRESQL, Dialect.MYSQL))
+                .doesNotThrowAnyException();
+    }
 }

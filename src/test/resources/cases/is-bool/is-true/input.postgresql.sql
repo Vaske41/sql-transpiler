@@ -1,0 +1,1 @@
+SELECT id FROM t WHERE flag IS TRUE;

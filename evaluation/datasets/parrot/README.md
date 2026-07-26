@@ -36,8 +36,8 @@ only**; no `--sqlglot`). Artifact:
 | | SUCCESS | PARSE | REFUSED | SUCCESS rate |
 |---|---:|---:|---:|---:|
 | Pre–Wave 1 baseline | 345 | 1057 | 24 | 24.2% |
-| Post–Wave 1 (remeasure) | **654** | 666 | 106 | **45.9%** |
-| Δ | **+309** | −391 | +82 | +21.7 pp |
+| Post–Wave 1 (remeasure) | **655** | 665 | 106 | **45.9%** |
+| Δ | **+310** | −392 | +82 | +21.7 pp |
 | Wave 1 bar (~65%) | ≥ ~927 | — | — | **not met** |
 
 Caption CSV `SUCCESS` as **parse→rules→print coverage** (process exit 0), **not**
@@ -51,6 +51,35 @@ FETCH≈1), while the bulk of remaining PARSE is out-of-scope long-tail
 +82 REFUSED are mostly honest Wave 1 refusals (`recursive CTE`, `window frame`)
 plus type long-tail. **Do not silently lower the bar** — publish this remainder
 as the thesis finding; any bar revision needs this evidence table.
+
+### Wave 2 reporting caption
+
+Wave 2 remeasures the same **frozen 1,426-task** cohort after cluster work
+(ordered/filtered aggregates, JSON accessors, INTERVAL/`EXTRACT`, cheap DDL,
+DML shapes, `LATERAL`/`APPLY`, `VALUES`, `DISTINCT ON`→`ROW_NUMBER`, set ops,
+table functions, etc.).
+
+```text
+EVAL_FAST=1 python evaluation/bin/wave2_measure.py
+```
+
+Canonical HEAD artifact (local, gitignored):
+`evaluation/results-local/parrot-wave2-latest.csv` (n=1426, sqltranslate).
+Historical wrap pin (pre–gap-closer finish):
+`evaluation/results-local/parrot-wave2-official-wrap.csv` (**928** SUCCESS).
+
+| | SUCCESS | PARSE | REFUSED | SUCCESS rate |
+|---|---:|---:|---:|---:|
+| Post–Wave 1 baseline | 655 | 665 | 106 | 45.9% |
+| Official wrap pin | 928 | 383 | 115 | 65.1% |
+| Pre–review-fix HEAD | 963 | 312 | 151 | 67.53% |
+| **HEAD (canonical, post review fixes)** | **966** | **309** | **151** | **67.74%** |
+| Δ vs Wave 1 | **+311** | −356 | +45 | +21.8 pp |
+| Wave 2 bar (70%) | ≥998 | — | — | **not met (−32)** |
+
+Caption: coverage exit 0, **not** AccEX. See
+`evaluation/results-local/parrot-wave2-remainder.md`. **Do not** equate SUCCESS
+with gold_sql / catalog-semantic quality.
 
 Stratify thesis reporting by `hf_id` (benchmark family), not a single
 undifferentiated SUCCESS%. `case_id` embeds it as
