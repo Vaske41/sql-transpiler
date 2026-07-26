@@ -367,7 +367,9 @@ Adding statement N+1 is this ordered touch-list — a ~30-minute checklist, not 
 
 **Wave 1 PG quick wins (PARSE coverage):** PostgreSQL `FETCH FIRST`/`NEXT … ROWS ONLY` folds into existing `RowLimit`; postfix `expr::type` folds into `CastExpression`.
 
-**Wave 1 remeasure (2026-07-23, frozen 1426):** baseline 345/1057/24 → **654/666/106** SUCCESS/PARSE/REFUSED (**45.9%** SUCCESS, Δ **+309**). Option B bar ≥~927 (~65%) **not met**. Remaining PARSE dominated by out-of-scope long-tail (DDL/routines, vendor functions, JSON, …); Wave 1 token residuals are small. Honest refusals include recursive CTE / window frames. See `evaluation/datasets/parrot/README.md` Wave 1 caption — do not silently revise the bar. Caption: parse/print coverage, not AccEX. Run: `python evaluation/bin/remeasure_parrot_wave1.py` (`--corpus parrot-diverse`, no `--sqlglot`).
+**Wave 1 remeasure (2026-07-23, frozen 1426):** baseline 345/1057/24 → **655/665/106** SUCCESS/PARSE/REFUSED (**45.9%** SUCCESS, Δ **+310**). Option B bar ≥~927 (~65%) **not met**. Remaining PARSE dominated by out-of-scope long-tail (DDL/routines, vendor functions, JSON, …); Wave 1 token residuals are small. Honest refusals include recursive CTE / window frames. See `evaluation/datasets/parrot/README.md` Wave 1 caption — do not silently revise the bar. Caption: parse/print coverage, not AccEX. Run: `python evaluation/bin/remeasure_parrot_wave1.py` (`--corpus parrot-diverse`, no `--sqlglot`).
+
+**Wave 2 remeasure (HEAD, frozen 1426):** Wave 1 pin 655 → **966/309/151** (**67.74%** SUCCESS, Δ **+311**). Wave 2 bar ≥998 (70%) **not met (−32)**. Pre–review-fix pin was 963. Canonical CSV: evaluation/results-local/parrot-wave2-latest.csv; remainder: parrot-wave2-remainder.md. Historical wrap pin was 928 (65.1%). Caption: coverage exit 0, **not** AccEX. Run: EVAL_FAST=1 python evaluation/bin/wave2_measure.py (or jar resumable harness).
 
 ---
 

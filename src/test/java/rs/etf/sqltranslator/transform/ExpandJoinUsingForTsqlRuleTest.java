@@ -48,4 +48,18 @@ class ExpandJoinUsingForTsqlRuleTest {
         assertThat(sql).containsIgnoringCase("purchase.nth_operation");
         assertThat(sql).containsIgnoringCase("sale.molecule_id");
     }
+
+    @Test
+    void chainedUsingNestsLeftTowardTsql() {
+        String sql = CodegenTestSupport.printTranslated(
+                "SELECT * FROM c JOIN g USING (gid) JOIN u USING (uid);",
+                Dialect.POSTGRESQL, Dialect.TSQL).sql();
+        assertThat(sql).doesNotContainIgnoringCase("USING (");
+        // Second USING must resolve uid against the accumulated join, not only g.
+        assertThat(sql).doesNotContainIgnoringCase("g.uid");
+        assertThat(sql).containsIgnoringCase("_using0.uid");
+        assertThat(sql).containsIgnoringCase("u.uid");
+        assertThat(sql).containsIgnoringCase("c.gid");
+        assertThat(sql).containsIgnoringCase("g.gid");
+    }
 }

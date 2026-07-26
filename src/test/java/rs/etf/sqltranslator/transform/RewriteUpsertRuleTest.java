@@ -24,15 +24,14 @@ class RewriteUpsertRuleTest {
     }
 
     @Test
-    void onConflictDoUpdateRewritesToOnDuplicateTowardMysql() {
+    void onConflictExcludedRewritesToValuesTowardMysql() {
         String sql = CodegenTestSupport.printTranslated(
-                "INSERT INTO attendance (link_to_event, link_to_member, attend) "
-                        + "VALUES ('e', 'm', 1) "
-                        + "ON CONFLICT (link_to_event, link_to_member) DO UPDATE SET attend = 1;",
+                "INSERT INTO t (id, name) VALUES (1, 'a') "
+                        + "ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;",
                 Dialect.POSTGRESQL, Dialect.MYSQL).sql();
         assertThat(sql).containsIgnoringCase("ON DUPLICATE KEY UPDATE");
-        assertThat(sql).doesNotContainIgnoringCase("ON CONFLICT");
-        assertThat(sql).containsIgnoringCase("attend");
+        assertThat(sql).containsIgnoringCase("VALUES(name)");
+        assertThat(sql).doesNotContainIgnoringCase("EXCLUDED");
     }
 
     @Test

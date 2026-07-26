@@ -134,6 +134,10 @@ public final class RenderJsonRule implements Rule {
             if (isNumericPathLeg(key)) {
                 return "$[" + key + "]";
             }
+            // Quote keys with JSON-path metacharacters so 'a.b' stays one leg, not a.then.b.
+            if (needsQuotedPathLeg(key)) {
+                return "$.\"" + key.replace("\"", "\\\"") + "\"";
+            }
             return "$." + key;
         }
 
@@ -142,11 +146,24 @@ public final class RenderJsonRule implements Rule {
             for (String key : keys) {
                 if (isNumericPathLeg(key)) {
                     path.append('[').append(key).append(']');
+                } else if (needsQuotedPathLeg(key)) {
+                    path.append(".\"").append(key.replace("\"", "\\\"")).append('"');
                 } else {
                     path.append('.').append(key);
                 }
             }
             return path.toString();
+        }
+
+        private static boolean needsQuotedPathLeg(String key) {
+            for (int i = 0; i < key.length(); i++) {
+                char c = key.charAt(i);
+                if (c == '.' || c == '[' || c == ']' || c == '"' || c == '\'' || c == ' '
+                        || c == '$' || c == '*') {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private static boolean isNumericPathLeg(String key) {

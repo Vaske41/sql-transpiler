@@ -72,6 +72,25 @@ class RenderJsonRuleTest {
     }
 
     @Test
+    void dottedSingleKeyQuotedTowardMysql() {
+        assertThat(CodegenTestSupport.printTranslated(
+                "SELECT data ->> 'a.b' FROM t;",
+                Dialect.POSTGRESQL, Dialect.MYSQL).sql())
+                .contains("'$.\"a.b\"'")
+                .doesNotContain("'$.a.b'");
+    }
+
+    @Test
+    void dottedSingleKeyQuotedTowardTsql() {
+        assertThat(CodegenTestSupport.printTranslated(
+                "SELECT data ->> 'a.b' FROM t;",
+                Dialect.POSTGRESQL, Dialect.TSQL).sql())
+                .contains("JSON_VALUE")
+                .contains("'$.\"a.b\"'")
+                .doesNotContain("'$.a.b'");
+    }
+
+    @Test
     void containmentRefusedTowardMysql() {
         assertThatThrownBy(() -> CodegenTestSupport.printTranslated(
                 "SELECT payload @> '{\"a\":1}' FROM t;",

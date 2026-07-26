@@ -9,11 +9,15 @@ import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.QualifiedName;
+import rs.etf.sqltranslator.ast.Query;
+import rs.etf.sqltranslator.ast.QuerySpecification;
 import rs.etf.sqltranslator.ast.Relation;
 import rs.etf.sqltranslator.ast.Script;
+import rs.etf.sqltranslator.ast.SelectItem;
+import rs.etf.sqltranslator.ast.SelectStar;
+import rs.etf.sqltranslator.ast.TableFunction;
 import rs.etf.sqltranslator.ast.TableRef;
 import rs.etf.sqltranslator.ast.TableSource;
-import rs.etf.sqltranslator.ast.TableFunction;
 import rs.etf.sqltranslator.ast.ValuesTable;
 import rs.etf.sqltranslator.core.Dialect;
 import rs.etf.sqltranslator.core.SourcePosition;
@@ -25,8 +29,12 @@ import java.util.Optional;
 
 /**
  * T-SQL has no {@code JOIN … USING (…)}. Expand each USING join to an equivalent
- * {@code ON left.col = right.col AND …} using the immediate left and right relation
- * aliases (or bare table names). Refuses when a side has no resolvable name.
+ * {@code ON left.col = right.col AND …}.
+ *
+ * <p>For a <em>chain</em> of USING joins, the left side of each subsequent ON is the
+ * accumulated join result (nested as a derived table), not merely the previous right
+ * relation — otherwise {@code c JOIN g USING (gid) JOIN u USING (uid)} wrongly emits
+ * {@code g.uid = u.uid} when {@code uid} lives on {@code c}.
  */
 public final class ExpandJoinUsingForTsqlRule implements Rule {
 
@@ -47,24 +55,50 @@ public final class ExpandJoinUsingForTsqlRule implements Rule {
 
         @Override
         public Object visitTableSource(TableSource node) {
-            Relation first = rebuild(node.first());
-            String leftName = relationName(first, node.pos());
-            List<Join> joins = new ArrayList<>();
+            Relation leftRel = rebuild(node.first());
+            List<Join> resultJoins = new ArrayList<>();
+            int nestId = 0;
             for (Join join : node.joins()) {
                 Join rebuilt = (Join) rebuild(join);
                 if (rebuilt.usingColumns().isEmpty()) {
-                    joins.add(rebuilt);
-                    leftName = relationName(rebuilt.table(), rebuilt.pos());
+                    resultJoins.add(rebuilt);
                     continue;
                 }
+                if (!resultJoins.isEmpty()) {
+                    // Nest accumulated left so USING columns resolve against the join result.
+                    DerivedTable nest = wrapAccumulated(
+                            leftRel, resultJoins, "_using" + nestId++, rebuilt.pos());
+                    leftRel = nest;
+                    resultJoins = new ArrayList<>();
+                }
+                String leftName = relationName(leftRel, rebuilt.pos());
                 String rightName = relationName(rebuilt.table(), rebuilt.pos());
                 Expression on = usingEquals(leftName, rightName, rebuilt.usingColumns(),
                         rebuilt.pos());
-                joins.add(new Join(rebuilt.kind(), rebuilt.table(), Optional.of(on),
+                resultJoins.add(new Join(rebuilt.kind(), rebuilt.table(), Optional.of(on),
                         List.of(), rebuilt.lateral(), rebuilt.pos()));
-                leftName = rightName;
             }
-            return new TableSource(first, joins, node.pos());
+            return new TableSource(leftRel, resultJoins, node.pos());
+        }
+
+        private static DerivedTable wrapAccumulated(
+                Relation first, List<Join> joins, String alias, SourcePosition pos) {
+            TableSource from = new TableSource(first, joins, pos);
+            QuerySpecification spec = new QuerySpecification(
+                    Optional.empty(),
+                    List.<SelectItem>of(new SelectStar(Optional.empty(), pos)),
+                    Optional.of(from),
+                    Optional.empty(),
+                    List.of(),
+                    Optional.empty(),
+                    pos);
+            Query query = new Query(
+                    List.of(), false, spec, List.of(), List.of(), Optional.empty(), pos);
+            return new DerivedTable(
+                    query,
+                    new Identifier(alias, false, pos),
+                    Optional.empty(),
+                    pos);
         }
 
         private static Expression usingEquals(
