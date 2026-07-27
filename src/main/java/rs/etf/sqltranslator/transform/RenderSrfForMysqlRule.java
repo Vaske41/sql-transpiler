@@ -86,22 +86,47 @@ public final class RenderSrfForMysqlRule implements Rule {
         }
 
         /**
-         * {@code unnest(string_to_array(s, d))} → JSON array literal expression
-         * {@code CONCAT('["', REPLACE(s, d, '","'), '"]')} for {@code JSON_TABLE}.
-         * MySQL 8.0 has no {@code STRING_SPLIT}.
+         * {@code unnest(string_to_array(s, d))} → JSON array literal for {@code JSON_TABLE}.
+         * Escapes {@code \} then {@code "} in {@code s}, then replaces delimiter with
+         * {@code ","}, wrapped as {@code ["…"]}. MySQL 8.0 has no {@code STRING_SPLIT}.
+         * Literal delimiters containing {@code \} or {@code "} are refused — escape-then-split
+         * cannot faithfully recover element boundaries for those delimiters.
          */
         private static Expression stringSplitAsJsonArray(Expression str, Expression delim,
                                                          SourcePosition pos) {
-            FunctionCall replace = new FunctionCall(
-                    "REPLACE",
-                    List.of(str, delim, new StringLiteral("\",\"", false, pos)),
-                    false, Optional.empty(), Optional.empty(), pos);
+            if (delim instanceof StringLiteral lit) {
+                String d = lit.value();
+                if (d.contains("\\") || d.contains("\"")) {
+                    throw new UnsupportedFeatureException(
+                            "unnest(string_to_array) delimiter containing \\ or \""
+                                    + " (no faithful MySQL JSON encoding)",
+                            pos);
+                }
+            }
+            // Order is load-bearing: backslash first, then quote, then delimiter split.
+            Expression escaped = replaceCall(str,
+                    new StringLiteral("\\", false, pos),
+                    new StringLiteral("\\\\", false, pos),
+                    pos);
+            escaped = replaceCall(escaped,
+                    new StringLiteral("\"", false, pos),
+                    new StringLiteral("\\\"", false, pos),
+                    pos);
+            Expression split = replaceCall(escaped, delim, new StringLiteral("\",\"", false, pos), pos);
             return new FunctionCall(
                     "CONCAT",
                     List.of(
                             new StringLiteral("[\"", false, pos),
-                            replace,
+                            split,
                             new StringLiteral("\"]", false, pos)),
+                    false, Optional.empty(), Optional.empty(), pos);
+        }
+
+        private static FunctionCall replaceCall(Expression input, Expression from, Expression to,
+                                                SourcePosition pos) {
+            return new FunctionCall(
+                    "REPLACE",
+                    List.of(input, from, to),
                     false, Optional.empty(), Optional.empty(), pos);
         }
     }

@@ -40,6 +40,43 @@ class RenderSrfForMysqlRuleTest {
     }
 
     @Test
+    void unnestStringToArrayEscapesQuotesAndBackslashes() {
+        // Data with ", \, and delimiter must become a JSON-safe CONCAT/REPLACE chain:
+        // REPLACE(REPLACE(s, '\', '\\'), '"', '\"') before delimiter → '","'.
+        String sql = toMysql(
+                "SELECT * FROM unnest(string_to_array('a\"b,c\\d,e', ',')) AS t");
+        String upper = sql.toUpperCase();
+        assertThat(upper).contains("JSON_TABLE");
+        assertThat(upper).contains("REPLACE");
+        assertThat(sql).contains("\\\\");
+        assertThat(sql).contains("\\\"");
+        assertThat(sql).contains("\",\"");
+    }
+
+    @Test
+    void unnestStringToArrayKeepsDelimiterInPayloadAsSplit() {
+        // Comma delimiter with multi-element payload — encoding still wraps JSON_TABLE TEXT.
+        String sql = toMysql(
+                "SELECT * FROM unnest(string_to_array(payload, ',')) AS t");
+        assertThat(sql)
+                .containsIgnoringCase("JSON_TABLE")
+                .containsIgnoringCase("CONCAT")
+                .containsIgnoringCase("REPLACE");
+    }
+
+    @Test
+    void unnestStringToArrayRefusesQuoteOrBackslashDelimiter() {
+        assertThatThrownBy(() -> toMysql("SELECT * FROM unnest(string_to_array(s, '\"')) AS t"))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("unnest(string_to_array)")
+                .hasMessageContaining("delimiter");
+        assertThatThrownBy(() -> toMysql("SELECT * FROM unnest(string_to_array(s, E'\\\\')) AS t"))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("unnest(string_to_array)")
+                .hasMessageContaining("delimiter");
+    }
+
+    @Test
     void unnestOfArrayColumnStillRefuses() {
         assertThatThrownBy(() -> toMysql("SELECT * FROM unnest(a.arr) AS u"))
                 .isInstanceOf(UnsupportedFeatureException.class)
