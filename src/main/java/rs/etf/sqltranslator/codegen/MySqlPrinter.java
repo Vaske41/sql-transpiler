@@ -140,6 +140,36 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
         }
     }
 
+    @Override
+    public Void visitJsonTableRelation(rs.etf.sqltranslator.ast.JsonTableRelation node) {
+        out.token("JSON_TABLE").raw("(");
+        node.source().accept(this);
+        out.raw(",");
+        out.token("'" + node.path().replace("'", "''") + "'");
+        out.token("COLUMNS").raw("(");
+        boolean first = true;
+        for (rs.etf.sqltranslator.ast.ColumnDefinition col : node.columns()) {
+            if (!first) {
+                out.raw(",");
+            }
+            first = false;
+            out.token(identifier(col.name()));
+            renderDataType(col.type());
+            out.token("PATH").token("'" + jsonTableColumnPath(node.path(), col).replace("'", "''") + "'");
+        }
+        out.raw(")").raw(")");
+        node.alias().ifPresent(alias -> out.token("AS").token(identifier(alias)));
+        return null;
+    }
+
+    private static String jsonTableColumnPath(String tablePath,
+                                              rs.etf.sqltranslator.ast.ColumnDefinition col) {
+        if ("$[*]".equals(tablePath)) {
+            return "$";
+        }
+        return "$." + col.name().value();
+    }
+
     /**
      * MySQL has no {@code UPDATE … FROM}. When a FROM clause is present (after
      * {@code RewriteUpdateFromForMysqlRule} qualifies SET LHS), emit the multi-table

@@ -8,6 +8,7 @@ import rs.etf.sqltranslator.ast.DerivedTable;
 import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.Join;
+import rs.etf.sqltranslator.ast.JsonTableRelation;
 import rs.etf.sqltranslator.ast.QualifiedName;
 import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.QuerySpecification;
@@ -131,6 +132,12 @@ public final class ExpandJoinUsingForTsqlRule implements Rule {
             }
             if (relation instanceof TableFunction fn) {
                 return fn.alias().orElse(fn.name().last()).value();
+            }
+            if (relation instanceof JsonTableRelation jt) {
+                return jt.alias().map(Identifier::value).orElseThrow(() ->
+                        new UnsupportedFeatureException(
+                                "JOIN USING requires a named left/right relation for T-SQL expansion",
+                                pos));
             }
             throw new UnsupportedFeatureException(
                     "JOIN USING requires a named left/right relation for T-SQL expansion",

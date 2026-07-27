@@ -164,6 +164,16 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitJsonTableRelation(JsonTableRelation node) {
+        node.source().accept(this);
+        for (ColumnDefinition col : node.columns()) {
+            col.accept(this);
+        }
+        node.alias().ifPresent(alias -> alias.accept(this));
+        return defaultResult();
+    }
+
+    @Override
     public R visitRowValue(RowValue node) {
         for (Expression value : node.values()) {
             value.accept(this);

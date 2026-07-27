@@ -26,6 +26,7 @@ public final class RuleEngine {
                 new ValidateTargetCapabilitiesRule(),
                 new FlattenNestedCtesForTsqlRule(),
                 new NormalizeSourceFunctionsRule(),
+                new RenderSrfForMysqlRule(),
                 new ReshapeOrderedAggregatesRule(),
                 new RewriteFilteredAggregatesRule(),
                 new RewriteDistinctOnRule(),

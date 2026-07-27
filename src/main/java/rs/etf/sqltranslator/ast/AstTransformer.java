@@ -142,6 +142,16 @@ public class AstTransformer implements AstVisitor<Object> {
     }
 
     @Override
+    public Object visitJsonTableRelation(JsonTableRelation node) {
+        return new JsonTableRelation(
+                rebuild(node.source()),
+                node.path(),
+                rebuildList(node.columns()),
+                rebuildOptional(node.alias()),
+                node.pos());
+    }
+
+    @Override
     public Object visitRowValue(RowValue node) {
         return new RowValue(rebuildList(node.values()), node.pos());
     }

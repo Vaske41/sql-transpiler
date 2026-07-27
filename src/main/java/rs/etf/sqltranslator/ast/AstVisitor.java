@@ -38,6 +38,8 @@ public interface AstVisitor<R> {
 
     R visitTableFunction(TableFunction node);
 
+    R visitJsonTableRelation(JsonTableRelation node);
+
     R visitRowValue(RowValue node);
 
     R visitJoin(Join node);

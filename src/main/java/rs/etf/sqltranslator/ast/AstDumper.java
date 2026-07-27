@@ -148,6 +148,15 @@ public final class AstDumper implements AstVisitor<String> {
     }
 
     @Override
+    public String visitJsonTableRelation(JsonTableRelation node) {
+        return node("JsonTableRelation path=" + quote(node.path()))
+                .child("source", node.source())
+                .children("columns", node.columns())
+                .child("alias", node.alias())
+                .done();
+    }
+
+    @Override
     public String visitRowValue(RowValue node) {
         return node("RowValue")
                 .children("values", node.values())

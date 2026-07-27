@@ -115,7 +115,9 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
 
         @Override
         public Object visitTableFunction(TableFunction node) {
-            if (ctx.target() == Dialect.MYSQL || ctx.target() == Dialect.TSQL) {
+            // MySQL: RenderSrfForMysqlRule rewrites known SRFs or refuses; keep T-SQL
+            // refusal here until RenderSrfForTsqlRule (Task 6) owns that fall-through.
+            if (ctx.target() == Dialect.TSQL) {
                 throw new UnsupportedFeatureException(
                         "table function (no SRF-in-FROM in target)", node.pos());
             }

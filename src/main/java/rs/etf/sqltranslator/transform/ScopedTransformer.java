@@ -12,6 +12,7 @@ import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.InsertStatement;
 import rs.etf.sqltranslator.ast.Join;
+import rs.etf.sqltranslator.ast.JsonTableRelation;
 import rs.etf.sqltranslator.ast.NumericLiteral;
 import rs.etf.sqltranslator.ast.QualifiedName;
 import rs.etf.sqltranslator.ast.Query;
@@ -298,6 +299,15 @@ public abstract class ScopedTransformer extends rs.etf.sqltranslator.ast.AstTran
         }
         if (relation instanceof TableFunction fn) {
             Identifier alias = fn.alias().orElse(fn.name().last());
+            String key = alias.value().toLowerCase(Locale.ROOT);
+            QualifiedName qn = new QualifiedName(
+                    List.of(new Identifier(alias.value(), false, alias.pos())),
+                    alias.pos());
+            return List.of(new ScopedTable(key, new TableSchema(qn, List.of())));
+        }
+        if (relation instanceof JsonTableRelation jt) {
+            Identifier alias = jt.alias().orElseThrow(() -> new IllegalStateException(
+                    "JSON_TABLE relation requires an alias for scoping"));
             String key = alias.value().toLowerCase(Locale.ROOT);
             QualifiedName qn = new QualifiedName(
                     List.of(new Identifier(alias.value(), false, alias.pos())),

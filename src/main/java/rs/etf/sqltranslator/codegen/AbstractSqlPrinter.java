@@ -811,6 +811,12 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     }
 
     @Override
+    public Void visitJsonTableRelation(JsonTableRelation node) {
+        throw new IllegalStateException(
+                "rule engine contract: JsonTableRelation must only reach MySqlPrinter");
+    }
+
+    @Override
     public Void visitRowValue(RowValue node) {
         out.token("(");
         csv(node.values());
