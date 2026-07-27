@@ -48,6 +48,17 @@ class RenderSrfForTsqlRuleTest {
     }
 
     @Test
+    void correlatedInnerJoinSrfBecomesCrossApply() {
+        String sql = toTsql(
+                "SELECT t.value FROM events e "
+                        + "JOIN json_array_elements(e.payload) AS t ON true");
+        assertThat(sql).containsIgnoringCase("CROSS APPLY");
+        assertThat(sql).containsIgnoringCase("OPENJSON");
+        assertThat(sql.toUpperCase()).doesNotContain("INNER JOIN OPENJSON");
+        assertThat(sql.toUpperCase()).doesNotContain("JOIN OPENJSON");
+    }
+
+    @Test
     void unmappableSrfStillRefusesHonestly() {
         assertThatThrownBy(() -> toTsql("SELECT * FROM generate_subscripts(a, 1) AS g"))
                 .isInstanceOf(UnsupportedFeatureException.class)

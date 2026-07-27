@@ -1,12 +1,14 @@
 package rs.etf.sqltranslator.transform;
 
 import rs.etf.sqltranslator.ast.AstTransformer;
+import rs.etf.sqltranslator.ast.BooleanLiteral;
 import rs.etf.sqltranslator.ast.ColumnRef;
 import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.JoinKind;
+import rs.etf.sqltranslator.ast.NumericLiteral;
 import rs.etf.sqltranslator.ast.QualifiedName;
 import rs.etf.sqltranslator.ast.Relation;
 import rs.etf.sqltranslator.ast.Script;
@@ -25,9 +27,10 @@ import java.util.Set;
  * {@code STRING_SPLIT}. Owns the T-SQL SRF fall-through (validator must not refuse
  * table functions toward T-SQL, or this rewrite never runs).
  *
- * <p>Correlated comma / non-lateral {@code CROSS} joins become {@code CROSS APPLY}
- * ({@code Join.lateral = true}) — T-SQL cannot comma-join a TVF that references the
- * left side.
+ * <p>Correlated TVF joins become {@code CROSS APPLY} / {@code OUTER APPLY}
+ * ({@code Join.lateral = true}) — T-SQL cannot plain-JOIN a TVF that references the
+ * left side. INNER + trivial ON folds to CROSS APPLY; LEFT + trivial ON becomes
+ * OUTER APPLY. Non-foldable correlated shapes refuse.
  */
 public final class RenderSrfForTsqlRule implements Rule {
 
@@ -61,15 +64,32 @@ public final class RenderSrfForTsqlRule implements Rule {
             Optional<Expression> on = rebuildOptional(node.on());
             List<Identifier> usingColumns = rebuildList(node.usingColumns());
             boolean lateral = node.lateral();
+            JoinKind kind = node.kind();
+
             // PG SRFs are implicitly lateral; T-SQL needs APPLY when the TVF refs the left.
-            if (!lateral
-                    && node.kind() == JoinKind.CROSS
-                    && table instanceof TableFunction tf
+            if (table instanceof TableFunction tf
                     && isTsqlTvf(tf)
                     && argsContainColumnRef(tf)) {
-                lateral = true;
+                if (kind == JoinKind.CROSS && usingColumns.isEmpty()) {
+                    lateral = true;
+                    on = Optional.empty();
+                } else if (kind == JoinKind.INNER
+                        && usingColumns.isEmpty()
+                        && isTrivialOn(on)) {
+                    kind = JoinKind.CROSS;
+                    lateral = true;
+                    on = Optional.empty();
+                } else if (kind == JoinKind.LEFT
+                        && usingColumns.isEmpty()
+                        && isTrivialOn(on)) {
+                    lateral = true;
+                } else {
+                    throw new UnsupportedFeatureException(
+                            "correlated table function join cannot fold to APPLY",
+                            node.pos());
+                }
             }
-            return new Join(node.kind(), table, on, usingColumns, lateral, node.pos());
+            return new Join(kind, table, on, usingColumns, lateral, node.pos());
         }
 
         @Override
@@ -121,6 +141,18 @@ public final class RenderSrfForTsqlRule implements Rule {
 
         private static boolean isTsqlTvf(TableFunction tf) {
             return TSQL_TVF.contains(tf.name().last().value().toUpperCase(Locale.ROOT));
+        }
+
+        /** Empty / TRUE / {@code 1} ON — foldable to APPLY (no residual predicate). */
+        private static boolean isTrivialOn(Optional<Expression> on) {
+            if (on.isEmpty()) {
+                return true;
+            }
+            Expression expr = on.get();
+            if (expr instanceof BooleanLiteral b) {
+                return b.value();
+            }
+            return expr instanceof NumericLiteral n && "1".equals(n.text());
         }
 
         private static boolean argsContainColumnRef(TableFunction tf) {
