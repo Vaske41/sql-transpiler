@@ -53,10 +53,10 @@ class TypeFoldingTest {
     }
 
     @Test
-    void mysqlTinyintOtherLengthsAreRefused() {
-        assertThatExceptionOfType(UnsupportedFeatureException.class)
-                .isThrownBy(() -> columnType("TINYINT(2)", Dialect.MYSQL))
-                .withMessageContaining("length argument on type TINYINT");
+    void mysqlTinyintOtherDisplayWidthsAreDropped() {
+        DataType type = columnType("TINYINT(2)", Dialect.MYSQL);
+        assertThat(type.type()).isEqualTo(GenericType.TINYINT);
+        assertThat(type.length()).isEmpty();
     }
 
     @Test
@@ -188,11 +188,11 @@ class TypeFoldingTest {
     @Test
     void lengthArgumentOnNonParameterizableFoldIsRefused() {
         assertThatExceptionOfType(UnsupportedFeatureException.class)
-                .isThrownBy(() -> columnType("FLOAT(24)", Dialect.TSQL))
-                .withMessageContaining("length argument on type FLOAT");
+                .isThrownBy(() -> columnType("BOOLEAN(1)", Dialect.POSTGRESQL))
+                .withMessageContaining("length argument on type BOOLEAN");
         assertThatExceptionOfType(UnsupportedFeatureException.class)
-                .isThrownBy(() -> columnType("DOUBLE PRECISION(10)", Dialect.POSTGRESQL))
-                .withMessageContaining("length argument on type DOUBLE PRECISION");
+                .isThrownBy(() -> columnType("DATE(10)", Dialect.MYSQL))
+                .withMessageContaining("length argument on type DATE");
     }
 
     @Test

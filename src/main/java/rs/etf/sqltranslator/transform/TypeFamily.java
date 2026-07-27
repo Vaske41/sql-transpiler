@@ -11,7 +11,7 @@ public enum TypeFamily {
             case TINYINT, SMALLINT, INTEGER, BIGINT, DECIMAL, FLOAT, DOUBLE -> NUMERIC;
             case CHAR, VARCHAR, NVARCHAR, TEXT, JSON, JSONB, UUID -> STRING;
             case BOOLEAN -> BOOLEAN;
-            case DATE, TIME, TIMESTAMP -> DATETIME;
+            case DATE, TIME, TIMESTAMP, TIMESTAMP_TZ -> DATETIME;
             case BLOB -> BINARY;
         };
     }

@@ -298,6 +298,9 @@ primaryExpression
     | convertExpression                     # convertExpr
     | extractExpression                     # extractExpr
     | intervalLiteral                       # intervalExpr
+    | SUBSTRING '(' expression FROM expression (FOR expression)? ')'   # substringStandard
+    | POSITION '(' expression IN expression ')'                        # positionStandard
+    | TRIM '(' (LEADING | TRAILING | BOTH)? expression (FROM expression)? ')' # trimStandard
     | functionCall windowOverlay?           # functionExpr
     | columnReference                       # columnRefExpr
     | subquery                              # scalarSubqueryExpr
@@ -364,7 +367,7 @@ frameBound
     ;
 
 // A join's LEFT/RIGHT is never followed by '(' — unambiguous as function names.
-functionName : identifier | MAX | LEFT | RIGHT ;
+functionName : identifier | MAX | LEFT | RIGHT | SUBSTRING | POSITION | TRIM ;
 
 caseExpression
     : CASE expression? (WHEN expression THEN expression)+ (ELSE expression)? END
@@ -385,6 +388,7 @@ aliasName  : identifier | nonReservedWord ;
 
 nonReservedWord
     : KEY | FIRST | LAST | END | ROW | MAX
+    | SUBSTRING | POSITION | TRIM | LEADING | TRAILING | BOTH | FOR
     ;
 
 literal
@@ -419,24 +423,24 @@ clusterOption : CLUSTERED | NONCLUSTERED ;
 
 ADD:A D D; ALL:A L L; ALTER:A L T E R; ALWAYS:A L W A Y S; AND:A N D;
 AS:A S; ASC:A S C; AUTO_INCREMENT:A U T O '_' I N C R E M E N T; APPLY:A P P L Y;
-BETWEEN:B E T W E E N; BY:B Y; CASE:C A S E; CAST:C A S T;
+BETWEEN:B E T W E E N; BOTH:B O T H; BY:B Y; CASE:C A S E; CAST:C A S T;
 CLUSTERED:C L U S T E R E D; COLUMN:C O L U M N;
 CONSTRAINT:C O N S T R A I N T; CONVERT:C O N V E R T; CREATE:C R E A T E;
 CROSS:C R O S S; CURRENT_ROW:C U R R E N T [ \t\r\n]+ R O W; DEFAULT:D E F A U L T; DELETE:D E L E T E; DESC:D E S C;
 DISTINCT:D I S T I N C T; DROP:D R O P; ELSE:E L S E; END:E N D;
 EXCEPT:E X C E P T; EXISTS:E X I S T S; FALSE:F A L S E; FETCH:F E T C H; FIRST:F I R S T;
-FOLLOWING:F O L L O W I N G; FOREIGN:F O R E I G N; FROM:F R O M; FULL:F U L L;
+FOLLOWING:F O L L O W I N G; FOR:F O R; FOREIGN:F O R E I G N; FROM:F R O M; FULL:F U L L;
 GENERATED:G E N E R A T E D; GROUP:G R O U P; HAVING:H A V I N G;
 IDENTITY:I D E N T I T Y; IF:I F; IN:I N; INDEX:I N D E X;
 INNER:I N N E R; INSERT:I N S E R T; INTERSECT:I N T E R S E C T; INTERVAL:I N T E R V A L; INTO:I N T O; IS:I S; JOIN:J O I N;
-KEY:K E Y; LAST:L A S T; LATERAL:L A T E R A L; LEFT:L E F T; LIKE:L I K E; LIMIT:L I M I T;
+KEY:K E Y; LAST:L A S T; LATERAL:L A T E R A L; LEADING:L E A D I N G; LEFT:L E F T; LIKE:L I K E; LIMIT:L I M I T;
 MAX:M A X; NEXT:N E X T; NONCLUSTERED:N O N C L U S T E R E D; NOT:N O T;
 NULL:N U L L; NULLS:N U L L S; OFFSET:O F F S E T; ON:O N; ONLY:O N L Y;
 OR:O R; ORDER:O R D E R; OUTER:O U T E R; OVER:O V E R;
-PARTITION:P A R T I T I O N; PRECEDING:P R E C E D I N G; PRIMARY:P R I M A R Y;
+PARTITION:P A R T I T I O N; POSITION:P O S I T I O N; PRECEDING:P R E C E D I N G; PRIMARY:P R I M A R Y;
 RANGE:R A N G E; RECURSIVE:R E C U R S I V E; REFERENCES:R E F E R E N C E S; RIGHT:R I G H T; ROW:R O W; ROWS:R O W S;
-SELECT:S E L E C T; SEPARATOR:S E P A R A T O R; SET:S E T; TABLE:T A B L E; THEN:T H E N; TOP:T O P;
-TRUE:T R U E; UNBOUNDED:U N B O U N D E D; UNION:U N I O N; UNIQUE:U N I Q U E; UNKNOWN:U N K N O W N; UPDATE:U P D A T E;
+SELECT:S E L E C T; SEPARATOR:S E P A R A T O R; SET:S E T; SUBSTRING:S U B S T R I N G; TABLE:T A B L E; THEN:T H E N; TOP:T O P;
+TRAILING:T R A I L I N G; TRIM:T R I M; TRUE:T R U E; UNBOUNDED:U N B O U N D E D; UNION:U N I O N; UNIQUE:U N I Q U E; UNKNOWN:U N K N O W N; UPDATE:U P D A T E;
 USING:U S I N G; VALUES:V A L U E S; WHEN:W H E N; WHERE:W H E R E; WITH:W I T H; WITHIN:W I T H I N;
 
 // =====================================================================

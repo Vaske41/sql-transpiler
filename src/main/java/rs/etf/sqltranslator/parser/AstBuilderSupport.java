@@ -21,6 +21,7 @@ import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.ExtractExpression;
 import rs.etf.sqltranslator.ast.FixedLength;
 import rs.etf.sqltranslator.ast.ForeignKeyRef;
+import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.GenericType;
 import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.InSubqueryPredicate;
@@ -73,7 +74,8 @@ final class AstBuilderSupport {
     /** Length/scale arguments are carried only into these generics (§2.3). */
     private static final Set<GenericType> PARAMETERIZABLE = Set.of(
             GenericType.CHAR, GenericType.VARCHAR, GenericType.NVARCHAR,
-            GenericType.DECIMAL, GenericType.TIME, GenericType.TIMESTAMP);
+            GenericType.DECIMAL, GenericType.FLOAT, GenericType.DOUBLE,
+            GenericType.TIME, GenericType.TIMESTAMP);
 
     /** Two-word forms accepted verbatim by the fold table (§3 fix 2 + Wave 3 C1). */
     private static final Set<String> TWO_WORD_TYPES = Set.of(
@@ -258,6 +260,42 @@ final class AstBuilderSupport {
                                         SourcePosition position) {
         requireContextualKeyword(name, "EXTRACT");
         return new ExtractExpression(field.value(), source, position);
+    }
+
+    /** SQL-standard {@code SUBSTRING(x FROM y [FOR z])} → positional {@code SUBSTRING}. */
+    FunctionCall substringStandard(Expression source, Expression from, Optional<Expression> forLength,
+                                   SourcePosition position) {
+        List<Expression> args = new ArrayList<>();
+        args.add(source);
+        args.add(from);
+        forLength.ifPresent(args::add);
+        return new FunctionCall("SUBSTRING", args, false, Optional.empty(), Optional.empty(), position);
+    }
+
+    /** SQL-standard {@code POSITION(needle IN haystack)} → positional {@code POSITION}. */
+    FunctionCall positionStandard(Expression needle, Expression haystack, SourcePosition position) {
+        return new FunctionCall("POSITION", List.of(needle, haystack), false,
+                Optional.empty(), Optional.empty(), position);
+    }
+
+    /**
+     * SQL-standard {@code TRIM([LEADING|TRAILING|BOTH] [chars] [FROM] source)}.
+     * Spec is carried as a leading string argument when present or implied by {@code FROM}.
+     */
+    FunctionCall trimStandard(Optional<String> spec, Expression first, Optional<Expression> fromSource,
+                              SourcePosition position) {
+        if (spec.isEmpty() && fromSource.isEmpty()) {
+            return new FunctionCall("TRIM", List.of(first), false,
+                    Optional.empty(), Optional.empty(), position);
+        }
+        String effectiveSpec = spec.orElse("BOTH").toUpperCase(Locale.ROOT);
+        StringLiteral specLit = new StringLiteral(effectiveSpec, false, position);
+        if (fromSource.isEmpty()) {
+            return new FunctionCall("TRIM", List.of(specLit, first), false,
+                    Optional.empty(), Optional.empty(), position);
+        }
+        return new FunctionCall("TRIM", List.of(specLit, first, fromSource.get()), false,
+                Optional.empty(), Optional.empty(), position);
     }
 
     /** Requires an unquoted contextual keyword (VIEW / FUNCTION / TRUNCATE / …). */
@@ -952,6 +990,15 @@ final class AstBuilderSupport {
         Optional<TypeLength> length = Optional.empty();
         Optional<Integer> scale = Optional.empty();
         if (!args.isEmpty()) {
+            boolean integerDisplayWidth = dialect == Dialect.MYSQL
+                    && (generic == GenericType.INTEGER || generic == GenericType.BIGINT
+                        || generic == GenericType.SMALLINT || generic == GenericType.TINYINT)
+                    && args.size() == 1;
+            if (integerDisplayWidth) {
+                // MySQL display width is cosmetic and has no cross-dialect meaning: drop it.
+                return new FoldedType(new DataType(generic, Optional.empty(), Optional.empty()),
+                        entry.autoIncrement());
+            }
             refuseIf(!PARAMETERIZABLE.contains(generic),
                     "length argument on type " + name, position);
             String first = args.get(0);
@@ -1017,8 +1064,10 @@ final class AstBuilderSupport {
                     Map.entry("CHAR", Fold.of(GenericType.CHAR)),
                     Map.entry("DATETIME2", Fold.of(GenericType.TIMESTAMP)),
                     Map.entry("DATETIME", Fold.of(GenericType.TIMESTAMP)),
+                    Map.entry("DATETIMEOFFSET", Fold.of(GenericType.TIMESTAMP_TZ)),
                     Map.entry("DATE", Fold.of(GenericType.DATE)),
                     Map.entry("TIME", Fold.of(GenericType.TIME)),
+                    Map.entry("TIMESTAMPTZ", Fold.of(GenericType.TIMESTAMP_TZ)),
                     Map.entry("IMAGE", Fold.of(GenericType.BLOB)),
                     Map.entry("UNIQUEIDENTIFIER", Fold.of(GenericType.UUID)),
                     Map.entry("JSON", Fold.of(GenericType.JSON)),
@@ -1049,6 +1098,8 @@ final class AstBuilderSupport {
                     Map.entry("BOOL", Fold.of(GenericType.BOOLEAN)),
                     Map.entry("DATETIME", Fold.of(GenericType.TIMESTAMP)),
                     Map.entry("TIMESTAMP", Fold.of(GenericType.TIMESTAMP)),
+                    Map.entry("TIMESTAMPTZ", Fold.of(GenericType.TIMESTAMP_TZ)),
+                    Map.entry("DATETIMEOFFSET", Fold.of(GenericType.TIMESTAMP_TZ)),
                     Map.entry("DATE", Fold.of(GenericType.DATE)),
                     Map.entry("TIME", Fold.of(GenericType.TIME)),
                     Map.entry("BLOB", Fold.of(GenericType.BLOB)),
@@ -1083,6 +1134,7 @@ final class AstBuilderSupport {
                     Map.entry("DECIMAL", Fold.of(GenericType.DECIMAL)),
                     Map.entry("NUMERIC", Fold.of(GenericType.DECIMAL)),
                     Map.entry("REAL", Fold.of(GenericType.FLOAT)),
+                    Map.entry("FLOAT", Fold.of(GenericType.FLOAT)),
                     Map.entry("DOUBLE PRECISION", Fold.of(GenericType.DOUBLE)),
                     Map.entry("FLOAT8", Fold.of(GenericType.DOUBLE)),
                     Map.entry("VARCHAR", Fold.of(GenericType.VARCHAR)),
@@ -1091,6 +1143,8 @@ final class AstBuilderSupport {
                     Map.entry("BOOLEAN", Fold.of(GenericType.BOOLEAN)),
                     Map.entry("BOOL", Fold.of(GenericType.BOOLEAN)),
                     Map.entry("TIMESTAMP", Fold.of(GenericType.TIMESTAMP)),
+                    Map.entry("TIMESTAMPTZ", Fold.of(GenericType.TIMESTAMP_TZ)),
+                    Map.entry("DATETIMEOFFSET", Fold.of(GenericType.TIMESTAMP_TZ)),
                     Map.entry("DATE", Fold.of(GenericType.DATE)),
                     Map.entry("TIME", Fold.of(GenericType.TIME)),
                     Map.entry("BYTEA", Fold.of(GenericType.BLOB)),

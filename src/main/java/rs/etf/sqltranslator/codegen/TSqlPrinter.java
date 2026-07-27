@@ -266,6 +266,7 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
             case DATE -> "DATE";
             case TIME -> "TIME";
             case TIMESTAMP -> "DATETIME2";
+            case TIMESTAMP_TZ -> "DATETIMEOFFSET";
             case BLOB, UUID -> throw new AssertionError("handled above");
             case TEXT -> throw new IllegalStateException(
                     "rule engine contract: TEXT must not reach the T-SQL printer");

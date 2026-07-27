@@ -843,6 +843,31 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
         if (ctx.intervalLiteral() != null) {
             return visit(ctx.intervalLiteral());
         }
+        if (ctx.SUBSTRING() != null) {
+            Optional<Expression> forLength = ctx.FOR() == null
+                    ? Optional.empty()
+                    : Optional.of(expr(ctx.expression(2)));
+            return support.substringStandard(
+                    expr(ctx.expression(0)), expr(ctx.expression(1)), forLength, pos(ctx));
+        }
+        if (ctx.POSITION() != null) {
+            return support.positionStandard(
+                    expr(ctx.expression(0)), expr(ctx.expression(1)), pos(ctx));
+        }
+        if (ctx.TRIM() != null) {
+            Optional<String> spec = Optional.empty();
+            if (ctx.LEADING() != null) {
+                spec = Optional.of("LEADING");
+            } else if (ctx.TRAILING() != null) {
+                spec = Optional.of("TRAILING");
+            } else if (ctx.BOTH() != null) {
+                spec = Optional.of("BOTH");
+            }
+            Optional<Expression> fromSource = ctx.FROM() == null
+                    ? Optional.empty()
+                    : Optional.of(expr(ctx.expression(1)));
+            return support.trimStandard(spec, expr(ctx.expression(0)), fromSource, pos(ctx));
+        }
         if (ctx.functionCall() != null) {
             FunctionCall call = (FunctionCall) visit(ctx.functionCall());
             if (ctx.windowOverlay() != null) {

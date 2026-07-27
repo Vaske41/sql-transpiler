@@ -1,6 +1,7 @@
 package rs.etf.sqltranslator.codegen;
 
 import rs.etf.sqltranslator.ast.DataType;
+import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.StringLiteral;
 
@@ -10,6 +11,19 @@ import rs.etf.sqltranslator.ast.StringLiteral;
  * printer (Phase 4 narrows them) — reaching them is a contract violation.
  */
 public final class PostgreSqlPrinter extends AbstractSqlPrinter {
+
+    @Override
+    public Void visitFunctionCall(FunctionCall node) {
+        if (node.name().equals("POSITION") && !node.star() && node.args().size() == 2) {
+            out.token("POSITION").raw("(");
+            node.args().get(0).accept(this);
+            out.token("IN");
+            node.args().get(1).accept(this);
+            out.raw(")");
+            return null;
+        }
+        return super.visitFunctionCall(node);
+    }
 
     @Override
     protected void renderRowLimit(Query query) {
@@ -63,6 +77,7 @@ public final class PostgreSqlPrinter extends AbstractSqlPrinter {
             case DATE -> "DATE";
             case TIME -> "TIME";
             case TIMESTAMP -> "TIMESTAMP";
+            case TIMESTAMP_TZ -> "TIMESTAMPTZ";
             case BLOB -> "BYTEA";
             case JSON -> "JSON";
             case JSONB -> "JSONB";

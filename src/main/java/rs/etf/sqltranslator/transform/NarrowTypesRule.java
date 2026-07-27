@@ -109,6 +109,13 @@ public final class NarrowTypesRule implements Rule {
                 return new DataType(GenericType.CHAR,
                         Optional.of(new FixedLength(36)), Optional.empty(), type.arrayDims());
             }
+            if (ctx.target() == Dialect.MYSQL && type.type() == GenericType.TIMESTAMP_TZ) {
+                ctx.report().warn("TIMESTAMPTZ_AS_TIMESTAMP",
+                        "timezone-aware timestamp has no MySQL equivalent; mapped to TIMESTAMP "
+                                + "with timezone information lost", pos);
+                return new DataType(GenericType.TIMESTAMP, type.length(), type.scale(),
+                        type.arrayDims());
+            }
             if (type.type() == GenericType.TINYINT) {
                 if (ctx.target() == Dialect.POSTGRESQL) {
                     ctx.report().warn("TINYINT_WIDENED",

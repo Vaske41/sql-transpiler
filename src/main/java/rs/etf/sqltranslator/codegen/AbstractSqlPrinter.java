@@ -320,6 +320,12 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
 
     @Override
     public Void visitFunctionCall(FunctionCall node) {
+        if (isSpecifiedTrim(node)) {
+            return renderSpecifiedTrim(node);
+        }
+        if (isPositionInForm(node)) {
+            return renderPositionInForm(node);
+        }
         out.token(node.name()).raw("(");
         if (node.star()) {
             out.raw("*");
@@ -358,6 +364,51 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     /** MySQL {@code GROUP_CONCAT(expr [ORDER BY …] SEPARATOR sep)} — sep is the 2nd arg. */
     private static boolean isGroupConcatWithSeparator(FunctionCall node) {
         return node.name().equals("GROUP_CONCAT") && node.args().size() == 2 && !node.star();
+    }
+
+    /** PostgreSQL {@code POSITION(needle IN haystack)} — comma form is not accepted. */
+    private static boolean isPositionInForm(FunctionCall node) {
+        return node.name().equals("POSITION") && node.args().size() == 2 && !node.star();
+    }
+
+    private Void renderPositionInForm(FunctionCall node) {
+        out.token("POSITION").raw("(");
+        node.args().get(0).accept(this);
+        out.token("IN");
+        node.args().get(1).accept(this);
+        out.raw(")");
+        return null;
+    }
+
+    /**
+     * {@code TRIM('LEADING'|'TRAILING'|'BOTH', [chars,] source)} → SQL-standard
+     * {@code TRIM(LEADING [chars] FROM source)} form used by MySQL and PostgreSQL.
+     */
+    private static boolean isSpecifiedTrim(FunctionCall node) {
+        if (!node.name().equals("TRIM") || node.star() || node.args().size() < 2) {
+            return false;
+        }
+        if (!(node.args().get(0) instanceof StringLiteral spec)) {
+            return false;
+        }
+        String value = spec.value().toUpperCase(java.util.Locale.ROOT);
+        return value.equals("LEADING") || value.equals("TRAILING") || value.equals("BOTH");
+    }
+
+    private Void renderSpecifiedTrim(FunctionCall node) {
+        StringLiteral spec = (StringLiteral) node.args().get(0);
+        out.token("TRIM").raw("(");
+        out.token(spec.value().toUpperCase(java.util.Locale.ROOT));
+        if (node.args().size() == 2) {
+            out.token("FROM");
+            node.args().get(1).accept(this);
+        } else {
+            node.args().get(1).accept(this);
+            out.token("FROM");
+            node.args().get(2).accept(this);
+        }
+        out.raw(")");
+        return null;
     }
 
     @Override

@@ -112,6 +112,8 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
                     "rule engine contract: NVARCHAR must not reach the MySQL printer");
             case UUID -> throw new IllegalStateException(
                     "rule engine contract: UUID must be narrowed to CHAR(36) before MySQL print");
+            case TIMESTAMP_TZ -> throw new IllegalStateException(
+                    "rule engine contract: TIMESTAMP_TZ must be narrowed before MySQL print");
         };
         out.token(name);
         renderTypeArgs(type);

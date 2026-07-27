@@ -858,6 +858,37 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitSubstringStandard(MySqlParser.SubstringStandardContext ctx) {
+        Optional<Expression> forLength = ctx.FOR() == null
+                ? Optional.empty()
+                : Optional.of(expr(ctx.expression(2)));
+        return support.substringStandard(
+                expr(ctx.expression(0)), expr(ctx.expression(1)), forLength, pos(ctx));
+    }
+
+    @Override
+    public Object visitPositionStandard(MySqlParser.PositionStandardContext ctx) {
+        return support.positionStandard(
+                expr(ctx.expression(0)), expr(ctx.expression(1)), pos(ctx));
+    }
+
+    @Override
+    public Object visitTrimStandard(MySqlParser.TrimStandardContext ctx) {
+        Optional<String> spec = Optional.empty();
+        if (ctx.LEADING() != null) {
+            spec = Optional.of("LEADING");
+        } else if (ctx.TRAILING() != null) {
+            spec = Optional.of("TRAILING");
+        } else if (ctx.BOTH() != null) {
+            spec = Optional.of("BOTH");
+        }
+        Optional<Expression> fromSource = ctx.FROM() == null
+                ? Optional.empty()
+                : Optional.of(expr(ctx.expression(1)));
+        return support.trimStandard(spec, expr(ctx.expression(0)), fromSource, pos(ctx));
+    }
+
+    @Override
     public Object visitIntervalExpr(MySqlParser.IntervalExprContext ctx) {
         return visit(ctx.intervalLiteral());
     }
