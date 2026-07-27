@@ -796,11 +796,17 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         csv(node.args());
         out.raw(")");
         node.alias().ifPresent(alias -> out.token("AS").token(identifier(alias)));
-        node.columnAliases().ifPresent(cols -> {
+        if (!node.columnTypes().isEmpty()) {
             out.raw("(");
-            csv(cols);
+            csv(node.columnTypes());
             out.raw(")");
-        });
+        } else {
+            node.columnAliases().ifPresent(cols -> {
+                out.raw("(");
+                csv(cols);
+                out.raw(")");
+            });
+        }
         return null;
     }
 

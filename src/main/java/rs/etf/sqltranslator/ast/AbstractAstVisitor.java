@@ -157,6 +157,9 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
                 col.accept(this);
             }
         });
+        for (ColumnDefinition col : node.columnTypes()) {
+            col.accept(this);
+        }
         return defaultResult();
     }
 

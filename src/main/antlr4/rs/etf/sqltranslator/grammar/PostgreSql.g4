@@ -196,13 +196,15 @@ tablePrimary
     // Function form before bare name — otherwise generate_series(…) matches namedTablePrimary
     // and the '(' is left for the statement closer.
     : qualifiedName '(' (expression (',' expression)*)? ')' (AS? aliasName)?
-        ('(' columnName (',' columnName)* ')')?                # functionTablePrimary
+        ('(' tableFunctionColumn (',' tableFunctionColumn)* ')')?  # functionTablePrimary
     | qualifiedName (AS? aliasName)?                           # namedTablePrimary
     | '(' queryExpression ')' (AS? aliasName)?
         ('(' columnName (',' columnName)* ')')?              # derivedTablePrimary
     | '(' VALUES rowValue (',' rowValue)* ')' AS? aliasName
         ('(' columnName (',' columnName)* ')')?              # valuesTablePrimary
     ;
+
+tableFunctionColumn : columnName dataType? ;
 
 joinedTable
     : CROSS APPLY tablePrimary

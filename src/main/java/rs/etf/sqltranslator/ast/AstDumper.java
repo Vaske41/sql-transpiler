@@ -136,11 +136,15 @@ public final class AstDumper implements AstVisitor<String> {
 
     @Override
     public String visitTableFunction(TableFunction node) {
-        return node("TableFunction")
+        Dump dump = node("TableFunction")
                 .child("name", node.name())
                 .children("args", node.args())
-                .child("alias", node.alias())
-                .done();
+                .child("alias", node.alias());
+        node.columnAliases().ifPresent(cols -> dump.children("columnAliases", cols));
+        if (!node.columnTypes().isEmpty()) {
+            dump.children("columnTypes", node.columnTypes());
+        }
+        return dump.done();
     }
 
     @Override

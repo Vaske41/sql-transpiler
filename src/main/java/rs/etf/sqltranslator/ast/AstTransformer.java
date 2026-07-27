@@ -137,6 +137,7 @@ public class AstTransformer implements AstVisitor<Object> {
                 rebuildList(node.args()),
                 rebuildOptional(node.alias()),
                 node.columnAliases().map(this::rebuildList),
+                rebuildList(node.columnTypes()),
                 node.pos());
     }
 

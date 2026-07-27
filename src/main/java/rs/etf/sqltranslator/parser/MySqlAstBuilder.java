@@ -236,10 +236,22 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
         Optional<Identifier> alias = ctx.aliasName() == null
                 ? Optional.empty() : Optional.of(aliasName(ctx.aliasName()));
         Optional<List<Identifier>> cols = Optional.empty();
-        if (!ctx.columnName().isEmpty()) {
-            cols = Optional.of(ctx.columnName().stream().map(this::columnName).toList());
+        List<ColumnDefinition> columnTypes = List.of();
+        List<MySqlParser.TableFunctionColumnContext> colCtxs = ctx.tableFunctionColumn();
+        if (!colCtxs.isEmpty()) {
+            cols = Optional.of(colCtxs.stream()
+                    .map(c -> columnName(c.columnName())).toList());
+            if (colCtxs.stream().allMatch(c -> c.dataType() != null)) {
+                columnTypes = colCtxs.stream()
+                        .map(c -> new ColumnDefinition(
+                                columnName(c.columnName()), castType(c.dataType()),
+                                false, Optional.empty(), Optional.empty(),
+                                false, false, Optional.empty(), pos(c)))
+                        .toList();
+            }
         }
-        return new TableFunction(qname(ctx.qualifiedName()), args, alias, cols, pos(ctx));
+        return new TableFunction(qname(ctx.qualifiedName()), args, alias, cols,
+                columnTypes, pos(ctx));
     }
 
     @Override
