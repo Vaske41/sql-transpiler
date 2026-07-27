@@ -9,6 +9,8 @@ import rs.etf.sqltranslator.ast.IntervalLiteral;
 import rs.etf.sqltranslator.ast.NullsOrder;
 import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.QuerySpecification;
+import rs.etf.sqltranslator.ast.Script;
+import rs.etf.sqltranslator.ast.Statement;
 import rs.etf.sqltranslator.ast.StringLiteral;
 
 /**
@@ -17,8 +19,15 @@ import rs.etf.sqltranslator.ast.StringLiteral;
  * [FETCH NEXT n ROWS ONLY]} after ORDER BY otherwise — the Validate batch
  * guarantees ORDER BY is present in every non-TOP case. BooleanLiteral and TEXT
  * never reach this printer (Phase 4 rewrites/narrows them).
+ *
+ * <p>Statement-terminal {@code OPTION} clauses are collected via
+ * {@link #requireMaxRecursion()} (and later siblings) and flushed once after the
+ * outermost statement body — never inside a CTE, subquery, or derived table.
  */
 public final class TSqlPrinter extends AbstractSqlPrinter {
+
+    /** Set when any path needs unbounded recursion; flushed once per statement. */
+    private boolean maxRecursionRequired;
 
     @Override
     protected String quoteIdentifier(String value) {
@@ -36,10 +45,56 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
         return "+";
     }
 
-    /** SQL Server infers recursion; never emit the {@code RECURSIVE} keyword. */
+    /**
+     * Request {@code OPTION (MAXRECURSION 0)} on the current outermost statement.
+     * Idempotent — multiple requesters (recursive CTE, generate_series, …) still
+     * produce a single {@code OPTION} clause.
+     */
+    public void requireMaxRecursion() {
+        maxRecursionRequired = true;
+    }
+
+    /**
+     * Package-visible for unit tests: simulate {@code requires} independent
+     * {@link #requireMaxRecursion()} callers then flush once.
+     */
+    static String optionsAfterRequires(int requires) {
+        TSqlPrinter printer = new TSqlPrinter();
+        for (int i = 0; i < requires; i++) {
+            printer.requireMaxRecursion();
+        }
+        printer.flushStatementOptions();
+        return printer.out.result();
+    }
+
+    @Override
+    public Void visitScript(Script node) {
+        for (Statement statement : node.statements()) {
+            maxRecursionRequired = false;
+            statement.accept(this);
+            flushStatementOptions();
+            out.raw(";\n");
+        }
+        return null;
+    }
+
+    private void flushStatementOptions() {
+        if (maxRecursionRequired) {
+            out.token("OPTION").token("(").token("MAXRECURSION").token("0").raw(")");
+            maxRecursionRequired = false;
+        }
+    }
+
+    /**
+     * SQL Server infers recursion; never emit the {@code RECURSIVE} keyword.
+     * Recursive WITH still needs {@code OPTION (MAXRECURSION 0)} — default limit is 100.
+     */
     @Override
     protected void renderWithKeyword(boolean recursive) {
         out.token("WITH");
+        if (recursive) {
+            requireMaxRecursion();
+        }
     }
 
     @Override

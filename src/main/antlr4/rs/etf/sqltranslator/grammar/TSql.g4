@@ -52,6 +52,7 @@ updateStatement
     : withClause? UPDATE qualifiedName (AS? identifier)? joinedTable* (',' tableSource)?
       SET assignment (',' assignment)*
       (FROM tableSource)? whereClause?
+      optionClause?
     ;
 
 assignment
@@ -148,7 +149,12 @@ alterDataType
 
 usingClause : USING expression ;
 
-selectStatement : queryExpression ;
+selectStatement : queryExpression optionClause? ;
+
+// Statement-terminal query hints. OPTION / MAXRECURSION stay contextual IDs
+// (shared keyword block stays byte-identical). Builder accepts and discards —
+// the printer re-emits MAXRECURSION from the recursive CTE flag.
+optionClause : identifier '(' identifier INTEGER_LITERAL ')' ;
 
 // T-SQL has no trailing rowLimitClause — OFFSET/FETCH folds into orderByClause.
 queryExpression

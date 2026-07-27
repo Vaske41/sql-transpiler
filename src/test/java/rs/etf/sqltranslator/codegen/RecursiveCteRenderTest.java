@@ -39,7 +39,7 @@ class RecursiveCteRenderTest {
         assertThat(Translator.translate(sql, Dialect.POSTGRESQL, Dialect.MYSQL).sql())
                 .isEqualTo("WITH RECURSIVE c AS (SELECT 1 AS x) SELECT * FROM c;\n");
         assertThat(Translator.translate(sql, Dialect.POSTGRESQL, Dialect.TSQL).sql())
-                .isEqualTo("WITH c AS (SELECT 1 AS x) SELECT * FROM c;\n");
+                .isEqualTo("WITH c AS (SELECT 1 AS x) SELECT * FROM c OPTION (MAXRECURSION 0);\n");
     }
 
     @Test
