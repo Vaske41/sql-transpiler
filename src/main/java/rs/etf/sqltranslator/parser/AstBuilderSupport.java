@@ -75,6 +75,17 @@ final class AstBuilderSupport {
             GenericType.CHAR, GenericType.VARCHAR, GenericType.NVARCHAR,
             GenericType.DECIMAL, GenericType.TIME, GenericType.TIMESTAMP);
 
+    /** Two-word forms accepted verbatim by the fold table (§3 fix 2 + Wave 3 C1). */
+    private static final Set<String> TWO_WORD_TYPES = Set.of(
+            "DOUBLE PRECISION",
+            "INT UNSIGNED", "INTEGER UNSIGNED", "BIGINT UNSIGNED",
+            "SMALLINT UNSIGNED", "TINYINT UNSIGNED",
+            "INT SIGNED", "BIGINT SIGNED");
+
+    /** Unsigned 64-bit family widens to DECIMAL(20,0) when args are absent. */
+    private static final Set<String> UNSIGNED_64 = Set.of(
+            "UNSIGNED", "UBIGINT", "BIGINT UNSIGNED");
+
     private final Dialect dialect;
     private final Map<String, Fold> typeTable;
 
@@ -915,8 +926,8 @@ final class AstBuilderSupport {
         String name = word1.toUpperCase(Locale.ROOT);
         if (word2 != null) {
             name = name + " " + word2.toUpperCase(Locale.ROOT);
-            // The builder-side whitelist for the two-word grammar form (§3 fix 2).
-            refuseIf(!name.equals("DOUBLE PRECISION"), "type " + word1 + " " + word2, position);
+            // Two-word forms accepted verbatim by the fold table (§3 fix 2 + Wave 3 C1).
+            refuseIf(!TWO_WORD_TYPES.contains(name), "type " + word1 + " " + word2, position);
         }
         // MAX is part of the lookup key itself and is consumed by the fold (§2.3).
         if (dialect == Dialect.TSQL && name.equals("VARBINARY")
@@ -957,6 +968,10 @@ final class AstBuilderSupport {
                         "scale argument on type " + name, position);
                 scale = Optional.of(parseTypeArg(second, name, position));
             }
+        }
+        if (generic == GenericType.DECIMAL && args.isEmpty() && UNSIGNED_64.contains(name)) {
+            return new FoldedType(new DataType(GenericType.DECIMAL,
+                    Optional.of(new FixedLength(20)), Optional.of(0)), entry.autoIncrement());
         }
         return new FoldedType(new DataType(generic, length, scale), entry.autoIncrement());
     }
@@ -1012,7 +1027,10 @@ final class AstBuilderSupport {
                     Map.entry("BYTEA", Fold.of(GenericType.BLOB)),
                     Map.entry("SERIAL", Fold.auto(GenericType.INTEGER)),
                     Map.entry("BIGSERIAL", Fold.auto(GenericType.BIGINT)),
-                    Map.entry("SMALLSERIAL", Fold.auto(GenericType.SMALLINT)));
+                    Map.entry("SMALLSERIAL", Fold.auto(GenericType.SMALLINT)),
+                    // MySQL-derived names appearing in T-SQL corpus rows (Wave 3 C1).
+                    Map.entry("SIGNED", Fold.of(GenericType.BIGINT)),
+                    Map.entry("UNSIGNED", Fold.of(GenericType.DECIMAL)));
             case MYSQL -> Map.ofEntries(
                     Map.entry("INT", Fold.of(GenericType.INTEGER)),
                     Map.entry("INTEGER", Fold.of(GenericType.INTEGER)),
@@ -1040,7 +1058,20 @@ final class AstBuilderSupport {
                     Map.entry("BYTEA", Fold.of(GenericType.BLOB)),
                     Map.entry("SERIAL", Fold.auto(GenericType.INTEGER)),
                     Map.entry("BIGSERIAL", Fold.auto(GenericType.BIGINT)),
-                    Map.entry("SMALLSERIAL", Fold.auto(GenericType.SMALLINT)));
+                    Map.entry("SMALLSERIAL", Fold.auto(GenericType.SMALLINT)),
+                    Map.entry("SIGNED", Fold.of(GenericType.BIGINT)),
+                    Map.entry("INT SIGNED", Fold.of(GenericType.INTEGER)),
+                    Map.entry("BIGINT SIGNED", Fold.of(GenericType.BIGINT)),
+                    Map.entry("UNSIGNED", Fold.of(GenericType.DECIMAL)),
+                    Map.entry("UINT", Fold.of(GenericType.BIGINT)),
+                    Map.entry("UBIGINT", Fold.of(GenericType.DECIMAL)),
+                    Map.entry("USMALLINT", Fold.of(GenericType.INTEGER)),
+                    Map.entry("UTINYINT", Fold.of(GenericType.SMALLINT)),
+                    Map.entry("INT UNSIGNED", Fold.of(GenericType.BIGINT)),
+                    Map.entry("INTEGER UNSIGNED", Fold.of(GenericType.BIGINT)),
+                    Map.entry("BIGINT UNSIGNED", Fold.of(GenericType.DECIMAL)),
+                    Map.entry("SMALLINT UNSIGNED", Fold.of(GenericType.INTEGER)),
+                    Map.entry("TINYINT UNSIGNED", Fold.of(GenericType.SMALLINT)));
             case POSTGRESQL -> Map.ofEntries(
                     Map.entry("INTEGER", Fold.of(GenericType.INTEGER)),
                     Map.entry("INT", Fold.of(GenericType.INTEGER)),
@@ -1068,7 +1099,10 @@ final class AstBuilderSupport {
                     Map.entry("UUID", Fold.of(GenericType.UUID)),
                     Map.entry("SERIAL", Fold.auto(GenericType.INTEGER)),
                     Map.entry("BIGSERIAL", Fold.auto(GenericType.BIGINT)),
-                    Map.entry("SMALLSERIAL", Fold.auto(GenericType.SMALLINT)));
+                    Map.entry("SMALLSERIAL", Fold.auto(GenericType.SMALLINT)),
+                    // MySQL-derived names appearing in PG corpus rows (Wave 3 C1).
+                    Map.entry("SIGNED", Fold.of(GenericType.BIGINT)),
+                    Map.entry("UNSIGNED", Fold.of(GenericType.DECIMAL)));
         };
     }
 }
