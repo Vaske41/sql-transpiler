@@ -105,6 +105,8 @@ columnConstraint
     | REFERENCES qualifiedName ('(' identifier ')')?        # referencesColumnConstraint
     | AUTO_INCREMENT                                        # autoIncrementColumnConstraint
     | GENERATED (ALWAYS | BY DEFAULT) AS IDENTITY ('(' ~')'* ')')?   # identityConstraint
+    | (GENERATED ALWAYS)? AS '(' expression ')' (STORED | VIRTUAL | PERSISTED)? # generatedColumnConstraint
+    | CHECK '(' expression ')'                              # checkColumnConstraint
     | IDENTITY ('(' INTEGER_LITERAL ',' INTEGER_LITERAL ')')?        # tsqlIdentityConstraint
     ;
 
@@ -113,6 +115,7 @@ tableConstraint
       ( PRIMARY KEY columnList
       | UNIQUE columnList
       | FOREIGN KEY columnList REFERENCES qualifiedName columnList?
+      | CHECK '(' expression ')'
       )
     ;
 
@@ -422,7 +425,7 @@ indexMethod : USING identifier ;
 
 ADD:A D D; ALL:A L L; ALTER:A L T E R; ALWAYS:A L W A Y S; AND:A N D;
 AS:A S; ASC:A S C; AUTO_INCREMENT:A U T O '_' I N C R E M E N T; APPLY:A P P L Y;
-BETWEEN:B E T W E E N; BOTH:B O T H; BY:B Y; CASE:C A S E; CAST:C A S T;
+BETWEEN:B E T W E E N; BOTH:B O T H; BY:B Y; CASE:C A S E; CAST:C A S T; CHECK:C H E C K;
 CLUSTERED:C L U S T E R E D; COLUMN:C O L U M N;
 CONSTRAINT:C O N S T R A I N T; CONVERT:C O N V E R T; CREATE:C R E A T E;
 CROSS:C R O S S; CURRENT_ROW:C U R R E N T [ \t\r\n]+ R O W; DEFAULT:D E F A U L T; DELETE:D E L E T E; DESC:D E S C;
@@ -436,11 +439,11 @@ KEY:K E Y; LAST:L A S T; LATERAL:L A T E R A L; LEADING:L E A D I N G; LEFT:L E 
 MAX:M A X; NEXT:N E X T; NONCLUSTERED:N O N C L U S T E R E D; NOT:N O T;
 NULL:N U L L; NULLS:N U L L S; OFFSET:O F F S E T; ON:O N; ONLY:O N L Y;
 OR:O R; ORDER:O R D E R; OUTER:O U T E R; OVER:O V E R;
-PARTITION:P A R T I T I O N; POSITION:P O S I T I O N; PRECEDING:P R E C E D I N G; PRIMARY:P R I M A R Y;
+PARTITION:P A R T I T I O N; PERSISTED:P E R S I S T E D; POSITION:P O S I T I O N; PRECEDING:P R E C E D I N G; PRIMARY:P R I M A R Y;
 RANGE:R A N G E; RECURSIVE:R E C U R S I V E; REFERENCES:R E F E R E N C E S; RIGHT:R I G H T; ROW:R O W; ROWS:R O W S;
-SELECT:S E L E C T; SEPARATOR:S E P A R A T O R; SET:S E T; SUBSTRING:S U B S T R I N G; TABLE:T A B L E; THEN:T H E N; TOP:T O P;
+SELECT:S E L E C T; SEPARATOR:S E P A R A T O R; SET:S E T; STORED:S T O R E D; SUBSTRING:S U B S T R I N G; TABLE:T A B L E; THEN:T H E N; TOP:T O P;
 TRAILING:T R A I L I N G; TRIM:T R I M; TRUE:T R U E; UNBOUNDED:U N B O U N D E D; UNION:U N I O N; UNIQUE:U N I Q U E; UNKNOWN:U N K N O W N; UPDATE:U P D A T E;
-USING:U S I N G; VALUES:V A L U E S; WHEN:W H E N; WHERE:W H E R E; WITH:W I T H; WITHIN:W I T H I N;
+USING:U S I N G; VALUES:V A L U E S; VIRTUAL:V I R T U A L; WHEN:W H E N; WHERE:W H E R E; WITH:W I T H; WITHIN:W I T H I N;
 
 // =====================================================================
 // 4. Operators, literals, identifiers (dialect-specific lexing)

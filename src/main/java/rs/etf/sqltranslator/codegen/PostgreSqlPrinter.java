@@ -125,6 +125,12 @@ public final class PostgreSqlPrinter extends AbstractSqlPrinter {
             out.token("UNIQUE");
         }
         node.references().ifPresent(ref -> ref.accept(this));
+        node.check().ifPresent(check -> {
+            out.token("CHECK").raw("(");
+            check.accept(this);
+            out.raw(")");
+        });
+        renderGeneratedColumn(node);
         return null;
     }
 

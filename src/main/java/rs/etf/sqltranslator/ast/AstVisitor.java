@@ -70,6 +70,8 @@ public interface AstVisitor<R> {
 
     R visitForeignKeyConstraint(ForeignKeyConstraint node);
 
+    R visitCheckConstraint(CheckConstraint node);
+
     R visitDropTableStatement(DropTableStatement node);
 
     R visitDropViewStatement(DropViewStatement node);
@@ -85,6 +87,8 @@ public interface AstVisitor<R> {
     R visitAddColumn(AddColumn node);
 
     R visitAddTableConstraint(AddTableConstraint node);
+
+    R visitAddCheckConstraint(AddCheckConstraint node);
 
     R visitDropColumn(DropColumn node);
 

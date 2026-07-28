@@ -217,7 +217,11 @@ public class AstTransformer implements AstVisitor<Object> {
         return new ColumnDefinition(rebuild(node.name()), rebuild(node.type()),
                 node.autoIncrement(), node.nullable(),
                 rebuildOptional(node.defaultValue()), node.primaryKey(), node.unique(),
-                rebuildOptional(node.references()), node.pos());
+                rebuildOptional(node.references()),
+                rebuildOptional(node.check()),
+                rebuildOptional(node.generatedAs()),
+                node.stored(),
+                node.pos());
     }
 
     @Override
@@ -243,6 +247,11 @@ public class AstTransformer implements AstVisitor<Object> {
         return new ForeignKeyConstraint(rebuildOptional(node.name()),
                 rebuildList(node.columns()), rebuild(node.refTable()),
                 rebuildList(node.refColumns()), node.pos());
+    }
+
+    @Override
+    public Object visitCheckConstraint(CheckConstraint node) {
+        return new CheckConstraint(rebuildOptional(node.name()), rebuild(node.predicate()), node.pos());
     }
 
     @Override
@@ -286,6 +295,11 @@ public class AstTransformer implements AstVisitor<Object> {
     @Override
     public Object visitAddTableConstraint(AddTableConstraint node) {
         return new AddTableConstraint(rebuild(node.constraint()), node.pos());
+    }
+
+    @Override
+    public Object visitAddCheckConstraint(AddCheckConstraint node) {
+        return new AddCheckConstraint(rebuildOptional(node.name()), rebuild(node.predicate()), node.pos());
     }
 
     @Override

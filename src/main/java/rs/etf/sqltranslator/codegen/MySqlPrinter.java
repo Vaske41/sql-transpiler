@@ -2,6 +2,7 @@ package rs.etf.sqltranslator.codegen;
 
 import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.BinaryOperator;
+import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.ColumnRef;
 import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.DataType;
@@ -231,5 +232,18 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
             out.token("DESC");
         }
         return null;
+    }
+
+    /** MySQL virtual generated columns omit {@code GENERATED ALWAYS}; stored columns add {@code STORED}. */
+    @Override
+    protected void renderGeneratedColumn(ColumnDefinition node) {
+        node.generatedAs().ifPresent(expr -> {
+            out.token("AS").raw("(");
+            expr.accept(this);
+            out.raw(")");
+            if (node.stored()) {
+                out.token("STORED");
+            }
+        });
     }
 }

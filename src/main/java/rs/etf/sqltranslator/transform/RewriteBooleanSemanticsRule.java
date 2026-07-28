@@ -170,7 +170,8 @@ public final class RewriteBooleanSemanticsRule implements Rule {
             Optional<Expression> harmonized = column.defaultValue().map(this::asBooleanLiteral);
             return new ColumnDefinition(column.name(), column.type(), column.autoIncrement(),
                     column.nullable(), harmonized, column.primaryKey(), column.unique(),
-                    column.references(), column.pos());
+                    column.references(), column.check(), column.generatedAs(), column.stored(),
+                    column.pos());
         }
 
         @Override

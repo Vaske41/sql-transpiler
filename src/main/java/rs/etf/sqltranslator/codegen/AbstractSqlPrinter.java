@@ -1073,7 +1073,23 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             out.token("UNIQUE");
         }
         node.references().ifPresent(ref -> ref.accept(this));
+        node.check().ifPresent(check -> {
+            out.token("CHECK").raw("(");
+            check.accept(this);
+            out.raw(")");
+        });
+        renderGeneratedColumn(node);
         return null;
+    }
+
+    /** Dialect-specific generated-column spelling; PG requires {@code GENERATED ALWAYS … STORED}. */
+    protected void renderGeneratedColumn(ColumnDefinition node) {
+        node.generatedAs().ifPresent(expr -> {
+            out.token("GENERATED").token("ALWAYS").token("AS").raw("(");
+            expr.accept(this);
+            out.raw(")");
+            out.token("STORED");
+        });
     }
 
     @Override
@@ -1113,6 +1129,15 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             csv(node.refColumns());
             out.raw(")");
         }
+        return null;
+    }
+
+    @Override
+    public Void visitCheckConstraint(CheckConstraint node) {
+        constraintName(node.name());
+        out.token("CHECK").raw("(");
+        node.predicate().accept(this);
+        out.raw(")");
         return null;
     }
 
@@ -1203,6 +1228,16 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     public Void visitAddTableConstraint(AddTableConstraint node) {
         out.token("ADD");
         node.constraint().accept(this);
+        return null;
+    }
+
+    @Override
+    public Void visitAddCheckConstraint(AddCheckConstraint node) {
+        out.token("ADD");
+        constraintName(node.name());
+        out.token("CHECK").raw("(");
+        node.predicate().accept(this);
+        out.raw(")");
         return null;
     }
 

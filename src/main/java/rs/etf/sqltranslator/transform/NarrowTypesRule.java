@@ -46,7 +46,8 @@ public final class NarrowTypesRule implements Rule {
             ColumnDefinition column = (ColumnDefinition) super.visitColumnDefinition(node);
             return new ColumnDefinition(column.name(), narrow(column.type(), column.pos()),
                     column.autoIncrement(), column.nullable(), column.defaultValue(),
-                    column.primaryKey(), column.unique(), column.references(), column.pos());
+                    column.primaryKey(), column.unique(), column.references(),
+                    column.check(), column.generatedAs(), column.stored(), column.pos());
         }
 
         @Override

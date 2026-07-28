@@ -3,6 +3,7 @@ package rs.etf.sqltranslator.codegen;
 import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.BinaryOperator;
 import rs.etf.sqltranslator.ast.BooleanLiteral;
+import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.IntervalLiteral;
@@ -306,5 +307,18 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
             throw new IllegalStateException(
                     "rule engine contract: USING must be dropped before T-SQL print");
         }
+    }
+
+    /** T-SQL computed columns use {@code AS (expr) PERSISTED} when stored. */
+    @Override
+    protected void renderGeneratedColumn(ColumnDefinition node) {
+        node.generatedAs().ifPresent(expr -> {
+            out.token("AS").raw("(");
+            expr.accept(this);
+            out.raw(")");
+            if (node.stored()) {
+                out.token("PERSISTED");
+            }
+        });
     }
 }

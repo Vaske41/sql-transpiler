@@ -47,7 +47,8 @@ public record JsonTableRelation(Expression source, String path,
         ColumnDefinition value = new ColumnDefinition(
                 new Identifier("value", false, pos), type,
                 false, Optional.empty(), Optional.empty(),
-                false, false, Optional.empty(), pos);
+                false, false, Optional.empty(), Optional.empty(),
+                Optional.empty(), false, pos);
         return new JsonTableRelation(source, "$[*]", List.of(value), alias, pos);
     }
 

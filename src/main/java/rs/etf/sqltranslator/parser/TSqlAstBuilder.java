@@ -5,6 +5,7 @@ import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import rs.etf.sqltranslator.ast.AlterAction;
+import rs.etf.sqltranslator.ast.AddCheckConstraint;
 import rs.etf.sqltranslator.ast.AddColumn;
 import rs.etf.sqltranslator.ast.AddTableConstraint;
 import rs.etf.sqltranslator.ast.AlterTableStatement;
@@ -14,6 +15,7 @@ import rs.etf.sqltranslator.ast.AtTimeZone;
 import rs.etf.sqltranslator.ast.BetweenPredicate;
 import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.CastExpression;
+import rs.etf.sqltranslator.ast.CheckConstraint;
 import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.ColumnRef;
 import rs.etf.sqltranslator.ast.CreateIndexStatement;
@@ -278,7 +280,8 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
                         .map(c -> new ColumnDefinition(
                                 columnName(c.columnName()), castType(c.dataType()),
                                 false, Optional.empty(), Optional.empty(),
-                                false, false, Optional.empty(), pos(c)))
+                                false, false, Optional.empty(), Optional.empty(),
+                                Optional.empty(), false, pos(c)))
                         .toList();
             }
         }
@@ -565,6 +568,12 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
                 String increment = id.INTEGER_LITERAL().size() > 1
                         ? id.INTEGER_LITERAL(1).getText() : null;
                 support.applyTsqlIdentityConstraint(attributes, seed, increment, pos(id));
+            } else if (constraint instanceof TSqlParser.GeneratedColumnConstraintContext gen) {
+                support.applyGeneratedColumn(attributes, expr(gen.expression()),
+                        support.generatedColumnStored(gen.STORED() != null, gen.VIRTUAL() != null,
+                                gen.PERSISTED() != null));
+            } else if (constraint instanceof TSqlParser.CheckColumnConstraintContext chk) {
+                support.applyCheckConstraint(attributes, expr(chk.expression()));
             } else {
                 throw new IllegalStateException("unknown column constraint");
             }
@@ -581,6 +590,9 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
         }
         if (ctx.UNIQUE() != null) {
             return new UniqueConstraint(name, columns(ctx.columnList(0)), pos(ctx));
+        }
+        if (ctx.CHECK() != null) {
+            return new CheckConstraint(name, expr(ctx.expression()), pos(ctx));
         }
         List<Identifier> refColumns = ctx.columnList().size() > 1
                 ? columns(ctx.columnList(1)) : List.of();
@@ -641,7 +653,11 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
 
     @Override
     public Object visitAlterAddConstraint(TSqlParser.AlterAddConstraintContext ctx) {
-        return new AddTableConstraint((TableConstraint) visit(ctx.tableConstraint()), pos(ctx));
+        TableConstraint constraint = (TableConstraint) visit(ctx.tableConstraint());
+        if (constraint instanceof CheckConstraint check) {
+            return new AddCheckConstraint(check.name(), check.predicate(), pos(ctx));
+        }
+        return new AddTableConstraint(constraint, pos(ctx));
     }
 
     @Override

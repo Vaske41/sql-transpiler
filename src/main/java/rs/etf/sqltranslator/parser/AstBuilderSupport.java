@@ -883,7 +883,11 @@ final class AstBuilderSupport {
                 type.autoIncrement() || attributes.autoIncrement,
                 attributes.nullable, Optional.ofNullable(attributes.defaultValue),
                 attributes.primaryKey, attributes.unique,
-                Optional.ofNullable(attributes.references), position);
+                Optional.ofNullable(attributes.references),
+                Optional.ofNullable(attributes.check),
+                Optional.ofNullable(attributes.generatedAs),
+                attributes.stored,
+                position);
     }
 
     /**
@@ -900,11 +904,33 @@ final class AstBuilderSupport {
             case UNIQUE -> attributes.unique();
             case REFERENCES -> attributes.references(references);
             case AUTO_INCREMENT -> attributes.autoIncrement();
+            case CHECK -> throw new IllegalStateException("use applyCheckConstraint");
         }
     }
 
+    void applyCheckConstraint(ColumnAttributes attributes, Expression predicate) {
+        attributes.check = predicate;
+    }
+
+    void applyGeneratedColumn(ColumnAttributes attributes, Expression expression, boolean stored) {
+        attributes.generatedAs = expression;
+        attributes.stored = stored;
+    }
+
+    /** {@code STORED}/{@code PERSISTED} → stored; {@code VIRTUAL} or absent → virtual. */
+    boolean generatedColumnStored(boolean storedKeyword, boolean virtualKeyword,
+                                  boolean persistedKeyword) {
+        if (storedKeyword || persistedKeyword) {
+            return true;
+        }
+        if (virtualKeyword) {
+            return false;
+        }
+        return false;
+    }
+
     enum ColumnConstraintKind {
-        NOT_NULL, NULL_ALLOWED, DEFAULT, PRIMARY_KEY, UNIQUE, REFERENCES, AUTO_INCREMENT
+        NOT_NULL, NULL_ALLOWED, DEFAULT, PRIMARY_KEY, UNIQUE, REFERENCES, AUTO_INCREMENT, CHECK
     }
 
     /** Mutable accumulator the builders fill while walking {@code columnConstraint*}. */
@@ -916,6 +942,9 @@ final class AstBuilderSupport {
         private boolean unique;
         private boolean autoIncrement;
         private ForeignKeyRef references;
+        private Expression check;
+        private Expression generatedAs;
+        private boolean stored;
 
         void notNull() {
             nullable = Optional.of(false);

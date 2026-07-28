@@ -259,12 +259,15 @@ public final class AstDumper implements AstVisitor<String> {
         String header = "ColumnDefinition autoIncrement=" + node.autoIncrement()
                 + " primaryKey=" + node.primaryKey()
                 + " unique=" + node.unique()
+                + " stored=" + node.stored()
                 + node.nullable().map(n -> " nullable=" + n).orElse("");
         return node(header)
                 .child("name", node.name())
                 .child("type", node.type())
                 .child("defaultValue", node.defaultValue())
                 .child("references", node.references())
+                .child("check", node.check())
+                .child("generatedAs", node.generatedAs())
                 .done();
     }
 
@@ -299,6 +302,14 @@ public final class AstDumper implements AstVisitor<String> {
                 .children("columns", node.columns())
                 .child("refTable", node.refTable())
                 .children("refColumns", node.refColumns())
+                .done();
+    }
+
+    @Override
+    public String visitCheckConstraint(CheckConstraint node) {
+        return node("CheckConstraint")
+                .child("name", node.name())
+                .child("predicate", node.predicate())
                 .done();
     }
 
@@ -357,6 +368,14 @@ public final class AstDumper implements AstVisitor<String> {
     @Override
     public String visitAddTableConstraint(AddTableConstraint node) {
         return node("AddTableConstraint").child("constraint", node.constraint()).done();
+    }
+
+    @Override
+    public String visitAddCheckConstraint(AddCheckConstraint node) {
+        return node("AddCheckConstraint")
+                .child("name", node.name())
+                .child("predicate", node.predicate())
+                .done();
     }
 
     @Override
