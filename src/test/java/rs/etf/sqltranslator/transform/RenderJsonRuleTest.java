@@ -91,12 +91,12 @@ class RenderJsonRuleTest {
     }
 
     @Test
-    void containmentRefusedTowardMysql() {
-        assertThatThrownBy(() -> CodegenTestSupport.printTranslated(
+    void containmentBecomesJsonContainsTowardMysql() {
+        assertThat(CodegenTestSupport.printTranslated(
                 "SELECT payload @> '{\"a\":1}' FROM t;",
-                Dialect.POSTGRESQL, Dialect.MYSQL))
-                .isInstanceOf(UnsupportedFeatureException.class)
-                .hasMessageContaining("containment");
+                Dialect.POSTGRESQL, Dialect.MYSQL).sql())
+                .containsIgnoringCase("JSON_CONTAINS")
+                .doesNotContain("@>");
     }
 
     @Test

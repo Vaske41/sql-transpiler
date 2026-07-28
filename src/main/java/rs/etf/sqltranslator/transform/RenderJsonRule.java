@@ -21,7 +21,7 @@ import java.util.Optional;
  * <ul>
  *   <li>PostgreSQL — native ({@code ->}, {@code ->>}, {@code #>}, {@code #>>}, {@code @>}).</li>
  *   <li>MySQL — {@code ->}/{@code ->>} with {@code $.…} paths; {@code #>}{@code #>>}
- *       collapsed to a single arrow with a combined path; containment refused.</li>
+ *       collapsed to a single arrow with a combined path; {@code @>}→{@code JSON_CONTAINS}.</li>
  *   <li>T-SQL — {@code ->}→{@code JSON_QUERY}, {@code ->>}→{@code JSON_VALUE} (and path
  *       forms) with {@code $.k} paths from literal keys; non-literal keys and
  *       containment refused.</li>
@@ -68,7 +68,7 @@ public final class RenderJsonRule implements Rule {
                 case JSON_GET, JSON_GET_TEXT -> withMysqlKeyPath(op);
                 case JSON_PATH -> collapsePath(op, false);
                 case JSON_PATH_TEXT -> collapsePath(op, true);
-                case JSON_CONTAINS -> refuseContains(op);
+                case JSON_CONTAINS -> jsonContains(op);
                 default -> op;
             };
         }
@@ -213,6 +213,12 @@ public final class RenderJsonRule implements Rule {
             return new FunctionCall(name,
                     List.of(doc, new StringLiteral(path, false, pos)),
                     false, Optional.empty(), Optional.empty(), pos);
+        }
+
+        private static Expression jsonContains(BinaryOp op) {
+            return new FunctionCall("JSON_CONTAINS",
+                    List.of(op.left(), op.right()),
+                    false, Optional.empty(), Optional.empty(), op.pos());
         }
 
         private static Expression refuseContains(BinaryOp op) {
