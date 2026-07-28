@@ -70,6 +70,18 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
             throw new IllegalStateException(
                     "rule engine contract: PG-only JSON ops must be rewritten/refused before MySQL print");
         }
+        if (op == BinaryOperator.REGEX_MATCH) {
+            operand(node.left(), 4, false);
+            out.token("REGEXP");
+            operand(node.right(), 4, true);
+            return null;
+        }
+        if (op == BinaryOperator.REGEX_MATCH_I
+                || op == BinaryOperator.REGEX_NOT_MATCH
+                || op == BinaryOperator.REGEX_NOT_MATCH_I) {
+            throw new IllegalStateException(
+                    "rule engine contract: regex operators must be rewritten before MySQL print");
+        }
         return super.visitBinaryOp(node);
     }
 
@@ -252,7 +264,7 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
     @Override
     public Void visitColumnRef(ColumnRef node) {
         if (node.name().parts().size() == 1
-                && node.name().last().value().startsWith("@@")) {
+                && node.name().last().value().startsWith("@")) {
             out.token(node.name().last().value());
             return null;
         }

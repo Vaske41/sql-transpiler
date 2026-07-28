@@ -297,8 +297,13 @@ comparisonOperator : '=' | '<>' | '!=' | '<' | '<=' | '>' | '>=' ;
 concatExpression : jsonExpression (PIPES jsonExpression)* ;
 
 jsonExpression
+    : regexExpression
+      ( (ARROW | ARROW2 | HASH_ARROW | HASH_ARROW2 | AT_GT) regexExpression )*
+    ;
+
+regexExpression
     : additiveExpression
-      ( (ARROW | ARROW2 | HASH_ARROW | HASH_ARROW2 | AT_GT) additiveExpression )*
+      ( (TILDE | TILDE_STAR | BANG_TILDE | BANG_TILDE_STAR) additiveExpression )*
     ;
 
 additiveExpression : multiplicativeExpression (('+' | '-') multiplicativeExpression)* ;
@@ -495,6 +500,12 @@ ARROW : '->' ;
 HASH_ARROW2 : '#>>' ;
 HASH_ARROW : '#>' ;
 AT_GT : '@>' ;
+
+// Longest-match ordering: !~* before !~ before ~* before ~.
+BANG_TILDE_STAR : '!~*' ;
+BANG_TILDE : '!~' ;
+TILDE_STAR : '~*' ;
+TILDE : '~' ;
 
 INTEGER_LITERAL : [0-9]+ ;
 

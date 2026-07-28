@@ -163,6 +163,13 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
             throw new IllegalStateException(
                     "rule engine contract: JSON operators must be rewritten before T-SQL print");
         }
+        if (op == BinaryOperator.REGEX_MATCH
+                || op == BinaryOperator.REGEX_MATCH_I
+                || op == BinaryOperator.REGEX_NOT_MATCH
+                || op == BinaryOperator.REGEX_NOT_MATCH_I) {
+            throw new IllegalStateException(
+                    "rule engine contract: regex operators must be rewritten/refused before T-SQL print");
+        }
         return super.visitBinaryOp(node);
     }
 

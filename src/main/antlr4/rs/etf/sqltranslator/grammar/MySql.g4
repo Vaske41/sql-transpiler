@@ -19,6 +19,11 @@ statement
     | dropViewOrRoutineStatement
     | alterTableStatement
     | truncateStatement
+    | setUserVariableStatement
+    ;
+
+setUserVariableStatement
+    : SET USER_VAR '=' expression
     ;
 
 // MySQL: INTO is optional.
@@ -47,7 +52,10 @@ conflictTarget : '(' identifier (',' identifier)* ')' ;
 
 returningClause : identifier selectItem (',' selectItem)* ;
 
-rowValue : '(' expression (',' expression)* ')' ;
+rowValue
+    : '(' expression (',' expression)* ')'
+    | ROW '(' expression (',' expression)* ')'
+    ;
 
 updateStatement
     : withClause? UPDATE qualifiedName (AS? identifier)? joinedTable* (',' tableSource)?
@@ -325,6 +333,7 @@ primaryExpression
     | TRIM '(' (LEADING | TRAILING | BOTH)? expression (FROM expression)? ')' # trimStandard
     | functionCall windowOverlay?           # functionExpr
     | columnReference                       # columnRefExpr
+    | USER_VAR COLON_EQ expression          # userVarAssignExpr
     | subquery                              # scalarSubqueryExpr
     | '(' expression (',' expression)* ')'  # parenExpr
     | identifier '[' (expression (',' expression)*)? ']'  # arrayLiteralExpr
@@ -425,7 +434,7 @@ literal
     | FALSE
     ;
 
-identifier : ID | QUOTED_IDENTIFIER ;
+identifier : ID | QUOTED_IDENTIFIER | USER_VAR | SESSION_VAR ;
 
 // =====================================================================
 // 2. Dialect-specific parser rules
@@ -479,6 +488,10 @@ ARROW : '->' ;
 HASH_ARROW2 : '#>>' ;
 HASH_ARROW : '#>' ;
 AT_GT : '@>' ;
+
+SESSION_VAR : '@@' [A-Za-z_][A-Za-z0-9_.]* ;
+USER_VAR : '@' [A-Za-z_][A-Za-z0-9_]* ;
+COLON_EQ : ':=' ;
 
 INTEGER_LITERAL : [0-9]+ ;
 

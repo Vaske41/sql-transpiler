@@ -5,5 +5,5 @@ public sealed interface Statement extends AstNode
         permits SelectStatement, InsertStatement, UpdateStatement, DeleteStatement,
                 CreateTableStatement, CreateViewStatement, DropTableStatement, DropViewStatement,
                 DropRoutineStatement, DropIndexStatement, AlterTableStatement, CreateIndexStatement,
-                TruncateStatement {
+                TruncateStatement, SetUserVariableStatement {
 }

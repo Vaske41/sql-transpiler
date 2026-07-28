@@ -369,6 +369,14 @@ public final class AstDumper implements AstVisitor<String> {
     }
 
     @Override
+    public String visitSetUserVariableStatement(SetUserVariableStatement node) {
+        return node("SetUserVariableStatement")
+                .child("variable", node.variable())
+                .child("value", node.value())
+                .done();
+    }
+
+    @Override
     public String visitAlterTableStatement(AlterTableStatement node) {
         return node("AlterTableStatement")
                 .child("table", node.table())
@@ -588,6 +596,14 @@ public final class AstDumper implements AstVisitor<String> {
         return node("AtTimeZone")
                 .child("value", node.value())
                 .child("zone", node.zone())
+                .done();
+    }
+
+    @Override
+    public String visitUserVarAssignment(UserVarAssignment node) {
+        return node("UserVarAssignment")
+                .child("variable", node.variable())
+                .child("value", node.value())
                 .done();
     }
 

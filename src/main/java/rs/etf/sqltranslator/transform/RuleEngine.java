@@ -46,6 +46,7 @@ public final class RuleEngine {
                 new RewriteBooleanSemanticsRule(),
                 new NarrowTypesRule(),
                 new RenderJsonRule(),
+                new RewriteRegexOperatorsRule(),
                 new RewriteIntervalArithmeticRule(),
                 new RewriteFullJoinForMysqlRule(),
                 new RewriteRowConstructorRule(),

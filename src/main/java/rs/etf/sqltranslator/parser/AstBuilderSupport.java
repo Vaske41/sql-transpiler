@@ -801,6 +801,10 @@ final class AstBuilderSupport {
             case "#>" -> BinaryOperator.JSON_PATH;
             case "#>>" -> BinaryOperator.JSON_PATH_TEXT;
             case "@>" -> BinaryOperator.JSON_CONTAINS;
+            case "~" -> BinaryOperator.REGEX_MATCH;
+            case "~*" -> BinaryOperator.REGEX_MATCH_I;
+            case "!~" -> BinaryOperator.REGEX_NOT_MATCH;
+            case "!~*" -> BinaryOperator.REGEX_NOT_MATCH_I;
             default -> throw new IllegalStateException("Unmapped binary operator: " + text);
         };
     }

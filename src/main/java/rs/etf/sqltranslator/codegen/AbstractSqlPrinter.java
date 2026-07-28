@@ -183,6 +183,7 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
                 case MUL, DIV, MOD -> 7;
                 // JSON access: tighter than ||, same band as additive for paren decisions.
                 case JSON_GET, JSON_GET_TEXT, JSON_PATH, JSON_PATH_TEXT, JSON_CONTAINS -> 6;
+                case REGEX_MATCH, REGEX_MATCH_I, REGEX_NOT_MATCH, REGEX_NOT_MATCH_I -> 6;
             };
         }
         if (e instanceof UnaryOp op) {
@@ -235,6 +236,10 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             case JSON_PATH -> "#>";
             case JSON_PATH_TEXT -> "#>>";
             case JSON_CONTAINS -> "@>";
+            case REGEX_MATCH -> "~";
+            case REGEX_MATCH_I -> "~*";
+            case REGEX_NOT_MATCH -> "!~";
+            case REGEX_NOT_MATCH_I -> "!~*";
         };
     }
 
@@ -565,6 +570,13 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         node.value().accept(this);
         out.token("AT").token("TIME").token("ZONE");
         node.zone().accept(this);
+        return null;
+    }
+
+    @Override
+    public Void visitUserVarAssignment(UserVarAssignment node) {
+        out.token(node.variable().value()).raw(" := ");
+        node.value().accept(this);
         return null;
     }
 
@@ -1283,6 +1295,13 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     @Override
     public Void visitTruncateStatement(TruncateStatement node) {
         out.token("TRUNCATE TABLE").token(dotted(node.table()));
+        return null;
+    }
+
+    @Override
+    public Void visitSetUserVariableStatement(SetUserVariableStatement node) {
+        out.token("SET").token(node.variable().value()).raw(" = ");
+        node.value().accept(this);
         return null;
     }
 

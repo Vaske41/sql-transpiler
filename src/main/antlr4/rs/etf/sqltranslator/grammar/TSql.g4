@@ -46,7 +46,10 @@ conflictTarget : '(' identifier (',' identifier)* ')' ;
 
 outputClause : OUTPUT selectItem (',' selectItem)* ;
 
-rowValue : '(' expression (',' expression)* ')' ;
+rowValue
+    : '(' expression (',' expression)* ')'
+    | ROW '(' expression (',' expression)* ')'
+    ;
 
 updateStatement
     : withClause? UPDATE qualifiedName (AS? identifier)? joinedTable* (',' tableSource)?
@@ -335,6 +338,7 @@ primaryExpression
     | NEXT_VALUE_FOR identifier                                  # nextValueForExpr
     | functionCall windowOverlay?           # functionExpr
     | columnReference                       # columnRefExpr
+    | USER_VAR COLON_EQ expression          # userVarAssignExpr
     | subquery                              # scalarSubqueryExpr
     | '(' expression (',' expression)* ')'  # parenExpr
     | identifier '[' (expression (',' expression)*)? ']'  # arrayLiteralExpr
@@ -432,7 +436,7 @@ literal
     | NULL
     ;
 
-identifier : ID | QUOTED_IDENTIFIER ;
+identifier : ID | QUOTED_IDENTIFIER | USER_VAR ;
 
 // =====================================================================
 // 2. Dialect-specific parser rules
@@ -489,6 +493,9 @@ ARROW : '->' ;
 HASH_ARROW2 : '#>>' ;
 HASH_ARROW : '#>' ;
 AT_GT : '@>' ;
+
+USER_VAR : '@' [A-Za-z_][A-Za-z0-9_]* ;
+COLON_EQ : ':=' ;
 
 INTEGER_LITERAL : [0-9]+ ;
 

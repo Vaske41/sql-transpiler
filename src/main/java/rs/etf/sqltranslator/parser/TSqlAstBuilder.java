@@ -78,6 +78,7 @@ import rs.etf.sqltranslator.ast.UnaryOperator;
 import rs.etf.sqltranslator.ast.UnionArm;
 import rs.etf.sqltranslator.ast.UniqueConstraint;
 import rs.etf.sqltranslator.ast.UpdateStatement;
+import rs.etf.sqltranslator.ast.UserVarAssignment;
 import rs.etf.sqltranslator.ast.Upsert;
 import rs.etf.sqltranslator.ast.WindowFrame;
 import rs.etf.sqltranslator.ast.WindowSpec;
@@ -1171,6 +1172,13 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     @Override
     public Object visitColumnRefExpr(TSqlParser.ColumnRefExprContext ctx) {
         return new ColumnRef(columnRef(ctx.columnReference()), pos(ctx));
+    }
+
+    @Override
+    public Object visitUserVarAssignExpr(TSqlParser.UserVarAssignExprContext ctx) {
+        return new UserVarAssignment(
+                support.identifier(ctx.USER_VAR().getSymbol()),
+                expr(ctx.expression()), pos(ctx));
     }
 
     @Override

@@ -302,6 +302,11 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitSetUserVariableStatement(SetUserVariableStatement node) {
+        return defaultResult();
+    }
+
+    @Override
     public R visitAlterTableStatement(AlterTableStatement node) {
         return defaultResult();
     }
@@ -473,6 +478,11 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitAtTimeZone(AtTimeZone node) {
+        return defaultResult();
+    }
+
+    @Override
+    public R visitUserVarAssignment(UserVarAssignment node) {
         return defaultResult();
     }
 

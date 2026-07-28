@@ -809,6 +809,11 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitRegexExpression(PostgreSqlParser.RegexExpressionContext ctx) {
+        return support.foldBinaryChain(ctx, this);
+    }
+
+    @Override
     public Object visitAdditiveExpression(PostgreSqlParser.AdditiveExpressionContext ctx) {
         return support.foldBinaryChain(ctx, this);
     }

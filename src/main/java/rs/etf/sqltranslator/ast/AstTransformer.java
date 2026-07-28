@@ -297,6 +297,12 @@ public class AstTransformer implements AstVisitor<Object> {
     }
 
     @Override
+    public Object visitSetUserVariableStatement(SetUserVariableStatement node) {
+        return new SetUserVariableStatement(rebuild(node.variable()),
+                rebuild(node.value()), node.pos());
+    }
+
+    @Override
     public Object visitAlterTableStatement(AlterTableStatement node) {
         return new AlterTableStatement(rebuild(node.table()), rebuild(node.action()),
                 node.pos());
@@ -462,6 +468,11 @@ public class AstTransformer implements AstVisitor<Object> {
     @Override
     public Object visitAtTimeZone(AtTimeZone node) {
         return new AtTimeZone(rebuild(node.value()), rebuild(node.zone()), node.pos());
+    }
+
+    @Override
+    public Object visitUserVarAssignment(UserVarAssignment node) {
+        return new UserVarAssignment(rebuild(node.variable()), rebuild(node.value()), node.pos());
     }
 
     // --- literals, identifiers, types (leaves rebuild to themselves) ---

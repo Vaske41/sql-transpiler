@@ -86,6 +86,8 @@ public interface AstVisitor<R> {
 
     R visitTruncateStatement(TruncateStatement node);
 
+    R visitSetUserVariableStatement(SetUserVariableStatement node);
+
     R visitAlterTableStatement(AlterTableStatement node);
 
     R visitAddColumn(AddColumn node);
@@ -146,6 +148,8 @@ public interface AstVisitor<R> {
     R visitArraySubscript(ArraySubscript node);
 
     R visitAtTimeZone(AtTimeZone node);
+
+    R visitUserVarAssignment(UserVarAssignment node);
 
     // --- literals, identifiers, types ---
     R visitNumericLiteral(NumericLiteral node);

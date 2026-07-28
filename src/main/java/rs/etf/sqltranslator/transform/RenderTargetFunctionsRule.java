@@ -108,6 +108,13 @@ public final class RenderTargetFunctionsRule implements Rule {
             if (JSON_FUNCTIONS.contains(name)) {
                 return renderJsonFunction(call);
             }
+            if (name.equals("REGEXP_REPLACE")) {
+                if (ctx.target() == Dialect.TSQL) {
+                    throw new UnsupportedFeatureException(
+                            "REGEXP_REPLACE is not supported by the target", call.pos());
+                }
+                return call;
+            }
             if (name.equals("NEXTVAL") && ctx.target() == Dialect.MYSQL) {
                 throw new UnsupportedFeatureException(
                         "NEXTVAL is not supported by the target", call.pos());

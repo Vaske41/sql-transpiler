@@ -64,6 +64,7 @@ import rs.etf.sqltranslator.ast.SelectExpr;
 import rs.etf.sqltranslator.ast.SelectItem;
 import rs.etf.sqltranslator.ast.SelectStar;
 import rs.etf.sqltranslator.ast.SelectStatement;
+import rs.etf.sqltranslator.ast.SetUserVariableStatement;
 import rs.etf.sqltranslator.ast.SetQuantifier;
 import rs.etf.sqltranslator.ast.SortDirection;
 import rs.etf.sqltranslator.ast.Statement;
@@ -78,6 +79,7 @@ import rs.etf.sqltranslator.ast.UnaryOperator;
 import rs.etf.sqltranslator.ast.UnionArm;
 import rs.etf.sqltranslator.ast.UniqueConstraint;
 import rs.etf.sqltranslator.ast.UpdateStatement;
+import rs.etf.sqltranslator.ast.UserVarAssignment;
 import rs.etf.sqltranslator.ast.Upsert;
 import rs.etf.sqltranslator.ast.WindowFrame;
 import rs.etf.sqltranslator.ast.WindowSpec;
@@ -111,6 +113,13 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     @Override
     public Object visitSelectStatement(MySqlParser.SelectStatementContext ctx) {
         return new SelectStatement((Query) visit(ctx.queryExpression()), pos(ctx));
+    }
+
+    @Override
+    public Object visitSetUserVariableStatement(MySqlParser.SetUserVariableStatementContext ctx) {
+        return new SetUserVariableStatement(
+                support.identifier(ctx.USER_VAR().getSymbol()),
+                expr(ctx.expression()), pos(ctx));
     }
 
     // --- query shape ---
@@ -1102,6 +1111,13 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     @Override
     public Object visitColumnRefExpr(MySqlParser.ColumnRefExprContext ctx) {
         return new ColumnRef(columnRef(ctx.columnReference()), pos(ctx));
+    }
+
+    @Override
+    public Object visitUserVarAssignExpr(MySqlParser.UserVarAssignExprContext ctx) {
+        return new UserVarAssignment(
+                support.identifier(ctx.USER_VAR().getSymbol()),
+                expr(ctx.expression()), pos(ctx));
     }
 
     @Override

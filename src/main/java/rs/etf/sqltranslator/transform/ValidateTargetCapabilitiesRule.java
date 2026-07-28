@@ -29,7 +29,9 @@ import rs.etf.sqltranslator.ast.Script;
 import rs.etf.sqltranslator.ast.SelectExpr;
 import rs.etf.sqltranslator.ast.SelectItem;
 import rs.etf.sqltranslator.ast.SetOperator;
+import rs.etf.sqltranslator.ast.SetUserVariableStatement;
 import rs.etf.sqltranslator.ast.UnionArm;
+import rs.etf.sqltranslator.ast.UserVarAssignment;
 import rs.etf.sqltranslator.ast.WindowFrame;
 import rs.etf.sqltranslator.core.Dialect;
 import rs.etf.sqltranslator.core.SourcePosition;
@@ -224,6 +226,41 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
                         || (node.on().get() instanceof BooleanLiteral b && b.value());
             }
             return false;
+        }
+
+        @Override
+        public Object visitColumnRef(ColumnRef node) {
+            if (ctx.target() != Dialect.MYSQL && isUserVariable(node)) {
+                throw new UnsupportedFeatureException(
+                        "user variable is not supported by the target", node.pos());
+            }
+            return super.visitColumnRef(node);
+        }
+
+        @Override
+        public Object visitUserVarAssignment(UserVarAssignment node) {
+            if (ctx.target() != Dialect.MYSQL) {
+                throw new UnsupportedFeatureException(
+                        "user-variable assignment is not supported by the target", node.pos());
+            }
+            return super.visitUserVarAssignment(node);
+        }
+
+        @Override
+        public Object visitSetUserVariableStatement(SetUserVariableStatement node) {
+            if (ctx.target() != Dialect.MYSQL) {
+                throw new UnsupportedFeatureException(
+                        "SET user variable is not supported by the target", node.pos());
+            }
+            return super.visitSetUserVariableStatement(node);
+        }
+
+        private static boolean isUserVariable(ColumnRef ref) {
+            if (ref.name().parts().size() != 1) {
+                return false;
+            }
+            String name = ref.name().last().value();
+            return name.startsWith("@") && !name.startsWith("@@");
         }
 
         @Override

@@ -6,5 +6,5 @@ public sealed interface Expression extends AstNode
                 InListPredicate, InSubqueryPredicate, IsNullPredicate, IsBoolPredicate,
                 ExistsPredicate, FunctionCall, CaseExpression, CastExpression,
                 ExtractExpression, SubqueryExpression, RowConstructor, ArrayLiteral,
-                ArraySubscript, AtTimeZone {
+                ArraySubscript, AtTimeZone, UserVarAssignment {
 }
