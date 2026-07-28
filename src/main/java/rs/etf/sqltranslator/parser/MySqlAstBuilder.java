@@ -564,6 +564,36 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitCreateTriggerStatement(MySqlParser.CreateTriggerStatementContext ctx) {
+        support.refuseCreateTrigger(ident(ctx.identifier(0)), pos(ctx));
+        throw new AssertionError("unreachable");
+    }
+
+    @Override
+    public Object visitParam(MySqlParser.ParamContext ctx) {
+        AstBuilderSupport.FoldedType type = columnType(ctx.dataType());
+        return support.routineParam(columnName(ctx.columnName()), type, pos(ctx));
+    }
+
+    @Override
+    public Object visitCreateRoutineStatement(MySqlParser.CreateRoutineStatementContext ctx) {
+        List<Identifier> header = ctx.identifier().stream().map(this::ident).toList();
+        List<ColumnDefinition> params = ctx.paramList() == null
+                ? List.of()
+                : ctx.paramList().param().stream()
+                        .map(p -> (ColumnDefinition) visit(p)).toList();
+        Optional<DataType> returns = Optional.empty();
+        if (ctx.returnsClause() != null) {
+            support.requireReturnsKeyword(ident(ctx.returnsClause().identifier()));
+            returns = Optional.of(castType(ctx.returnsClause().dataType()));
+        }
+        List<Statement> bodyStmts = ctx.routineBody().routineBodyInner().selectStatement().stream()
+                .map(s -> (Statement) visit(s)).toList();
+        return support.createRoutineFromStatements(header, qname(ctx.qualifiedName()), params,
+                returns, bodyStmts, pos(ctx));
+    }
+
+    @Override
     public Object visitColumnDefinition(MySqlParser.ColumnDefinitionContext ctx) {
         AstBuilderSupport.FoldedType type = columnType(ctx.dataType());
         AstBuilderSupport.ColumnAttributes attributes = new AstBuilderSupport.ColumnAttributes();

@@ -1137,6 +1137,43 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         return null;
     }
 
+    @Override
+    public Void visitCreateRoutineStatement(CreateRoutineStatement node) {
+        out.token("CREATE").token(routineKindToken(node.kind())).token(dotted(node.name())).raw("(");
+        boolean first = true;
+        for (ColumnDefinition param : node.params()) {
+            if (!first) {
+                out.raw(",");
+            }
+            first = false;
+            param.accept(this);
+        }
+        out.raw(")");
+        node.returns().ifPresent(type -> {
+            out.token("RETURNS");
+            renderDataType(type);
+        });
+        renderRoutineCharacteristics(node);
+        renderRoutineBody(node);
+        return null;
+    }
+
+    private static String routineKindToken(CreateRoutineStatement.RoutineKind kind) {
+        return kind == CreateRoutineStatement.RoutineKind.FUNCTION ? "FUNCTION" : "PROCEDURE";
+    }
+
+    /** MySQL adds {@code DETERMINISTIC READS SQL DATA} before the body shell. */
+    protected void renderRoutineCharacteristics(CreateRoutineStatement node) {
+    }
+
+    /** Rebuilds the routine body per target — never passthrough dollar-quoted source text. */
+    protected void renderRoutineBody(CreateRoutineStatement node) {
+        SelectStatement body = (SelectStatement) node.body().get(0);
+        out.token("AS").token("BEGIN").token("RETURN").token("(");
+        body.query().accept(this);
+        out.raw(")").token("END");
+    }
+
     /** PostgreSQL/MySQL: {@code OR REPLACE}; T-SQL overrides to {@code OR ALTER}. */
     protected void renderCreateOrReplaceView() {
         out.token("OR").token("REPLACE");

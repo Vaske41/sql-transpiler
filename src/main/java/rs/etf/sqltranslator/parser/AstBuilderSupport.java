@@ -14,6 +14,7 @@ import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.DeleteStatement;
+import rs.etf.sqltranslator.ast.CreateRoutineStatement;
 import rs.etf.sqltranslator.ast.CreateViewStatement;
 import rs.etf.sqltranslator.ast.DropRoutineStatement;
 import rs.etf.sqltranslator.ast.DropViewStatement;
@@ -39,7 +40,9 @@ import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.QuerySpecification;
 import rs.etf.sqltranslator.ast.RowLimit;
 import rs.etf.sqltranslator.ast.RowValue;
+import rs.etf.sqltranslator.ast.Script;
 import rs.etf.sqltranslator.ast.SelectStar;
+import rs.etf.sqltranslator.ast.SelectStatement;
 import rs.etf.sqltranslator.ast.Statement;
 import rs.etf.sqltranslator.ast.StringLiteral;
 import rs.etf.sqltranslator.ast.TableRef;
@@ -65,6 +68,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * The shared core behind the three thin dialect builders (D4): node-construction
@@ -91,6 +95,10 @@ final class AstBuilderSupport {
     /** Unsigned 64-bit family widens to DECIMAL(20,0) when args are absent. */
     private static final Set<String> UNSIGNED_64 = Set.of(
             "UNSIGNED", "UBIGINT", "BIGINT UNSIGNED");
+
+    private static final Pattern PROCEDURAL_ROUTINE_BODY = Pattern.compile(
+            "\\b(DECLARE|IF|LOOP|WHILE|RETURN\\s+NEXT|EXCEPTION)\\b|NEW\\.|OLD\\.",
+            Pattern.CASE_INSENSITIVE);
 
     private final Dialect dialect;
     private final Map<String, Fold> typeTable;
@@ -358,6 +366,101 @@ final class AstBuilderSupport {
         throw refuse("malformed CREATE VIEW header", position);
     }
 
+    /** {@code CREATE TRIGGER} — no faithful cross-dialect mapping. */
+    void refuseCreateTrigger(Identifier kind, SourcePosition position) {
+        requireContextualKeyword(kind, "TRIGGER");
+        throw refuse("CREATE TRIGGER", position);
+    }
+
+    ColumnDefinition routineParam(Identifier name, FoldedType type, SourcePosition position) {
+        return new ColumnDefinition(name, type.dataType(), false, Optional.empty(),
+                Optional.empty(), false, false, Optional.empty(), Optional.empty(),
+                Optional.empty(), false, position);
+    }
+
+    /**
+     * {@code CREATE [OR REPLACE] FUNCTION|PROCEDURE … AS body}. Dollar-quoted or
+     * BEGIN…END bodies are normalized to a single {@link SelectStatement} in {@code body}.
+     */
+    CreateRoutineStatement createRoutine(List<Identifier> headerIds, QualifiedName name,
+                                         List<ColumnDefinition> params,
+                                         Optional<DataType> returns, String bodyText,
+                                         SourcePosition position) {
+        CreateRoutineStatement.RoutineKind kind = routineKind(headerIds, position);
+        refuseProceduralRoutineBody(bodyText, position);
+        Script inner = AstBuilderFacade.buildScript(bodyText.trim(), dialect);
+        return finishRoutine(kind, name, params, returns, inner, position);
+    }
+
+    CreateRoutineStatement createRoutineFromStatements(List<Identifier> headerIds,
+                                                       QualifiedName name,
+                                                       List<ColumnDefinition> params,
+                                                       Optional<DataType> returns,
+                                                       List<Statement> bodyStatements,
+                                                       SourcePosition position) {
+        CreateRoutineStatement.RoutineKind kind = routineKind(headerIds, position);
+        return finishRoutine(kind, name, params, returns,
+                new Script(bodyStatements, position), position);
+    }
+
+    static String unwrapDollarBody(String text) {
+        int second = text.indexOf('$', 1);
+        if (second < 0) {
+            return text;
+        }
+        String tag = text.substring(1, second);
+        String close = "$" + tag + "$";
+        int start = second + 1;
+        int end = text.lastIndexOf(close);
+        if (end <= start) {
+            return text;
+        }
+        return text.substring(start, end);
+    }
+
+    private CreateRoutineStatement finishRoutine(CreateRoutineStatement.RoutineKind kind,
+                                                 QualifiedName name,
+                                                 List<ColumnDefinition> params,
+                                                 Optional<DataType> returns, Script inner,
+                                                 SourcePosition position) {
+        refuseIf(inner.statements().size() != 1, "multi-statement routine body", position);
+        Statement stmt = inner.statements().get(0);
+        refuseIf(!(stmt instanceof SelectStatement), "scalar SELECT routine body", position);
+        return new CreateRoutineStatement(kind, name, params, returns, List.of(stmt), position);
+    }
+
+    private void refuseProceduralRoutineBody(String bodyText, SourcePosition position) {
+        if (PROCEDURAL_ROUTINE_BODY.matcher(bodyText).find()) {
+            throw refuse("procedural routine body", position);
+        }
+    }
+
+    private CreateRoutineStatement.RoutineKind routineKind(List<Identifier> headerIds,
+                                                           SourcePosition position) {
+        Identifier kindToken;
+        if (headerIds.size() == 1) {
+            kindToken = headerIds.get(0);
+        } else if (headerIds.size() == 2) {
+            String mid = headerIds.get(0).value();
+            refuseIf(headerIds.get(0).quoted()
+                            || (!"REPLACE".equalsIgnoreCase(mid)
+                            && !"ALTER".equalsIgnoreCase(mid)),
+                    "expected REPLACE or ALTER, got \"" + mid + "\"",
+                    headerIds.get(0).pos());
+            kindToken = headerIds.get(1);
+        } else {
+            throw refuse("malformed CREATE ROUTINE header", position);
+        }
+        if (kindToken.value().equalsIgnoreCase("FUNCTION")) {
+            return CreateRoutineStatement.RoutineKind.FUNCTION;
+        }
+        if (kindToken.value().equalsIgnoreCase("PROCEDURE")) {
+            return CreateRoutineStatement.RoutineKind.PROCEDURE;
+        }
+        throw refuse("expected FUNCTION or PROCEDURE, got \"" + kindToken.value() + "\"",
+                kindToken.pos());
+    }
+
     /**
      * MySQL-style {@code UPDATE t JOIN u ON … SET} → portable {@code UPDATE t SET … FROM …}
      * by folding the first JOIN's ON into WHERE (INNER/CROSS only).
@@ -488,6 +591,10 @@ final class AstBuilderSupport {
 
     void requireTypeKeyword(Identifier keyword) {
         requireContextualKeyword(keyword, "TYPE");
+    }
+
+    void requireReturnsKeyword(Identifier keyword) {
+        requireContextualKeyword(keyword, "RETURNS");
     }
 
     void requireDataTypeKeywords(Identifier data, Identifier type) {
@@ -1331,7 +1438,9 @@ final class AstBuilderSupport {
                     Map.entry("SMALLSERIAL", Fold.auto(GenericType.SMALLINT)),
                     // MySQL-derived names appearing in PG corpus rows (Wave 3 C1).
                     Map.entry("SIGNED", Fold.of(GenericType.BIGINT)),
-                    Map.entry("UNSIGNED", Fold.of(GenericType.DECIMAL)));
+                    Map.entry("UNSIGNED", Fold.of(GenericType.DECIMAL)),
+                    // PG trigger return type — parsed for routine shells, not a scalar target.
+                    Map.entry("TRIGGER", Fold.of(GenericType.TEXT)));
         };
     }
 

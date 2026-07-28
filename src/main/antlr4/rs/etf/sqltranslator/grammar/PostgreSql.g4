@@ -13,6 +13,8 @@ statement
     | deleteStatement
     | createTableStatement
     | createViewStatement
+    | createTriggerStatement
+    | createRoutineStatement
     | createIndexStatement
     | dropTableStatement
     | dropIndexStatement
@@ -76,6 +78,32 @@ createViewStatement
       ('(' columnName (',' columnName)* ')')?
       AS queryExpression
     ;
+
+// TRIGGER timing/event semantics differ across dialects — parsed only to refuse.
+createTriggerStatement
+    : CREATE identifier identifier identifier+
+    ;
+
+// FUNCTION / PROCEDURE / RETURNS / LANGUAGE are contextual identifiers.
+createRoutineStatement
+    : CREATE OR identifier identifier qualifiedName '(' paramList? ')' returnsClause? AS routineBody languageClause?
+    | CREATE identifier qualifiedName '(' paramList? ')' returnsClause? AS routineBody languageClause?
+    ;
+
+returnsClause : identifier dataType ;
+
+languageClause : identifier identifier ;
+
+routineBody
+    : DOLLAR_BODY
+    | BEGIN routineBodyInner END
+    ;
+
+routineBodyInner : selectStatement (';' selectStatement)* ';'? ;
+
+paramList : param (',' param)* ;
+
+param : columnName dataType ;
 
 createIndexStatement
     : CREATE UNIQUE? INDEX identifier ON qualifiedName indexMethod?
@@ -466,7 +494,7 @@ indexMethod : USING identifier ;
 
 ADD:A D D; ALL:A L L; ALTER:A L T E R; ALWAYS:A L W A Y S; AND:A N D;
 AS:A S; ASC:A S C; AUTO_INCREMENT:A U T O '_' I N C R E M E N T; APPLY:A P P L Y;
-BETWEEN:B E T W E E N; BOTH:B O T H; BY:B Y; CASE:C A S E; CAST:C A S T; CHECK:C H E C K;
+BETWEEN:B E T W E E N; BOTH:B O T H; BY:B Y; BEGIN:B E G I N; CASE:C A S E; CAST:C A S T; CHECK:C H E C K;
 CLUSTERED:C L U S T E R E D; COLUMN:C O L U M N;
 CONSTRAINT:C O N S T R A I N T; CONVERT:C O N V E R T; CREATE:C R E A T E;
 CROSS:C R O S S; CUBE:C U B E; CURRENT_ROW:C U R R E N T [ \t\r\n]+ R O W; DEFAULT:D E F A U L T; DELETE:D E L E T E; DESC:D E S C;
@@ -506,6 +534,10 @@ BANG_TILDE_STAR : '!~*' ;
 BANG_TILDE : '!~' ;
 TILDE_STAR : '~*' ;
 TILDE : '~' ;
+
+DOLLAR_BODY : '$' TAG? '$' (DOLLAR_BODY_CHAR)*? '$' TAG? '$' ;
+fragment DOLLAR_BODY_CHAR : . ;
+fragment TAG : [A-Za-z_][A-Za-z0-9_]* ;
 
 INTEGER_LITERAL : [0-9]+ ;
 

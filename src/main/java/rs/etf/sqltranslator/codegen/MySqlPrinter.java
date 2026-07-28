@@ -3,6 +3,7 @@ package rs.etf.sqltranslator.codegen;
 import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.BinaryOperator;
 import rs.etf.sqltranslator.ast.ColumnDefinition;
+import rs.etf.sqltranslator.ast.CreateRoutineStatement;
 import rs.etf.sqltranslator.ast.ColumnRef;
 import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.DataType;
@@ -10,6 +11,7 @@ import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.GroupByKind;
 import rs.etf.sqltranslator.ast.IndexColumn;
 import rs.etf.sqltranslator.ast.QuerySpecification;
+import rs.etf.sqltranslator.ast.SelectStatement;
 import rs.etf.sqltranslator.ast.IntervalLiteral;
 import rs.etf.sqltranslator.ast.NullsOrder;
 import rs.etf.sqltranslator.ast.NumericLiteral;
@@ -280,5 +282,18 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
             return;
         }
         super.renderGroupBy(spec);
+    }
+
+    @Override
+    protected void renderRoutineCharacteristics(CreateRoutineStatement node) {
+        out.token("DETERMINISTIC").token("READS").token("SQL").token("DATA");
+    }
+
+    @Override
+    protected void renderRoutineBody(CreateRoutineStatement node) {
+        SelectStatement body = (SelectStatement) node.body().get(0);
+        out.token("BEGIN").token("RETURN").token("(");
+        body.query().accept(this);
+        out.raw(");").token("END");
     }
 }

@@ -64,6 +64,8 @@ public interface AstVisitor<R> {
 
     R visitCreateViewStatement(CreateViewStatement node);
 
+    R visitCreateRoutineStatement(CreateRoutineStatement node);
+
     R visitColumnDefinition(ColumnDefinition node);
 
     R visitForeignKeyRef(ForeignKeyRef node);

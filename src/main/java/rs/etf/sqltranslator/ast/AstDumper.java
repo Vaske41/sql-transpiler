@@ -271,6 +271,16 @@ public final class AstDumper implements AstVisitor<String> {
     }
 
     @Override
+    public String visitCreateRoutineStatement(CreateRoutineStatement node) {
+        return node("CreateRoutineStatement kind=" + node.kind())
+                .child("name", node.name())
+                .children("params", node.params())
+                .child("returns", node.returns())
+                .children("body", node.body())
+                .done();
+    }
+
+    @Override
     public String visitColumnDefinition(ColumnDefinition node) {
         String header = "ColumnDefinition autoIncrement=" + node.autoIncrement()
                 + " primaryKey=" + node.primaryKey()
