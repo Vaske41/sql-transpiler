@@ -118,8 +118,22 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     // --- query shape ---
 
     @Override
-    public Object visitQueryExprParen(PostgreSqlParser.QueryExprParenContext ctx) {
-        return visit(ctx.queryExpression());
+    public Object visitQueryPrimarySpec(PostgreSqlParser.QueryPrimarySpecContext ctx) {
+        return support.primarySpec((QuerySpecification) visit(ctx.querySpecification()), pos(ctx));
+    }
+
+    @Override
+    public Object visitQueryPrimaryParen(PostgreSqlParser.QueryPrimaryParenContext ctx) {
+        return support.primaryParen((Query) visit(ctx.queryExpression()), pos(ctx));
+    }
+
+    @Override
+    public Object visitQueryTermSetOps(PostgreSqlParser.QueryTermSetOpsContext ctx) {
+        List<AstBuilderSupport.QueryPrimaryPart> primaries = ctx.queryPrimary().stream()
+                .map(p -> (AstBuilderSupport.QueryPrimaryPart) visit(p)).toList();
+        List<Boolean> intersectAll = support.intersectAllFlags(ctx, PostgreSqlParser.INTERSECT,
+                PostgreSqlParser.ALL, PostgreSqlParser.RULE_queryPrimary);
+        return support.queryTermPart(primaries, intersectAll, pos(ctx));
     }
 
     @Override
@@ -131,15 +145,17 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
             ctes = w.commonTableExpression().stream().map(c -> (Cte) visit(c)).toList();
             recursive = support.isRecursiveWith(w.RECURSIVE() != null, ctes);
         }
-        QuerySpecification first = (QuerySpecification) visit(ctx.querySpecification(0));
-        List<UnionArm> arms = support.unionArms(ctx, PostgreSqlParser.UNION,
-                PostgreSqlParser.EXCEPT, PostgreSqlParser.INTERSECT, PostgreSqlParser.ALL, this);
+        List<AstBuilderSupport.QueryTermPart> terms = ctx.queryTerm().stream()
+                .map(t -> (AstBuilderSupport.QueryTermPart) visit(t)).toList();
+        List<AstBuilderSupport.TermSetOp> termOps = support.termSetOps(ctx,
+                PostgreSqlParser.UNION, PostgreSqlParser.EXCEPT, PostgreSqlParser.ALL,
+                PostgreSqlParser.RULE_queryTerm);
         List<OrderItem> orderBy = ctx.orderByClause() == null
                 ? List.of()
                 : ctx.orderByClause().orderItem().stream()
                         .map(i -> (OrderItem) visit(i)).toList();
-        return new Query(ctes, recursive, first, arms, orderBy, rowLimit(ctx.rowLimitClause()),
-                pos(ctx));
+        return support.queryFromSetOps(ctes, recursive, terms, termOps, orderBy,
+                rowLimit(ctx.rowLimitClause()), pos(ctx));
     }
 
     @Override

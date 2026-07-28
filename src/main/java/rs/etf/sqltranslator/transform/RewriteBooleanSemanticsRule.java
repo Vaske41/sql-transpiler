@@ -226,10 +226,23 @@ public final class RewriteBooleanSemanticsRule implements Rule {
             QuerySpecification first = harmonizeSelectList(query.first(), namedColumns, schema);
             List<UnionArm> arms = query.unionArms().stream()
                     .map(arm -> new UnionArm(arm.operator(), arm.all(),
-                            harmonizeSelectList(arm.spec(), namedColumns, schema), arm.pos()))
+                            harmonizeInsertQueryOperand(arm.operand(), namedColumns, schema),
+                            arm.parenthesized(), arm.pos()))
                     .toList();
             return new Query(query.ctes(), query.recursive(), first, arms, query.orderBy(),
                     query.limit(), query.pos());
+        }
+
+        private Query harmonizeInsertQueryOperand(Query operand, List<Identifier> namedColumns,
+                                                  TableSchema schema) {
+            QuerySpecification first = harmonizeSelectList(operand.first(), namedColumns, schema);
+            List<UnionArm> arms = operand.unionArms().stream()
+                    .map(arm -> new UnionArm(arm.operator(), arm.all(),
+                            harmonizeInsertQueryOperand(arm.operand(), namedColumns, schema),
+                            arm.parenthesized(), arm.pos()))
+                    .toList();
+            return new Query(List.of(), false, first, arms, List.of(), Optional.empty(),
+                    operand.pos());
         }
 
         private QuerySpecification harmonizeSelectList(QuerySpecification spec,

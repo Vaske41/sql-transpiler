@@ -58,7 +58,7 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitUnionArm(UnionArm node) {
-        node.spec().accept(this);
+        node.operand().accept(this);
         return defaultResult();
     }
 

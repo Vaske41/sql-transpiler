@@ -89,7 +89,8 @@ public final class ExpandGenerateSeriesRule implements Rule {
                 arms.add(new UnionArm(
                         arm.operator(),
                         arm.all(),
-                        expandSpec(rebuild(arm.spec()), generated, bound),
+                        expandQueryOperand(rebuild(arm.operand()), generated, bound),
+                        arm.parenthesized(),
                         arm.pos()));
             }
 
@@ -125,6 +126,18 @@ public final class ExpandGenerateSeriesRule implements Rule {
                     spec.groupBy(),
                     spec.having(),
                     spec.pos());
+        }
+
+        private Query expandQueryOperand(Query operand, List<Cte> generated, Set<String> bound) {
+            QuerySpecification first = expandSpec(rebuild(operand.first()), generated, bound);
+            List<UnionArm> arms = new ArrayList<>();
+            for (UnionArm arm : operand.unionArms()) {
+                arms.add(new UnionArm(arm.operator(), arm.all(),
+                        expandQueryOperand(rebuild(arm.operand()), generated, bound),
+                        arm.parenthesized(), arm.pos()));
+            }
+            return new Query(List.of(), false, first, arms, List.of(), Optional.empty(),
+                    operand.pos());
         }
 
         private TableSource expandTableSource(TableSource source, List<Cte> generated,

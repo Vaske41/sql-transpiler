@@ -116,8 +116,22 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     // --- query shape ---
 
     @Override
-    public Object visitQueryExprParen(TSqlParser.QueryExprParenContext ctx) {
-        return visit(ctx.queryExpression());
+    public Object visitQueryPrimarySpec(TSqlParser.QueryPrimarySpecContext ctx) {
+        return support.primarySpec((QuerySpecification) visit(ctx.querySpecification()), pos(ctx));
+    }
+
+    @Override
+    public Object visitQueryPrimaryParen(TSqlParser.QueryPrimaryParenContext ctx) {
+        return support.primaryParen((Query) visit(ctx.queryExpression()), pos(ctx));
+    }
+
+    @Override
+    public Object visitQueryTermSetOps(TSqlParser.QueryTermSetOpsContext ctx) {
+        List<AstBuilderSupport.QueryPrimaryPart> primaries = ctx.queryPrimary().stream()
+                .map(p -> (AstBuilderSupport.QueryPrimaryPart) visit(p)).toList();
+        List<Boolean> intersectAll = support.intersectAllFlags(ctx, TSqlParser.INTERSECT,
+                TSqlParser.ALL, TSqlParser.RULE_queryPrimary);
+        return support.queryTermPart(primaries, intersectAll, pos(ctx));
     }
 
     @Override
@@ -129,9 +143,14 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
             ctes = w.commonTableExpression().stream().map(c -> (Cte) visit(c)).toList();
             recursive = support.isRecursiveWith(w.RECURSIVE() != null, ctes);
         }
-        List<TSqlParser.QuerySpecificationContext> specs = ctx.querySpecification();
-        boolean hasArms = specs.size() > 1;
-        List<AstBuilderSupport.ExtractedTop> tops = specs.stream()
+        List<AstBuilderSupport.QueryTermPart> terms = ctx.queryTerm().stream()
+                .map(t -> (AstBuilderSupport.QueryTermPart) visit(t)).toList();
+        List<TSqlParser.QuerySpecificationContext> specContexts = new ArrayList<>();
+        for (TSqlParser.QueryTermContext term : ctx.queryTerm()) {
+            collectSpecContexts(term, specContexts);
+        }
+        boolean hasArms = specContexts.size() > 1;
+        List<AstBuilderSupport.ExtractedTop> tops = specContexts.stream()
                 .map(spec -> {
                     TSqlParser.TopClauseContext topClause = spec.topClause();
                     if (topClause == null) {
@@ -147,9 +166,8 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
                 })
                 .toList();
         AstBuilderSupport.ExtractedTop top = support.extractTsqlTop(tops, hasArms);
-        QuerySpecification first = (QuerySpecification) visit(specs.get(0));
-        List<UnionArm> arms = support.unionArms(ctx, TSqlParser.UNION, TSqlParser.EXCEPT,
-                TSqlParser.INTERSECT, TSqlParser.ALL, this);
+        List<AstBuilderSupport.TermSetOp> termOps = support.termSetOps(ctx,
+                TSqlParser.UNION, TSqlParser.EXCEPT, TSqlParser.ALL, TSqlParser.RULE_queryTerm);
         List<OrderItem> orderBy = new ArrayList<>();
         Expression offset = null;
         Expression fetch = null;
@@ -178,7 +196,28 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
                 top == null ? null : top.count(),
                 top == null ? null : top.position(),
                 offset, fetch, withTies, offsetPos);
-        return new Query(ctes, recursive, first, arms, orderBy, limit, pos(ctx));
+        return support.queryFromSetOps(ctes, recursive, terms, termOps, orderBy, limit, pos(ctx));
+    }
+
+    private void collectSpecContexts(TSqlParser.QueryTermContext term,
+                                     List<TSqlParser.QuerySpecificationContext> out) {
+        TSqlParser.QueryTermSetOpsContext setOps = (TSqlParser.QueryTermSetOpsContext) term;
+        for (TSqlParser.QueryPrimaryContext primary : setOps.queryPrimary()) {
+            if (primary instanceof TSqlParser.QueryPrimarySpecContext specCtx) {
+                out.add(specCtx.querySpecification());
+            } else if (primary instanceof TSqlParser.QueryPrimaryParenContext parenCtx) {
+                collectSpecContextsFromExpression(parenCtx.queryExpression(), out);
+            }
+        }
+    }
+
+    private void collectSpecContextsFromExpression(TSqlParser.QueryExpressionContext expr,
+                                                   List<TSqlParser.QuerySpecificationContext> out) {
+        if (expr instanceof TSqlParser.QueryExprSetOpsContext setOps) {
+            for (TSqlParser.QueryTermContext term : setOps.queryTerm()) {
+                collectSpecContexts(term, out);
+            }
+        }
     }
 
     @Override

@@ -167,9 +167,17 @@ optionClause : identifier '(' identifier INTEGER_LITERAL ')' ;
 
 // T-SQL has no trailing rowLimitClause — OFFSET/FETCH folds into orderByClause.
 queryExpression
-    : withClause? querySpecification ((UNION | EXCEPT | INTERSECT) ALL? querySpecification)*
+    : withClause? queryTerm ((UNION | EXCEPT) ALL? queryTerm)*
       orderByClause?                                               # queryExprSetOps
-    | '(' queryExpression ')'                                      # queryExprParen
+    ;
+
+queryTerm
+    : queryPrimary (INTERSECT ALL? queryPrimary)*                  # queryTermSetOps
+    ;
+
+queryPrimary
+    : querySpecification                                           # queryPrimarySpec
+    | '(' queryExpression ')'                                      # queryPrimaryParen
     ;
 
 withClause

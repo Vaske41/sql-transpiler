@@ -30,6 +30,7 @@ import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.JoinKind;
 import rs.etf.sqltranslator.ast.MaxLength;
 import rs.etf.sqltranslator.ast.NumericLiteral;
+import rs.etf.sqltranslator.ast.OrderItem;
 import rs.etf.sqltranslator.ast.OutputClause;
 import rs.etf.sqltranslator.ast.QualifiedName;
 import rs.etf.sqltranslator.ast.Query;
@@ -651,16 +652,72 @@ final class AstBuilderSupport {
     }
 
     /**
-     * Walks a {@code queryExpression} child list and builds {@link UnionArm}s after
-     * each {@code UNION|EXCEPT|INTERSECT [ALL]}. Token type ids differ per dialect
-     * grammar; the structural walk is shared.
+     * One parsed {@code queryPrimary}: bare {@code querySpecification} or parenthesized
+     * {@code queryExpression}.
      */
-    List<UnionArm> unionArms(ParserRuleContext ctx,
-                             int unionTokenType, int exceptTokenType, int intersectTokenType,
-                             int allTokenType, ParseTreeVisitor<Object> builder) {
-        List<UnionArm> arms = new ArrayList<>();
+    record QueryPrimaryPart(QuerySpecification spec, Query parenQuery, boolean parenthesized,
+                            SourcePosition pos) {
+
+        Query asOperand() {
+            if (parenthesized) {
+                return parenQuery;
+            }
+            return new Query(List.of(), false, spec, List.of(), List.of(), Optional.empty(), pos);
+        }
+
+        QuerySpecification firstSpec() {
+            return parenthesized ? parenQuery.first() : spec;
+        }
+
+        QueryTermPart asTerm() {
+            if (!parenthesized) {
+                return new QueryTermPart(spec, List.of(), false, pos);
+            }
+            return new QueryTermPart(parenQuery.first(), parenQuery.unionArms(), true, pos);
+        }
+    }
+
+    /** One {@code queryTerm}: an INTERSECT chain at a UNION/EXCEPT precedence level. */
+    record QueryTermPart(QuerySpecification first, List<UnionArm> intersectArms,
+                         boolean firstParenthesized, SourcePosition pos) {
+
+        Query asUnionLevelOperand() {
+            return new Query(List.of(), false, first, intersectArms, List.of(),
+                    Optional.empty(), pos);
+        }
+    }
+
+    /** Set operator between two {@code queryTerm}s inside a {@code queryExpression}. */
+    record TermSetOp(SetOperator operator, boolean all) {
+    }
+
+    QueryPrimaryPart primarySpec(QuerySpecification spec, SourcePosition pos) {
+        return new QueryPrimaryPart(spec, null, false, pos);
+    }
+
+    QueryPrimaryPart primaryParen(Query query, SourcePosition pos) {
+        return new QueryPrimaryPart(null, query, true, pos);
+    }
+
+    QueryTermPart queryTermPart(List<QueryPrimaryPart> primaries, List<Boolean> intersectAll,
+                                SourcePosition pos) {
+        QueryTermPart head = primaries.get(0).asTerm();
+        List<UnionArm> arms = new ArrayList<>(head.intersectArms());
+        for (int i = 1; i < primaries.size(); i++) {
+            QueryPrimaryPart primary = primaries.get(i);
+            QueryTermPart part = primary.asTerm();
+            arms.add(new UnionArm(SetOperator.INTERSECT, intersectAll.get(i - 1),
+                    part.asUnionLevelOperand(), primary.parenthesized(), primary.pos()));
+        }
+        return new QueryTermPart(head.first(), arms, head.firstParenthesized(), pos);
+    }
+
+    List<TermSetOp> termSetOps(ParserRuleContext ctx, int unionTokenType, int exceptTokenType,
+                               int allTokenType, int queryTermRuleIndex) {
+        List<TermSetOp> ops = new ArrayList<>();
         SetOperator op = null;
         boolean all = false;
+        int termIndex = 0;
         for (ParseTree child : ctx.children) {
             if (child instanceof TerminalNode terminal) {
                 int type = terminal.getSymbol().getType();
@@ -670,19 +727,60 @@ final class AstBuilderSupport {
                 } else if (type == exceptTokenType) {
                     op = SetOperator.EXCEPT;
                     all = false;
-                } else if (type == intersectTokenType) {
-                    op = SetOperator.INTERSECT;
-                    all = false;
                 } else if (op != null && type == allTokenType) {
                     all = true;
                 }
-            } else if (op != null && child instanceof ParserRuleContext spec) {
-                arms.add(new UnionArm(op, all, (QuerySpecification) spec.accept(builder),
-                        pos(spec)));
-                op = null;
+            } else if (child instanceof ParserRuleContext rule
+                    && rule.getRuleIndex() == queryTermRuleIndex) {
+                if (termIndex++ > 0 && op != null) {
+                    ops.add(new TermSetOp(op, all));
+                    op = null;
+                }
             }
         }
-        return arms;
+        return ops;
+    }
+
+    List<Boolean> intersectAllFlags(ParserRuleContext ctx, int intersectTokenType,
+                                  int allTokenType, int queryPrimaryRuleIndex) {
+        List<Boolean> flags = new ArrayList<>();
+        boolean pendingIntersect = false;
+        boolean all = false;
+        for (ParseTree child : ctx.children) {
+            if (child instanceof TerminalNode terminal) {
+                int type = terminal.getSymbol().getType();
+                if (type == intersectTokenType) {
+                    pendingIntersect = true;
+                    all = false;
+                } else if (pendingIntersect && type == allTokenType) {
+                    all = true;
+                }
+            } else if (child instanceof ParserRuleContext rule
+                    && rule.getRuleIndex() == queryPrimaryRuleIndex) {
+                if (pendingIntersect) {
+                    flags.add(all);
+                    pendingIntersect = false;
+                    all = false;
+                }
+            }
+        }
+        return flags;
+    }
+
+    Query queryFromSetOps(List<Cte> ctes, boolean recursive, List<QueryTermPart> terms,
+                          List<TermSetOp> termOps, List<OrderItem> orderBy,
+                          Optional<RowLimit> limit, SourcePosition pos) {
+        QueryTermPart firstTerm = terms.get(0);
+        QuerySpecification first = firstTerm.first();
+        List<UnionArm> arms = new ArrayList<>(firstTerm.intersectArms());
+        for (int i = 1; i < terms.size(); i++) {
+            TermSetOp op = termOps.get(i - 1);
+            QueryTermPart term = terms.get(i);
+            boolean parenthesized = term.intersectArms().isEmpty() && term.firstParenthesized();
+            arms.add(new UnionArm(op.operator(), op.all(), term.asUnionLevelOperand(),
+                    parenthesized, term.pos()));
+        }
+        return new Query(ctes, recursive, first, arms, orderBy, limit, pos);
     }
 
     private BinaryOperator binaryOperator(String text) {

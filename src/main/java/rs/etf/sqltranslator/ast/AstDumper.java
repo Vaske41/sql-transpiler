@@ -56,8 +56,9 @@ public final class AstDumper implements AstVisitor<String> {
 
     @Override
     public String visitUnionArm(UnionArm node) {
-        return node("UnionArm op=" + node.operator() + " all=" + node.all())
-                .child("spec", node.spec()).done();
+        return node("UnionArm op=" + node.operator() + " all=" + node.all()
+                + " paren=" + node.parenthesized())
+                .child("operand", node.operand()).done();
     }
 
     @Override

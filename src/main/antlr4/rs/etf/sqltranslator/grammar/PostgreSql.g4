@@ -161,10 +161,18 @@ usingClause : USING expression ;
 selectStatement : queryExpression ;
 
 queryExpression
-    : withClause? querySpecification ((UNION | EXCEPT | INTERSECT) ALL? querySpecification)*
+    : withClause? queryTerm ((UNION | EXCEPT) ALL? queryTerm)*
       orderByClause?
       rowLimitClause?                                              # queryExprSetOps
-    | '(' queryExpression ')'                                      # queryExprParen
+    ;
+
+queryTerm
+    : queryPrimary (INTERSECT ALL? queryPrimary)*                  # queryTermSetOps
+    ;
+
+queryPrimary
+    : querySpecification                                           # queryPrimarySpec
+    | '(' queryExpression ')'                                      # queryPrimaryParen
     ;
 
 withClause

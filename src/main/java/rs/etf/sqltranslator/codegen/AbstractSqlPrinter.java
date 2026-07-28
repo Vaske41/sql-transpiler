@@ -688,8 +688,19 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         if (node.all()) {
             out.token("ALL");
         }
-        renderSpec(node.spec(), null);
+        renderSetOpOperand(node.operand(), node.parenthesized());
         return null;
+    }
+
+    private void renderSetOpOperand(Query operand, boolean parenthesized) {
+        if (parenthesized) {
+            subquery(operand);
+            return;
+        }
+        renderSpec(operand.first(), null);
+        for (UnionArm arm : operand.unionArms()) {
+            arm.accept(this);
+        }
     }
 
     @Override

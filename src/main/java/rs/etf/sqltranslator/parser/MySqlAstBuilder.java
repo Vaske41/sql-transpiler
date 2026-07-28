@@ -115,8 +115,22 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
     // --- query shape ---
 
     @Override
-    public Object visitQueryExprParen(MySqlParser.QueryExprParenContext ctx) {
-        return visit(ctx.queryExpression());
+    public Object visitQueryPrimarySpec(MySqlParser.QueryPrimarySpecContext ctx) {
+        return support.primarySpec((QuerySpecification) visit(ctx.querySpecification()), pos(ctx));
+    }
+
+    @Override
+    public Object visitQueryPrimaryParen(MySqlParser.QueryPrimaryParenContext ctx) {
+        return support.primaryParen((Query) visit(ctx.queryExpression()), pos(ctx));
+    }
+
+    @Override
+    public Object visitQueryTermSetOps(MySqlParser.QueryTermSetOpsContext ctx) {
+        List<AstBuilderSupport.QueryPrimaryPart> primaries = ctx.queryPrimary().stream()
+                .map(p -> (AstBuilderSupport.QueryPrimaryPart) visit(p)).toList();
+        List<Boolean> intersectAll = support.intersectAllFlags(ctx, MySqlParser.INTERSECT,
+                MySqlParser.ALL, MySqlParser.RULE_queryPrimary);
+        return support.queryTermPart(primaries, intersectAll, pos(ctx));
     }
 
     @Override
@@ -128,15 +142,17 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
             ctes = w.commonTableExpression().stream().map(c -> (Cte) visit(c)).toList();
             recursive = support.isRecursiveWith(w.RECURSIVE() != null, ctes);
         }
-        QuerySpecification first = (QuerySpecification) visit(ctx.querySpecification(0));
-        List<UnionArm> arms = support.unionArms(ctx, MySqlParser.UNION, MySqlParser.EXCEPT,
-                MySqlParser.INTERSECT, MySqlParser.ALL, this);
+        List<AstBuilderSupport.QueryTermPart> terms = ctx.queryTerm().stream()
+                .map(t -> (AstBuilderSupport.QueryTermPart) visit(t)).toList();
+        List<AstBuilderSupport.TermSetOp> termOps = support.termSetOps(ctx,
+                MySqlParser.UNION, MySqlParser.EXCEPT, MySqlParser.ALL,
+                MySqlParser.RULE_queryTerm);
         List<OrderItem> orderBy = ctx.orderByClause() == null
                 ? List.of()
                 : ctx.orderByClause().orderItem().stream()
                         .map(i -> (OrderItem) visit(i)).toList();
-        return new Query(ctes, recursive, first, arms, orderBy, rowLimit(ctx.rowLimitClause()),
-                pos(ctx));
+        return support.queryFromSetOps(ctes, recursive, terms, termOps, orderBy,
+                rowLimit(ctx.rowLimitClause()), pos(ctx));
     }
 
     @Override
