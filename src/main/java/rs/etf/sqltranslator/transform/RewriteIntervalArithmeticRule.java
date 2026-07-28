@@ -18,6 +18,7 @@ import rs.etf.sqltranslator.core.UnsupportedFeatureException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * INTERVAL handling for targets that lack native interval literals.
@@ -31,6 +32,11 @@ import java.util.Optional;
  * </ul>
  */
 public final class RewriteIntervalArithmeticRule implements Rule {
+
+    /** Portable units accepted by T-SQL {@code DATEADD}; unknowns are refused. */
+    private static final Set<String> DATEADD_UNITS = Set.of(
+            "year", "quarter", "month", "day", "week",
+            "hour", "minute", "second", "millisecond");
 
     @Override
     public String name() {
@@ -152,7 +158,11 @@ public final class RewriteIntervalArithmeticRule implements Rule {
 
         private static FunctionCall dateAdd(IntervalLiteral interval, int sign,
                                             Expression date, SourcePosition pos) {
-            String unit = interval.unit().orElseThrow();
+            String unit = interval.unit().orElseThrow().toLowerCase(Locale.ROOT);
+            if (!DATEADD_UNITS.contains(unit)) {
+                throw new UnsupportedFeatureException(
+                        "INTERVAL unit '" + unit + "' toward DATEADD", interval.pos());
+            }
             Expression amount = interval.value();
             if (sign < 0) {
                 if (amount instanceof NumericLiteral num) {
@@ -166,7 +176,7 @@ public final class RewriteIntervalArithmeticRule implements Rule {
                             new NumericLiteral("-1", false, pos), pos);
                 }
             }
-            Identifier unitId = new Identifier(unit.toLowerCase(Locale.ROOT), false, pos);
+            Identifier unitId = new Identifier(unit, false, pos);
             ColumnRef unitRef = new ColumnRef(new QualifiedName(List.of(unitId), pos), pos);
             return new FunctionCall("DATEADD", List.of(unitRef, amount, date),
                     false, Optional.empty(), Optional.empty(), pos);

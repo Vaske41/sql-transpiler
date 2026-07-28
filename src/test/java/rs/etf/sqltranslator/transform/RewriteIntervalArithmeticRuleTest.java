@@ -87,4 +87,13 @@ class RewriteIntervalArithmeticRuleTest {
                 .isInstanceOf(UnsupportedFeatureException.class)
                 .hasMessageContaining("compound INTERVAL");
     }
+
+    @Test
+    void unknownIntervalUnitRefusedTowardTsql() {
+        assertThatThrownBy(() -> CodegenTestSupport.printTranslated(
+                "SELECT ts + INTERVAL '1 fortnight' FROM t;",
+                Dialect.POSTGRESQL, Dialect.TSQL))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("INTERVAL unit");
+    }
 }
