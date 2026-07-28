@@ -4,8 +4,9 @@ import rs.etf.sqltranslator.core.SourcePosition;
 
 import java.util.Optional;
 
-/** DELETE FROM ... [AS alias] [USING ...] [WHERE ...]. */
+/** DELETE FROM ... [AS alias] [OUTPUT/RETURNING ...] [USING ...] [WHERE ...]. */
 public record DeleteStatement(QualifiedName table, Optional<Identifier> alias,
+                              Optional<OutputClause> outputClause,
                               Optional<TableSource> usingClause, Optional<Expression> where,
                               SourcePosition pos) implements Statement {
 
@@ -16,7 +17,7 @@ public record DeleteStatement(QualifiedName table, Optional<Identifier> alias,
 
     /** Compact form — no alias, no USING. Keeps existing call sites unchanged. */
     public DeleteStatement(QualifiedName table, Optional<Expression> where, SourcePosition pos) {
-        this(table, Optional.empty(), Optional.empty(), where, pos);
+        this(table, Optional.empty(), Optional.empty(), Optional.empty(), where, pos);
     }
 
     @Override

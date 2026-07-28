@@ -3,6 +3,7 @@ package rs.etf.sqltranslator.codegen;
 import rs.etf.sqltranslator.ast.*;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -132,14 +133,41 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     /**
      * Dialect-native INTERVAL rendering. T-SQL overrides with a contract guard —
      * additive intervals must become {@code DATEADD} before print.
+     * PostgreSQL: literal → {@code INTERVAL 'n unit'}; computed →
+     * {@code (value || ' unit')::interval}.
      */
     protected void renderIntervalLiteral(IntervalLiteral node) {
-        out.token("INTERVAL");
-        if (node.unit().isPresent()) {
-            out.token("'" + node.raw() + " " + node.unit().get() + "'");
-        } else {
-            out.token("'" + node.raw().replace("'", "''") + "'");
+        if (node.unit().isEmpty()) {
+            out.token("INTERVAL");
+            Expression value = node.value();
+            if (value instanceof StringLiteral str) {
+                out.token("'" + str.value().replace("'", "''") + "'");
+            } else if (value instanceof NumericLiteral num) {
+                out.token("'" + num.text() + "'");
+            } else {
+                out.raw("(");
+                value.accept(this);
+                out.raw(")::interval");
+            }
+            return;
         }
+        String unit = node.unit().get();
+        Expression value = node.value();
+        if (value instanceof NumericLiteral num) {
+            out.token("INTERVAL");
+            out.token("'" + num.text() + " " + unit + "'");
+            return;
+        }
+        if (value instanceof StringLiteral str) {
+            out.token("INTERVAL");
+            out.token("'" + str.value().replace("'", "''") + " " + unit + "'");
+            return;
+        }
+        out.raw("(");
+        value.accept(this);
+        out.token("||");
+        out.token("' " + unit + "'");
+        out.raw(")::interval");
     }
 
     // --- operators, precedence-driven minimal parentheses ---
@@ -155,6 +183,7 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
                 case MUL, DIV, MOD -> 7;
                 // JSON access: tighter than ||, same band as additive for paren decisions.
                 case JSON_GET, JSON_GET_TEXT, JSON_PATH, JSON_PATH_TEXT, JSON_CONTAINS -> 6;
+                case REGEX_MATCH, REGEX_MATCH_I, REGEX_NOT_MATCH, REGEX_NOT_MATCH_I -> 6;
             };
         }
         if (e instanceof UnaryOp op) {
@@ -207,6 +236,10 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             case JSON_PATH -> "#>";
             case JSON_PATH_TEXT -> "#>>";
             case JSON_CONTAINS -> "@>";
+            case REGEX_MATCH -> "~";
+            case REGEX_MATCH_I -> "~*";
+            case REGEX_NOT_MATCH -> "!~";
+            case REGEX_NOT_MATCH_I -> "!~*";
         };
     }
 
@@ -320,6 +353,12 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
 
     @Override
     public Void visitFunctionCall(FunctionCall node) {
+        if (isSpecifiedTrim(node)) {
+            return renderSpecifiedTrim(node);
+        }
+        if (isPositionInForm(node)) {
+            return renderPositionInForm(node);
+        }
         out.token(node.name()).raw("(");
         if (node.star()) {
             out.raw("*");
@@ -358,6 +397,51 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     /** MySQL {@code GROUP_CONCAT(expr [ORDER BY …] SEPARATOR sep)} — sep is the 2nd arg. */
     private static boolean isGroupConcatWithSeparator(FunctionCall node) {
         return node.name().equals("GROUP_CONCAT") && node.args().size() == 2 && !node.star();
+    }
+
+    /** PostgreSQL {@code POSITION(needle IN haystack)} — comma form is not accepted. */
+    private static boolean isPositionInForm(FunctionCall node) {
+        return node.name().equals("POSITION") && node.args().size() == 2 && !node.star();
+    }
+
+    private Void renderPositionInForm(FunctionCall node) {
+        out.token("POSITION").raw("(");
+        node.args().get(0).accept(this);
+        out.token("IN");
+        node.args().get(1).accept(this);
+        out.raw(")");
+        return null;
+    }
+
+    /**
+     * {@code TRIM('LEADING'|'TRAILING'|'BOTH', [chars,] source)} → SQL-standard
+     * {@code TRIM(LEADING [chars] FROM source)} form used by MySQL and PostgreSQL.
+     */
+    private static boolean isSpecifiedTrim(FunctionCall node) {
+        if (!node.name().equals("TRIM") || node.star() || node.args().size() < 2) {
+            return false;
+        }
+        if (!(node.args().get(0) instanceof StringLiteral spec)) {
+            return false;
+        }
+        String value = spec.value().toUpperCase(java.util.Locale.ROOT);
+        return value.equals("LEADING") || value.equals("TRAILING") || value.equals("BOTH");
+    }
+
+    private Void renderSpecifiedTrim(FunctionCall node) {
+        StringLiteral spec = (StringLiteral) node.args().get(0);
+        out.token("TRIM").raw("(");
+        out.token(spec.value().toUpperCase(java.util.Locale.ROOT));
+        if (node.args().size() == 2) {
+            out.token("FROM");
+            node.args().get(1).accept(this);
+        } else {
+            node.args().get(1).accept(this);
+            out.token("FROM");
+            node.args().get(2).accept(this);
+        }
+        out.raw(")");
+        return null;
     }
 
     @Override
@@ -473,10 +557,26 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     }
 
     @Override
+    public Void visitArraySubscript(ArraySubscript node) {
+        node.base().accept(this);
+        out.raw("[");
+        node.index().accept(this);
+        out.raw("]");
+        return null;
+    }
+
+    @Override
     public Void visitAtTimeZone(AtTimeZone node) {
         node.value().accept(this);
         out.token("AT").token("TIME").token("ZONE");
         node.zone().accept(this);
+        return null;
+    }
+
+    @Override
+    public Void visitUserVarAssignment(UserVarAssignment node) {
+        out.token(node.variable().value()).raw(" := ");
+        node.value().accept(this);
         return null;
     }
 
@@ -492,6 +592,15 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
                 out.raw(",");
             }
             nodes.get(i).accept(this);
+        }
+    }
+
+    protected final void csvIdentifiers(List<Identifier> ids) {
+        for (int i = 0; i < ids.size(); i++) {
+            if (i > 0) {
+                out.raw(",");
+            }
+            out.token(identifier(ids.get(i)));
         }
     }
 
@@ -591,8 +700,19 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         if (node.all()) {
             out.token("ALL");
         }
-        renderSpec(node.spec(), null);
+        renderSetOpOperand(node.operand(), node.parenthesized());
         return null;
+    }
+
+    private void renderSetOpOperand(Query operand, boolean parenthesized) {
+        if (parenthesized) {
+            subquery(operand);
+            return;
+        }
+        renderSpec(operand.first(), null);
+        for (UnionArm arm : operand.unionArms()) {
+            arm.accept(this);
+        }
     }
 
     @Override
@@ -621,9 +741,8 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             out.token("WHERE");
             where.accept(this);
         });
-        if (!spec.groupBy().isEmpty()) {
-            out.token("GROUP BY");
-            csv(spec.groupBy());
+        if (!spec.groupBy().isEmpty() || spec.groupByModifier().isPresent()) {
+            renderGroupBy(spec);
         }
         spec.having().ifPresent(having -> {
             out.token("HAVING");
@@ -633,6 +752,42 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
 
     /** Hook between SELECT [DISTINCT] and the item list. T-SQL emits TOP here. */
     protected void selectModifiers(QuerySpecification spec, Query owner) {
+    }
+
+    protected void renderGroupBy(QuerySpecification spec) {
+        out.token("GROUP BY");
+        spec.groupByModifier().ifPresentOrElse(mod -> {
+            switch (mod.kind()) {
+                case PLAIN -> csv(spec.groupBy());
+                case ROLLUP -> {
+                    out.token("ROLLUP").raw("(");
+                    csv(spec.groupBy());
+                    out.raw(")");
+                }
+                case CUBE -> {
+                    out.token("CUBE").raw("(");
+                    csv(spec.groupBy());
+                    out.raw(")");
+                }
+                case GROUPING_SETS -> {
+                    out.token("GROUPING").token("SETS").raw("(");
+                    for (int i = 0; i < mod.sets().size(); i++) {
+                        if (i > 0) {
+                            out.raw(",");
+                        }
+                        List<Expression> set = mod.sets().get(i);
+                        if (set.size() > 1) {
+                            out.raw("(");
+                            csv(set);
+                            out.raw(")");
+                        } else {
+                            set.get(0).accept(this);
+                        }
+                    }
+                    out.raw(")");
+                }
+            }
+        }, () -> csv(spec.groupBy()));
     }
 
     /** Trailing row limit. Base shape: LIMIT n [OFFSET m] / bare OFFSET (PG). */
@@ -745,12 +900,24 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         csv(node.args());
         out.raw(")");
         node.alias().ifPresent(alias -> out.token("AS").token(identifier(alias)));
-        node.columnAliases().ifPresent(cols -> {
+        if (!node.columnTypes().isEmpty()) {
             out.raw("(");
-            csv(cols);
+            csv(node.columnTypes());
             out.raw(")");
-        });
+        } else {
+            node.columnAliases().ifPresent(cols -> {
+                out.raw("(");
+                csv(cols);
+                out.raw(")");
+            });
+        }
         return null;
+    }
+
+    @Override
+    public Void visitJsonTableRelation(JsonTableRelation node) {
+        throw new IllegalStateException(
+                "rule engine contract: JsonTableRelation must only reach MySqlPrinter");
     }
 
     @Override
@@ -759,6 +926,12 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         csv(node.values());
         out.raw(")");
         return null;
+    }
+
+    @Override
+    public Void visitGroupByModifier(GroupByModifier node) {
+        throw new IllegalStateException(
+                "rule engine contract: GROUP BY modifier renders via renderGroupBy");
     }
 
     @Override
@@ -812,10 +985,21 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             }
         }
         node.upsert().ifPresent(u -> u.accept(this));
-        node.returning().ifPresent(items -> {
+        renderReturningClause(node.outputClause());
+        return null;
+    }
+
+    /** PostgreSQL/MySQL {@code RETURNING} — after upsert on INSERT, after WHERE on UPDATE/DELETE. */
+    protected void renderReturningClause(Optional<OutputClause> outputClause) {
+        outputClause.ifPresent(clause -> {
             out.token("RETURNING");
-            csv(items);
+            csv(clause.items());
         });
+    }
+
+    @Override
+    public Void visitOutputClause(OutputClause node) {
+        csv(node.items());
         return null;
     }
 
@@ -871,6 +1055,7 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         node.alias().ifPresent(alias -> out.token("AS").token(identifier(alias)));
         out.token("SET");
         csv(node.assignments());
+        renderUpdateOutputClause(node.outputClause());
         node.from().ifPresent(from -> {
             out.token("FROM");
             from.accept(this);
@@ -879,7 +1064,22 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             out.token("WHERE");
             where.accept(this);
         });
+        renderUpdateReturningSuffix(node.outputClause());
         return null;
+    }
+
+    /**
+     * Dialect hook for early UPDATE output (T-SQL {@code OUTPUT} before FROM/WHERE).
+     * Default: no-op; PostgreSQL/MySQL emit {@code RETURNING} via
+     * {@link #renderUpdateReturningSuffix}.
+     */
+    protected void renderUpdateOutputClause(Optional<OutputClause> outputClause) {
+        // T-SQL overrides; PG/MySQL print RETURNING after WHERE.
+    }
+
+    /** PostgreSQL/MySQL {@code RETURNING} on UPDATE — after WHERE. */
+    protected void renderUpdateReturningSuffix(Optional<OutputClause> outputClause) {
+        renderReturningClause(outputClause);
     }
 
     @Override
@@ -899,6 +1099,7 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     public Void visitDeleteStatement(DeleteStatement node) {
         out.token("DELETE FROM").token(dotted(node.table()));
         node.alias().ifPresent(alias -> out.token("AS").token(identifier(alias)));
+        renderDeleteOutputClause(node.outputClause());
         node.usingClause().ifPresent(using -> {
             out.token("USING");
             using.accept(this);
@@ -907,7 +1108,22 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             out.token("WHERE");
             where.accept(this);
         });
+        renderDeleteReturningSuffix(node.outputClause());
         return null;
+    }
+
+    /**
+     * Dialect hook for early DELETE output (T-SQL {@code OUTPUT}).
+     * Default: no-op; PostgreSQL/MySQL emit {@code RETURNING} via
+     * {@link #renderDeleteReturningSuffix}.
+     */
+    protected void renderDeleteOutputClause(Optional<OutputClause> outputClause) {
+        // T-SQL overrides; PG/MySQL print RETURNING after WHERE.
+    }
+
+    /** PostgreSQL/MySQL {@code RETURNING} on DELETE — after WHERE. */
+    protected void renderDeleteReturningSuffix(Optional<OutputClause> outputClause) {
+        renderReturningClause(outputClause);
     }
 
     // --- DDL ---
@@ -941,6 +1157,43 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         return null;
     }
 
+    @Override
+    public Void visitCreateRoutineStatement(CreateRoutineStatement node) {
+        out.token("CREATE").token(routineKindToken(node.kind())).token(dotted(node.name())).raw("(");
+        boolean first = true;
+        for (ColumnDefinition param : node.params()) {
+            if (!first) {
+                out.raw(",");
+            }
+            first = false;
+            param.accept(this);
+        }
+        out.raw(")");
+        node.returns().ifPresent(type -> {
+            out.token("RETURNS");
+            renderDataType(type);
+        });
+        renderRoutineCharacteristics(node);
+        renderRoutineBody(node);
+        return null;
+    }
+
+    private static String routineKindToken(CreateRoutineStatement.RoutineKind kind) {
+        return kind == CreateRoutineStatement.RoutineKind.FUNCTION ? "FUNCTION" : "PROCEDURE";
+    }
+
+    /** MySQL adds {@code DETERMINISTIC READS SQL DATA} before the body shell. */
+    protected void renderRoutineCharacteristics(CreateRoutineStatement node) {
+    }
+
+    /** Rebuilds the routine body per target — never passthrough dollar-quoted source text. */
+    protected void renderRoutineBody(CreateRoutineStatement node) {
+        SelectStatement body = (SelectStatement) node.body().get(0);
+        out.token("AS").token("BEGIN").token("RETURN").token("(");
+        body.query().accept(this);
+        out.raw(")").token("END");
+    }
+
     /** PostgreSQL/MySQL: {@code OR REPLACE}; T-SQL overrides to {@code OR ALTER}. */
     protected void renderCreateOrReplaceView() {
         out.token("OR").token("REPLACE");
@@ -965,7 +1218,23 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             out.token("UNIQUE");
         }
         node.references().ifPresent(ref -> ref.accept(this));
+        node.check().ifPresent(check -> {
+            out.token("CHECK").raw("(");
+            check.accept(this);
+            out.raw(")");
+        });
+        renderGeneratedColumn(node);
         return null;
+    }
+
+    /** Dialect-specific generated-column spelling; PG requires {@code GENERATED ALWAYS … STORED}. */
+    protected void renderGeneratedColumn(ColumnDefinition node) {
+        node.generatedAs().ifPresent(expr -> {
+            out.token("GENERATED").token("ALWAYS").token("AS").raw("(");
+            expr.accept(this);
+            out.raw(")");
+            out.token("STORED");
+        });
     }
 
     @Override
@@ -1005,6 +1274,15 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             csv(node.refColumns());
             out.raw(")");
         }
+        return null;
+    }
+
+    @Override
+    public Void visitCheckConstraint(CheckConstraint node) {
+        constraintName(node.name());
+        out.token("CHECK").raw("(");
+        node.predicate().accept(this);
+        out.raw(")");
         return null;
     }
 
@@ -1078,6 +1356,13 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     }
 
     @Override
+    public Void visitSetUserVariableStatement(SetUserVariableStatement node) {
+        out.token("SET").token(node.variable().value()).raw(" = ");
+        node.value().accept(this);
+        return null;
+    }
+
+    @Override
     public Void visitAlterTableStatement(AlterTableStatement node) {
         out.token("ALTER TABLE").token(dotted(node.table()));
         node.action().accept(this);
@@ -1095,6 +1380,16 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     public Void visitAddTableConstraint(AddTableConstraint node) {
         out.token("ADD");
         node.constraint().accept(this);
+        return null;
+    }
+
+    @Override
+    public Void visitAddCheckConstraint(AddCheckConstraint node) {
+        out.token("ADD");
+        constraintName(node.name());
+        out.token("CHECK").raw("(");
+        node.predicate().accept(this);
+        out.raw(")");
         return null;
     }
 
@@ -1130,12 +1425,21 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
                 .token("ON").token(dotted(node.table())).token("(");
         csv(node.columns());
         out.raw(")");
+        if (!node.includeColumns().isEmpty()) {
+            out.token("INCLUDE").token("(");
+            csvIdentifiers(node.includeColumns());
+            out.raw(")");
+        }
+        node.where().ifPresent(where -> {
+            out.token("WHERE");
+            where.accept(this);
+        });
         return null;
     }
 
     @Override
     public Void visitIndexColumn(IndexColumn node) {
-        out.token(identifier(node.column()));
+        node.key().accept(this);
         if (node.direction() == SortDirection.DESC) {
             out.token("DESC");
         }

@@ -403,11 +403,10 @@ class NormalizationTest {
     }
 
     @Test
-    void partialIndexWhereIsRefused() {
-        assertThatExceptionOfType(UnsupportedFeatureException.class)
-                .isThrownBy(() -> AstBuilderFacade.buildScript(
-                        "CREATE INDEX idx_a ON t (a) WHERE a > 0", Dialect.POSTGRESQL))
-                .withMessageContaining("partial index");
+    void partialIndexWhereParses() {
+        assertThat(AstBuilderFacade.buildScript(
+                "CREATE INDEX idx_a ON t (a) WHERE a > 0", Dialect.POSTGRESQL))
+                .isNotNull();
     }
 
     @Test

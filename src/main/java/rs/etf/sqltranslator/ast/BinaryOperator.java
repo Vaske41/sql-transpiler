@@ -12,5 +12,13 @@ public enum BinaryOperator {
     /** PostgreSQL {@code #>>} — JSON path as text. */
     JSON_PATH_TEXT,
     /** PostgreSQL {@code @>} — JSON containment (refused toward MySQL / T-SQL). */
-    JSON_CONTAINS
+    JSON_CONTAINS,
+    /** PostgreSQL {@code ~} — regex match (PG-only lexeme). */
+    REGEX_MATCH,
+    /** PostgreSQL {@code ~*} — case-insensitive regex match. */
+    REGEX_MATCH_I,
+    /** PostgreSQL {@code !~} — regex non-match. */
+    REGEX_NOT_MATCH,
+    /** PostgreSQL {@code !~*} — case-insensitive regex non-match. */
+    REGEX_NOT_MATCH_I
 }

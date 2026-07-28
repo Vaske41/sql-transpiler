@@ -79,7 +79,7 @@ public final class RewriteBooleanSemanticsRule implements Rule {
                             j.on().map(this::bool), j.usingColumns(), j.lateral(), j.pos())).toList(),
                     f.pos()));
             return new QuerySpecification(spec.quantifier(), spec.distinctOn(), spec.items(), from,
-                    spec.where().map(this::bool), spec.groupBy(),
+                    spec.where().map(this::bool), spec.groupBy(), spec.groupByModifier(),
                     spec.having().map(this::bool), spec.pos());
         }
 
@@ -170,7 +170,8 @@ public final class RewriteBooleanSemanticsRule implements Rule {
             Optional<Expression> harmonized = column.defaultValue().map(this::asBooleanLiteral);
             return new ColumnDefinition(column.name(), column.type(), column.autoIncrement(),
                     column.nullable(), harmonized, column.primaryKey(), column.unique(),
-                    column.references(), column.pos());
+                    column.references(), column.check(), column.generatedAs(), column.stored(),
+                    column.pos());
         }
 
         @Override
@@ -187,14 +188,14 @@ public final class RewriteBooleanSemanticsRule implements Rule {
                 Query query = harmonizeInsertQuery(
                         insert.query().get(), insert.columns(), schema.get());
                 return new InsertStatement(insert.table(), insert.columns(), List.of(),
-                        Optional.of(query), insert.upsert(), insert.returning(),
+                        Optional.of(query), insert.upsert(), insert.outputClause(),
                         insert.pos());
             }
             List<List<Expression>> rows = insert.rows().stream()
                     .map(row -> harmonizeRow(row, insert.columns(), schema.get()))
                     .toList();
             return new InsertStatement(insert.table(), insert.columns(), rows,
-                    Optional.empty(), insert.upsert(), insert.returning(), insert.pos());
+                    Optional.empty(), insert.upsert(), insert.outputClause(), insert.pos());
         }
 
         @Override
@@ -225,10 +226,23 @@ public final class RewriteBooleanSemanticsRule implements Rule {
             QuerySpecification first = harmonizeSelectList(query.first(), namedColumns, schema);
             List<UnionArm> arms = query.unionArms().stream()
                     .map(arm -> new UnionArm(arm.operator(), arm.all(),
-                            harmonizeSelectList(arm.spec(), namedColumns, schema), arm.pos()))
+                            harmonizeInsertQueryOperand(arm.operand(), namedColumns, schema),
+                            arm.parenthesized(), arm.pos()))
                     .toList();
             return new Query(query.ctes(), query.recursive(), first, arms, query.orderBy(),
                     query.limit(), query.pos());
+        }
+
+        private Query harmonizeInsertQueryOperand(Query operand, List<Identifier> namedColumns,
+                                                  TableSchema schema) {
+            QuerySpecification first = harmonizeSelectList(operand.first(), namedColumns, schema);
+            List<UnionArm> arms = operand.unionArms().stream()
+                    .map(arm -> new UnionArm(arm.operator(), arm.all(),
+                            harmonizeInsertQueryOperand(arm.operand(), namedColumns, schema),
+                            arm.parenthesized(), arm.pos()))
+                    .toList();
+            return new Query(List.of(), false, first, arms, List.of(), Optional.empty(),
+                    operand.pos());
         }
 
         private QuerySpecification harmonizeSelectList(QuerySpecification spec,
@@ -251,7 +265,7 @@ public final class RewriteBooleanSemanticsRule implements Rule {
             }
             return new QuerySpecification(spec.quantifier(), spec.distinctOn(), items,
                     spec.from(), spec.where(),
-                    spec.groupBy(), spec.having(), spec.pos());
+                    spec.groupBy(), spec.groupByModifier(), spec.having(), spec.pos());
         }
 
         private List<Expression> harmonizeRow(List<Expression> row,

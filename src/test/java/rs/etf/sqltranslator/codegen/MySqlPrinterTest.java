@@ -1,6 +1,7 @@
 package rs.etf.sqltranslator.codegen;
 
 import org.junit.jupiter.api.Test;
+import rs.etf.sqltranslator.ast.ColumnRef;
 import rs.etf.sqltranslator.ast.CreateIndexStatement;
 import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.IndexColumn;
@@ -97,9 +98,13 @@ class MySqlPrinterTest {
         CreateIndexStatement stmt = new CreateIndexStatement(
                 new Identifier("idx_users_name", false, pos), true,
                 new QualifiedName(List.of(new Identifier("users", false, pos)), pos),
-                List.of(new IndexColumn(new Identifier("name", false, pos),
+                List.of(new IndexColumn(
+                                new ColumnRef(new QualifiedName(
+                                        List.of(new Identifier("name", false, pos)), pos), pos),
                                 SortDirection.DESC, pos),
-                        new IndexColumn(new Identifier("id", false, pos),
+                        new IndexColumn(
+                                new ColumnRef(new QualifiedName(
+                                        List.of(new Identifier("id", false, pos)), pos), pos),
                                 SortDirection.ASC, pos)),
                 pos);
         Script script = new Script(List.of(stmt), pos);

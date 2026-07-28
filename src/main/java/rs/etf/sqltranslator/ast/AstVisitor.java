@@ -20,6 +20,8 @@ public interface AstVisitor<R> {
 
     R visitQuerySpecification(QuerySpecification node);
 
+    R visitGroupByModifier(GroupByModifier node);
+
     R visitRowLimit(RowLimit node);
 
     R visitOrderItem(OrderItem node);
@@ -38,6 +40,8 @@ public interface AstVisitor<R> {
 
     R visitTableFunction(TableFunction node);
 
+    R visitJsonTableRelation(JsonTableRelation node);
+
     R visitRowValue(RowValue node);
 
     R visitJoin(Join node);
@@ -46,6 +50,8 @@ public interface AstVisitor<R> {
     R visitInsertStatement(InsertStatement node);
 
     R visitUpsert(Upsert node);
+
+    R visitOutputClause(OutputClause node);
 
     R visitUpdateStatement(UpdateStatement node);
 
@@ -58,6 +64,8 @@ public interface AstVisitor<R> {
 
     R visitCreateViewStatement(CreateViewStatement node);
 
+    R visitCreateRoutineStatement(CreateRoutineStatement node);
+
     R visitColumnDefinition(ColumnDefinition node);
 
     R visitForeignKeyRef(ForeignKeyRef node);
@@ -67,6 +75,8 @@ public interface AstVisitor<R> {
     R visitUniqueConstraint(UniqueConstraint node);
 
     R visitForeignKeyConstraint(ForeignKeyConstraint node);
+
+    R visitCheckConstraint(CheckConstraint node);
 
     R visitDropTableStatement(DropTableStatement node);
 
@@ -78,11 +88,15 @@ public interface AstVisitor<R> {
 
     R visitTruncateStatement(TruncateStatement node);
 
+    R visitSetUserVariableStatement(SetUserVariableStatement node);
+
     R visitAlterTableStatement(AlterTableStatement node);
 
     R visitAddColumn(AddColumn node);
 
     R visitAddTableConstraint(AddTableConstraint node);
+
+    R visitAddCheckConstraint(AddCheckConstraint node);
 
     R visitDropColumn(DropColumn node);
 
@@ -133,7 +147,11 @@ public interface AstVisitor<R> {
 
     R visitArrayLiteral(ArrayLiteral node);
 
+    R visitArraySubscript(ArraySubscript node);
+
     R visitAtTimeZone(AtTimeZone node);
+
+    R visitUserVarAssignment(UserVarAssignment node);
 
     // --- literals, identifiers, types ---
     R visitNumericLiteral(NumericLiteral node);

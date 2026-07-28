@@ -46,7 +46,8 @@ public final class NarrowTypesRule implements Rule {
             ColumnDefinition column = (ColumnDefinition) super.visitColumnDefinition(node);
             return new ColumnDefinition(column.name(), narrow(column.type(), column.pos()),
                     column.autoIncrement(), column.nullable(), column.defaultValue(),
-                    column.primaryKey(), column.unique(), column.references(), column.pos());
+                    column.primaryKey(), column.unique(), column.references(),
+                    column.check(), column.generatedAs(), column.stored(), column.pos());
         }
 
         @Override
@@ -108,6 +109,13 @@ public final class NarrowTypesRule implements Rule {
                         "UUID has no MySQL equivalent; mapped to CHAR(36)", pos);
                 return new DataType(GenericType.CHAR,
                         Optional.of(new FixedLength(36)), Optional.empty(), type.arrayDims());
+            }
+            if (ctx.target() == Dialect.MYSQL && type.type() == GenericType.TIMESTAMP_TZ) {
+                ctx.report().warn("TIMESTAMPTZ_AS_TIMESTAMP",
+                        "timezone-aware timestamp has no MySQL equivalent; mapped to TIMESTAMP "
+                                + "with timezone information lost", pos);
+                return new DataType(GenericType.TIMESTAMP, type.length(), type.scale(),
+                        type.arrayDims());
             }
             if (type.type() == GenericType.TINYINT) {
                 if (ctx.target() == Dialect.POSTGRESQL) {

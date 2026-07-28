@@ -16,7 +16,11 @@ public record ColumnDefinition(Identifier name, DataType type, boolean autoIncre
                                Optional<Boolean> nullable,
                                Optional<Expression> defaultValue,
                                boolean primaryKey, boolean unique,
-                               Optional<ForeignKeyRef> references, SourcePosition pos)
+                               Optional<ForeignKeyRef> references,
+                               Optional<Expression> check,
+                               Optional<Expression> generatedAs,
+                               boolean stored,
+                               SourcePosition pos)
         implements AstNode {
 
     @Override

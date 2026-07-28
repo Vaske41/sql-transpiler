@@ -1,5 +1,7 @@
 package rs.etf.sqltranslator.ast;
 
+import java.util.List;
+
 /**
  * Walk-only visitor base with {@code null}/no-op defaults for every node type.
  * Analysis scanners (e.g. {@code CatalogBuilder}) subclass this and override only
@@ -58,7 +60,7 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitUnionArm(UnionArm node) {
-        node.spec().accept(this);
+        node.operand().accept(this);
         return defaultResult();
     }
 
@@ -75,7 +77,18 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
         for (Expression group : node.groupBy()) {
             group.accept(this);
         }
+        node.groupByModifier().ifPresent(mod -> mod.accept(this));
         node.having().ifPresent(having -> having.accept(this));
+        return defaultResult();
+    }
+
+    @Override
+    public R visitGroupByModifier(GroupByModifier node) {
+        for (List<Expression> set : node.sets()) {
+            for (Expression expr : set) {
+                expr.accept(this);
+            }
+        }
         return defaultResult();
     }
 
@@ -157,6 +170,19 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
                 col.accept(this);
             }
         });
+        for (ColumnDefinition col : node.columnTypes()) {
+            col.accept(this);
+        }
+        return defaultResult();
+    }
+
+    @Override
+    public R visitJsonTableRelation(JsonTableRelation node) {
+        node.source().accept(this);
+        for (ColumnDefinition col : node.columns()) {
+            col.accept(this);
+        }
+        node.alias().ifPresent(alias -> alias.accept(this));
         return defaultResult();
     }
 
@@ -182,6 +208,14 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitUpsert(Upsert node) {
+        return defaultResult();
+    }
+
+    @Override
+    public R visitOutputClause(OutputClause node) {
+        for (SelectItem item : node.items()) {
+            item.accept(this);
+        }
         return defaultResult();
     }
 
@@ -213,6 +247,11 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitCreateRoutineStatement(CreateRoutineStatement node) {
+        return defaultResult();
+    }
+
+    @Override
     public R visitColumnDefinition(ColumnDefinition node) {
         return defaultResult();
     }
@@ -234,6 +273,11 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitForeignKeyConstraint(ForeignKeyConstraint node) {
+        return defaultResult();
+    }
+
+    @Override
+    public R visitCheckConstraint(CheckConstraint node) {
         return defaultResult();
     }
 
@@ -263,6 +307,11 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitSetUserVariableStatement(SetUserVariableStatement node) {
+        return defaultResult();
+    }
+
+    @Override
     public R visitAlterTableStatement(AlterTableStatement node) {
         return defaultResult();
     }
@@ -274,6 +323,11 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
 
     @Override
     public R visitAddTableConstraint(AddTableConstraint node) {
+        return defaultResult();
+    }
+
+    @Override
+    public R visitAddCheckConstraint(AddCheckConstraint node) {
         return defaultResult();
     }
 
@@ -423,7 +477,17 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitArraySubscript(ArraySubscript node) {
+        return defaultResult();
+    }
+
+    @Override
     public R visitAtTimeZone(AtTimeZone node) {
+        return defaultResult();
+    }
+
+    @Override
+    public R visitUserVarAssignment(UserVarAssignment node) {
         return defaultResult();
     }
 

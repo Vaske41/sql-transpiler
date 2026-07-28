@@ -13,12 +13,19 @@ statement
     | deleteStatement
     | createTableStatement
     | createViewStatement
+    | createTriggerStatement
+    | createRoutineStatement
     | createIndexStatement
     | dropTableStatement
     | dropIndexStatement
     | dropViewOrRoutineStatement
     | alterTableStatement
     | truncateStatement
+    | setUserVariableStatement
+    ;
+
+setUserVariableStatement
+    : SET USER_VAR '=' expression
     ;
 
 // MySQL: INTO is optional.
@@ -47,12 +54,16 @@ conflictTarget : '(' identifier (',' identifier)* ')' ;
 
 returningClause : identifier selectItem (',' selectItem)* ;
 
-rowValue : '(' expression (',' expression)* ')' ;
+rowValue
+    : '(' expression (',' expression)* ')'
+    | ROW '(' expression (',' expression)* ')'
+    ;
 
 updateStatement
     : withClause? UPDATE qualifiedName (AS? identifier)? joinedTable* (',' tableSource)?
       SET assignment (',' assignment)*
       (FROM tableSource)? whereClause?
+      returningClause?
     ;
 
 assignment
@@ -61,7 +72,7 @@ assignment
     ;
 
 deleteStatement
-    : DELETE FROM qualifiedName (AS? identifier)? (USING tableSource)? whereClause?  # deleteFromUsing
+    : DELETE FROM qualifiedName (AS? identifier)? (USING tableSource)? whereClause? returningClause?  # deleteFromUsing
     | DELETE identifier (',' identifier)* FROM tableSource whereClause?             # deleteTargetsFrom
     ;
 
@@ -77,27 +88,60 @@ createViewStatement
       AS queryExpression
     ;
 
+createTriggerStatement
+    : CREATE identifier identifier identifier+
+    ;
+
+createRoutineStatement
+    : CREATE OR identifier identifier qualifiedName '(' paramList? ')' returnsClause? AS routineBody languageClause?
+    | CREATE identifier qualifiedName '(' paramList? ')' returnsClause? AS routineBody languageClause?
+    ;
+
+returnsClause : identifier dataType ;
+
+languageClause : identifier identifier ;
+
+routineBody
+    : BEGIN routineBodyInner END
+    ;
+
+routineBodyInner : selectStatement (';' selectStatement)* ';'? ;
+
+paramList : param (',' param)* ;
+
+param : columnName dataType ;
+
 // MySQL: index_type may appear before ON or after the column list.
 createIndexStatement
     : CREATE UNIQUE? INDEX identifier indexMethod? ON qualifiedName
-      '(' indexColumn (',' indexColumn)* ')' indexMethod?
+      '(' indexKey (',' indexKey)* ')' indexMethod?
+      includeClause?
     ;
 
-// Prefix length parses, is uniformly refused by the builder.
-indexColumn : identifier ('(' INTEGER_LITERAL ')')? (ASC | DESC)? ;
+includeClause : INCLUDE '(' identifier (',' identifier)* ')' ;
+
+// Prefix length on identifier keys parses, is uniformly refused by the builder.
+indexKey
+    : identifier ('(' INTEGER_LITERAL ')')? (ASC | DESC)?
+    | expression (ASC | DESC)?
+    ;
 
 tableElement : columnDefinition | tableConstraint ;
 
 columnDefinition : columnName dataType columnConstraint* ;
 
 columnConstraint
-    : NOT NULL
-    | NULL
-    | DEFAULT expression
-    | PRIMARY KEY
-    | UNIQUE
-    | REFERENCES qualifiedName ('(' identifier ')')?
-    | autoIncrement
+    : NOT NULL                                              # notNullConstraint
+    | NULL                                                  # nullConstraint
+    | DEFAULT expression                                    # defaultConstraint
+    | PRIMARY KEY                                           # primaryKeyColumnConstraint
+    | UNIQUE                                                # uniqueColumnConstraint
+    | REFERENCES qualifiedName ('(' identifier ')')?        # referencesColumnConstraint
+    | AUTO_INCREMENT                                        # autoIncrementColumnConstraint
+    | GENERATED (ALWAYS | BY DEFAULT) AS IDENTITY ('(' ~')'* ')')?   # identityConstraint
+    | (GENERATED ALWAYS)? AS '(' expression ')' (STORED | VIRTUAL | PERSISTED)? # generatedColumnConstraint
+    | CHECK '(' expression ')'                              # checkColumnConstraint
+    | IDENTITY ('(' INTEGER_LITERAL ',' INTEGER_LITERAL ')')?        # tsqlIdentityConstraint
     ;
 
 tableConstraint
@@ -105,6 +149,7 @@ tableConstraint
       ( PRIMARY KEY columnList
       | UNIQUE columnList
       | FOREIGN KEY columnList REFERENCES qualifiedName columnList?
+      | CHECK '(' expression ')'
       )
     ;
 
@@ -154,10 +199,18 @@ usingClause : USING expression ;
 selectStatement : queryExpression ;
 
 queryExpression
-    : withClause? querySpecification ((UNION | EXCEPT | INTERSECT) ALL? querySpecification)*
+    : withClause? queryTerm ((UNION | EXCEPT) ALL? queryTerm)*
       orderByClause?
       rowLimitClause?                                              # queryExprSetOps
-    | '(' queryExpression ')'                                      # queryExprParen
+    ;
+
+queryTerm
+    : queryPrimary (INTERSECT ALL? queryPrimary)*                  # queryTermSetOps
+    ;
+
+queryPrimary
+    : querySpecification                                           # queryPrimarySpec
+    | '(' queryExpression ')'                                      # queryPrimaryParen
     ;
 
 withClause
@@ -195,13 +248,15 @@ tablePrimary
     // Function form before bare name — otherwise generate_series(…) matches namedTablePrimary
     // and the '(' is left for the statement closer.
     : qualifiedName '(' (expression (',' expression)*)? ')' (AS? aliasName)?
-        ('(' columnName (',' columnName)* ')')?                # functionTablePrimary
+        ('(' tableFunctionColumn (',' tableFunctionColumn)* ')')?  # functionTablePrimary
     | qualifiedName (AS? aliasName)?                           # namedTablePrimary
     | '(' queryExpression ')' (AS? aliasName)?
         ('(' columnName (',' columnName)* ')')?              # derivedTablePrimary
     | '(' VALUES rowValue (',' rowValue)* ')' AS? aliasName
         ('(' columnName (',' columnName)* ')')?              # valuesTablePrimary
     ;
+
+tableFunctionColumn : columnName dataType? ;
 
 joinedTable
     : CROSS APPLY tablePrimary
@@ -221,7 +276,19 @@ joinType
 
 whereClause : WHERE expression ;
 
-groupByClause : GROUP BY expression (',' expression)* ;
+groupByClause
+    : GROUP BY groupByPlain                                          # groupByPlainClause
+    | GROUP BY ROLLUP '(' expression (',' expression)* ')'           # groupByRollupClause
+    | GROUP BY CUBE '(' expression (',' expression)* ')'             # groupByCubeClause
+    | GROUP BY GROUPING SETS '(' groupingSet (',' groupingSet)* ')'  # groupBySetsClause
+    ;
+
+groupByPlain : expression (',' expression)* ;
+
+groupingSet
+    : '(' expression (',' expression)* ')'
+    | expression
+    ;
 
 havingClause : HAVING expression ;
 
@@ -286,8 +353,12 @@ primaryExpression
     | castExpression                        # castExpr
     | extractExpression                     # extractExpr
     | intervalLiteral                       # intervalExpr
+    | SUBSTRING '(' expression FROM expression (FOR expression)? ')'   # substringStandard
+    | POSITION '(' expression IN expression ')'                        # positionStandard
+    | TRIM '(' (LEADING | TRAILING | BOTH)? expression (FROM expression)? ')' # trimStandard
     | functionCall windowOverlay?           # functionExpr
     | columnReference                       # columnRefExpr
+    | USER_VAR COLON_EQ expression          # userVarAssignExpr
     | subquery                              # scalarSubqueryExpr
     | '(' expression (',' expression)* ')'  # parenExpr
     | identifier '[' (expression (',' expression)*)? ']'  # arrayLiteralExpr
@@ -352,7 +423,7 @@ frameBound
     ;
 
 // A join's LEFT/RIGHT is never followed by '(' — unambiguous as function names.
-functionName : identifier | MAX | LEFT | RIGHT ;
+functionName : identifier | MAX | LEFT | RIGHT | SUBSTRING | POSITION | TRIM ;
 
 caseExpression
     : CASE expression? (WHEN expression THEN expression)+ (ELSE expression)? END
@@ -373,6 +444,8 @@ aliasName  : identifier | nonReservedWord ;
 
 nonReservedWord
     : KEY | FIRST | LAST | END | ROW | MAX
+    | SUBSTRING | POSITION | TRIM | LEADING | TRAILING | BOTH | FOR
+    | GROUPING | ROLLUP | CUBE | SETS
     ;
 
 // MySQL: booleans are literals.
@@ -386,7 +459,7 @@ literal
     | FALSE
     ;
 
-identifier : ID | QUOTED_IDENTIFIER ;
+identifier : ID | QUOTED_IDENTIFIER | USER_VAR | SESSION_VAR | SETS ;
 
 // =====================================================================
 // 2. Dialect-specific parser rules
@@ -400,8 +473,6 @@ rowLimitClause
     | LIMIT expression ',' expression
     ;
 
-autoIncrement : AUTO_INCREMENT ;
-
 indexMethod : USING identifier ;
 
 // =====================================================================
@@ -410,25 +481,25 @@ indexMethod : USING identifier ;
 
 ADD:A D D; ALL:A L L; ALTER:A L T E R; ALWAYS:A L W A Y S; AND:A N D;
 AS:A S; ASC:A S C; AUTO_INCREMENT:A U T O '_' I N C R E M E N T; APPLY:A P P L Y;
-BETWEEN:B E T W E E N; BY:B Y; CASE:C A S E; CAST:C A S T;
+BETWEEN:B E T W E E N; BOTH:B O T H; BY:B Y; BEGIN:B E G I N; CASE:C A S E; CAST:C A S T; CHECK:C H E C K;
 CLUSTERED:C L U S T E R E D; COLUMN:C O L U M N;
 CONSTRAINT:C O N S T R A I N T; CONVERT:C O N V E R T; CREATE:C R E A T E;
-CROSS:C R O S S; CURRENT_ROW:C U R R E N T [ \t\r\n]+ R O W; DEFAULT:D E F A U L T; DELETE:D E L E T E; DESC:D E S C;
+CROSS:C R O S S; CUBE:C U B E; CURRENT_ROW:C U R R E N T [ \t\r\n]+ R O W; DEFAULT:D E F A U L T; DELETE:D E L E T E; DESC:D E S C;
 DISTINCT:D I S T I N C T; DROP:D R O P; ELSE:E L S E; END:E N D;
 EXCEPT:E X C E P T; EXISTS:E X I S T S; FALSE:F A L S E; FETCH:F E T C H; FIRST:F I R S T;
-FOLLOWING:F O L L O W I N G; FOREIGN:F O R E I G N; FROM:F R O M; FULL:F U L L;
-GENERATED:G E N E R A T E D; GROUP:G R O U P; HAVING:H A V I N G;
-IDENTITY:I D E N T I T Y; IF:I F; IN:I N; INDEX:I N D E X;
+FOLLOWING:F O L L O W I N G; FOR:F O R; FOREIGN:F O R E I G N; FROM:F R O M; FULL:F U L L;
+GENERATED:G E N E R A T E D; GROUP:G R O U P; GROUPING:G R O U P I N G; HAVING:H A V I N G;
+IDENTITY:I D E N T I T Y; IF:I F; IN:I N; INCLUDE:I N C L U D E; INDEX:I N D E X;
 INNER:I N N E R; INSERT:I N S E R T; INTERSECT:I N T E R S E C T; INTERVAL:I N T E R V A L; INTO:I N T O; IS:I S; JOIN:J O I N;
-KEY:K E Y; LAST:L A S T; LATERAL:L A T E R A L; LEFT:L E F T; LIKE:L I K E; LIMIT:L I M I T;
+KEY:K E Y; LAST:L A S T; LATERAL:L A T E R A L; LEADING:L E A D I N G; LEFT:L E F T; LIKE:L I K E; LIMIT:L I M I T;
 MAX:M A X; NEXT:N E X T; NONCLUSTERED:N O N C L U S T E R E D; NOT:N O T;
 NULL:N U L L; NULLS:N U L L S; OFFSET:O F F S E T; ON:O N; ONLY:O N L Y;
-OR:O R; ORDER:O R D E R; OUTER:O U T E R; OVER:O V E R;
-PARTITION:P A R T I T I O N; PRECEDING:P R E C E D I N G; PRIMARY:P R I M A R Y;
-RANGE:R A N G E; RECURSIVE:R E C U R S I V E; REFERENCES:R E F E R E N C E S; RIGHT:R I G H T; ROW:R O W; ROWS:R O W S;
-SELECT:S E L E C T; SEPARATOR:S E P A R A T O R; SET:S E T; TABLE:T A B L E; THEN:T H E N; TOP:T O P;
-TRUE:T R U E; UNBOUNDED:U N B O U N D E D; UNION:U N I O N; UNIQUE:U N I Q U E; UNKNOWN:U N K N O W N; UPDATE:U P D A T E;
-USING:U S I N G; VALUES:V A L U E S; WHEN:W H E N; WHERE:W H E R E; WITH:W I T H; WITHIN:W I T H I N;
+OR:O R; ORDER:O R D E R; OUTER:O U T E R; OUTPUT:O U T P U T; OVER:O V E R;
+PARTITION:P A R T I T I O N; PERSISTED:P E R S I S T E D; POSITION:P O S I T I O N; PRECEDING:P R E C E D I N G; PRIMARY:P R I M A R Y;
+RANGE:R A N G E; RECURSIVE:R E C U R S I V E; REFERENCES:R E F E R E N C E S; RIGHT:R I G H T; ROLLUP:R O L L U P; ROW:R O W; ROWS:R O W S;
+SELECT:S E L E C T; SEPARATOR:S E P A R A T O R; SET:S E T; SETS:S E T S; STORED:S T O R E D; SUBSTRING:S U B S T R I N G; TABLE:T A B L E; THEN:T H E N; TOP:T O P;
+TRAILING:T R A I L I N G; TRIM:T R I M; TRUE:T R U E; UNBOUNDED:U N B O U N D E D; UNION:U N I O N; UNIQUE:U N I Q U E; UNKNOWN:U N K N O W N; UPDATE:U P D A T E;
+USING:U S I N G; VALUES:V A L U E S; VIRTUAL:V I R T U A L; WHEN:W H E N; WHERE:W H E R E; WITH:W I T H; WITHIN:W I T H I N;
 
 // =====================================================================
 // 4. Operators, literals, identifiers (dialect-specific lexing)
@@ -442,6 +513,10 @@ ARROW : '->' ;
 HASH_ARROW2 : '#>>' ;
 HASH_ARROW : '#>' ;
 AT_GT : '@>' ;
+
+SESSION_VAR : '@@' [A-Za-z_][A-Za-z0-9_.]* ;
+USER_VAR : '@' [A-Za-z_][A-Za-z0-9_]* ;
+COLON_EQ : ':=' ;
 
 INTEGER_LITERAL : [0-9]+ ;
 

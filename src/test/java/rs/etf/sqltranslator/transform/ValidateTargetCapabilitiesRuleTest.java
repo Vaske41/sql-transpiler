@@ -14,12 +14,11 @@ class ValidateTargetCapabilitiesRuleTest {
     private final Rule rule = new ValidateTargetCapabilitiesRule();
 
     @Test
-    void fullJoinToMySqlIsRefused() {
-        assertThatThrownBy(() -> runRule(rule,
+    void fullJoinToMySqlPassesValidatorAlone() {
+        assertThatCode(() -> runRule(rule,
                 "SELECT * FROM a FULL OUTER JOIN b ON a.x = b.x;",
                 Dialect.POSTGRESQL, Dialect.MYSQL))
-                .isInstanceOf(UnsupportedFeatureException.class)
-                .hasMessageContaining("FULL JOIN");
+                .doesNotThrowAnyException();
     }
 
     @Test
@@ -84,10 +83,19 @@ class ValidateTargetCapabilitiesRuleTest {
     }
 
     @Test
-    void arrayAggToMysqlIsRefused() {
+    void arrayAggToMysqlPassesValidatorAlone() {
+        // MySQL rendering is RenderArrayAggregatesRule; validator only guards T-SQL.
+        assertThatCode(() -> runRule(rule,
+                "SELECT ARRAY_AGG(x) FROM t;",
+                Dialect.POSTGRESQL, Dialect.MYSQL))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void arrayAggToTsqlIsRefused() {
         assertThatThrownBy(() -> runRule(rule,
                 "SELECT ARRAY_AGG(x ORDER BY x) FROM t;",
-                Dialect.POSTGRESQL, Dialect.MYSQL))
+                Dialect.POSTGRESQL, Dialect.TSQL))
                 .isInstanceOf(UnsupportedFeatureException.class)
                 .hasMessageContaining("ARRAY_AGG");
     }

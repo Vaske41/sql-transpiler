@@ -100,6 +100,7 @@ public final class FlattenNestedCtesForTsqlRule implements Rule {
                     rebuilt.table(),
                     rebuilt.alias(),
                     rebuilt.assignments(),
+                    rebuilt.outputClause(),
                     rebuilt.from(),
                     rebuilt.where(),
                     rebuilt.pos());

@@ -9,16 +9,16 @@ import java.util.Optional;
  * INSERT ... VALUES or INSERT ... SELECT; an empty {@code columns} list means no
  * column list was written. Exactly one source form: {@code rows} non-empty (VALUES)
  * xor {@code query} present (SELECT). Optional upsert ({@code ON CONFLICT} /
- * {@code ON DUPLICATE KEY}) and {@code RETURNING} list.
+ * {@code ON DUPLICATE KEY}) and {@code RETURNING}/{@code OUTPUT} clause.
  */
 public record InsertStatement(QualifiedName table, List<Identifier> columns,
                               List<List<Expression>> rows, Optional<Query> query,
                               Optional<Upsert> upsert,
-                              Optional<List<SelectItem>> returning,
+                              Optional<OutputClause> outputClause,
                               SourcePosition pos)
         implements Statement {
 
-    /** VALUES/SELECT insert with no upsert or RETURNING. */
+    /** VALUES/SELECT insert with no upsert or output clause. */
     public InsertStatement(QualifiedName table, List<Identifier> columns,
                            List<List<Expression>> rows, Optional<Query> query,
                            SourcePosition pos) {
@@ -28,7 +28,6 @@ public record InsertStatement(QualifiedName table, List<Identifier> columns,
     public InsertStatement {
         columns = List.copyOf(columns);
         rows = rows.stream().map(List::copyOf).toList();
-        returning = returning.map(List::copyOf);
         if (query.isPresent() != rows.isEmpty()) {
             throw new IllegalArgumentException(
                     "exactly one INSERT source: VALUES rows or a query");

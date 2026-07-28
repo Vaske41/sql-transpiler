@@ -12,6 +12,7 @@ import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.InsertStatement;
 import rs.etf.sqltranslator.ast.Join;
+import rs.etf.sqltranslator.ast.JsonTableRelation;
 import rs.etf.sqltranslator.ast.NumericLiteral;
 import rs.etf.sqltranslator.ast.QualifiedName;
 import rs.etf.sqltranslator.ast.Query;
@@ -128,6 +129,7 @@ public abstract class ScopedTransformer extends rs.etf.sqltranslator.ast.AstTran
                         rebuild(node.table()),
                         rebuildOptional(node.alias()),
                         rebuildList(node.assignments()),
+                        rebuildOptional(node.outputClause()),
                         rebuildOptional(node.from()),
                         rebuildOptional(node.where()),
                         node.pos());
@@ -223,7 +225,9 @@ public abstract class ScopedTransformer extends rs.etf.sqltranslator.ast.AstTran
             return Optional.of(switch (op.op()) {
                 case ADD, SUB, MUL, DIV, MOD -> TypeFamily.NUMERIC;
                 case CONCAT, JSON_GET, JSON_GET_TEXT, JSON_PATH, JSON_PATH_TEXT -> TypeFamily.STRING;
-                case OR, AND, EQ, NEQ, LT, LTE, GT, GTE, JSON_CONTAINS -> TypeFamily.BOOLEAN;
+                case OR, AND, EQ, NEQ, LT, LTE, GT, GTE, JSON_CONTAINS,
+                        REGEX_MATCH, REGEX_MATCH_I, REGEX_NOT_MATCH, REGEX_NOT_MATCH_I ->
+                        TypeFamily.BOOLEAN;
             });
         }
         if (expr instanceof rs.etf.sqltranslator.ast.UnaryOp op) {
@@ -298,6 +302,15 @@ public abstract class ScopedTransformer extends rs.etf.sqltranslator.ast.AstTran
         }
         if (relation instanceof TableFunction fn) {
             Identifier alias = fn.alias().orElse(fn.name().last());
+            String key = alias.value().toLowerCase(Locale.ROOT);
+            QualifiedName qn = new QualifiedName(
+                    List.of(new Identifier(alias.value(), false, alias.pos())),
+                    alias.pos());
+            return List.of(new ScopedTable(key, new TableSchema(qn, List.of())));
+        }
+        if (relation instanceof JsonTableRelation jt) {
+            Identifier alias = jt.alias().orElseThrow(() -> new IllegalStateException(
+                    "JSON_TABLE relation requires an alias for scoping"));
             String key = alias.value().toLowerCase(Locale.ROOT);
             QualifiedName qn = new QualifiedName(
                     List.of(new Identifier(alias.value(), false, alias.pos())),

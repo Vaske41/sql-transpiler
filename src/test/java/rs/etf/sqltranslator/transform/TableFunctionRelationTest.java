@@ -56,20 +56,44 @@ class TableFunctionRelationTest {
     }
 
     @Test
-    void tableFunctionRefusedTowardMysql() {
-        assertThatThrownBy(() -> CodegenTestSupport.printTranslated(
+    void generateSeriesExpandsTowardMysql() {
+        String sql = CodegenTestSupport.printTranslated(
                 "SELECT * FROM generate_series(1, 3) g;",
-                Dialect.POSTGRESQL, Dialect.MYSQL))
-                .isInstanceOf(UnsupportedFeatureException.class)
-                .hasMessageContaining("table function");
+                Dialect.POSTGRESQL, Dialect.MYSQL).sql();
+        assertThat(sql).containsIgnoringCase("WITH RECURSIVE")
+                .containsIgnoringCase("UNION ALL")
+                .containsIgnoringCase("FROM DUAL");
+        assertThat(sql).doesNotContainIgnoringCase("generate_series");
     }
 
     @Test
-    void tableFunctionRefusedTowardTsql() {
+    void generateSeriesCorrelatedBoundsRefusedTowardMysql() {
         assertThatThrownBy(() -> CodegenTestSupport.printTranslated(
-                "SELECT * FROM generate_series(1, 3) g;",
-                Dialect.POSTGRESQL, Dialect.TSQL))
+                "SELECT t.id, s.i FROM t, generate_series(1, t.n) AS s(i);",
+                Dialect.POSTGRESQL, Dialect.MYSQL))
                 .isInstanceOf(UnsupportedFeatureException.class)
-                .hasMessageContaining("table function");
+                .hasMessageContaining("correlated bounds");
+    }
+
+    @Test
+    void generateSeriesExpandsTowardTsql() {
+        String sql = CodegenTestSupport.printTranslated(
+                "SELECT * FROM generate_series(1, 3) g;",
+                Dialect.POSTGRESQL, Dialect.TSQL).sql();
+        assertThat(sql).containsIgnoringCase("WITH")
+                .containsIgnoringCase("UNION ALL")
+                .containsIgnoringCase("OPTION (MAXRECURSION 0)");
+        assertThat(sql).doesNotContainIgnoringCase("generate_series");
+    }
+
+    @Test
+    void generateSeriesIntervalStepRefusedTowardMysql() {
+        assertThatThrownBy(() -> CodegenTestSupport.printTranslated(
+                "SELECT d::date FROM race_incidents T "
+                        + "CROSS JOIN generate_series(T.incident_start, T.incident_end, "
+                        + "INTERVAL '1 day') d;",
+                Dialect.POSTGRESQL, Dialect.MYSQL))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("GENERATE_SERIES");
     }
 }

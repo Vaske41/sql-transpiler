@@ -2,10 +2,12 @@ package rs.etf.sqltranslator.transform;
 
 import rs.etf.sqltranslator.ast.Assignment;
 import rs.etf.sqltranslator.ast.AstTransformer;
+import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.BooleanLiteral;
 import rs.etf.sqltranslator.ast.CastExpression;
 import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.ColumnRef;
+import rs.etf.sqltranslator.ast.CreateIndexStatement;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.DeleteStatement;
 import rs.etf.sqltranslator.ast.Expression;
@@ -13,17 +15,23 @@ import rs.etf.sqltranslator.ast.FrameBound;
 import rs.etf.sqltranslator.ast.FrameBoundKind;
 import rs.etf.sqltranslator.ast.FrameMode;
 import rs.etf.sqltranslator.ast.FunctionCall;
+import rs.etf.sqltranslator.ast.GroupByKind;
+import rs.etf.sqltranslator.ast.GroupByModifier;
+import rs.etf.sqltranslator.ast.IndexColumn;
 import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.JoinKind;
 import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.QuerySpecification;
+import rs.etf.sqltranslator.ast.AtTimeZone;
+import rs.etf.sqltranslator.ast.RowConstructor;
 import rs.etf.sqltranslator.ast.RowLimit;
 import rs.etf.sqltranslator.ast.Script;
 import rs.etf.sqltranslator.ast.SelectExpr;
 import rs.etf.sqltranslator.ast.SelectItem;
 import rs.etf.sqltranslator.ast.SetOperator;
-import rs.etf.sqltranslator.ast.TableFunction;
+import rs.etf.sqltranslator.ast.SetUserVariableStatement;
 import rs.etf.sqltranslator.ast.UnionArm;
+import rs.etf.sqltranslator.ast.UserVarAssignment;
 import rs.etf.sqltranslator.ast.WindowFrame;
 import rs.etf.sqltranslator.core.Dialect;
 import rs.etf.sqltranslator.core.SourcePosition;
@@ -63,20 +71,49 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
         }
 
         @Override
-        public Object visitAssignment(Assignment node) {
-            if (node.columns().size() > 1
-                    && (ctx.target() == Dialect.MYSQL || ctx.target() == Dialect.TSQL)) {
-                throw new UnsupportedFeatureException(
-                        "multi-column SET assignment is not supported by " + ctx.target(),
-                        node.pos());
+        public Object visitCreateIndexStatement(CreateIndexStatement node) {
+            if (ctx.target() == Dialect.MYSQL) {
+                if (node.where().isPresent()) {
+                    throw new UnsupportedFeatureException("partial index", node.pos());
+                }
+                if (!node.includeColumns().isEmpty()) {
+                    throw new UnsupportedFeatureException(
+                            "INCLUDE columns in index", node.pos());
+                }
             }
+            if (ctx.target() == Dialect.TSQL) {
+                for (IndexColumn key : node.columns()) {
+                    if (!(key.key() instanceof ColumnRef)) {
+                        throw new UnsupportedFeatureException(
+                                "expression index key", node.pos());
+                    }
+                }
+                node.where().ifPresent(where -> {
+                    if (!isTsqlFilteredIndexPredicate(where)) {
+                        throw new UnsupportedFeatureException(
+                                "partial index predicate", node.pos());
+                    }
+                });
+            }
+            return super.visitCreateIndexStatement(node);
+        }
+
+        /** T-SQL filtered indexes allow boolean columns or simple comparisons to literals. */
+        private static boolean isTsqlFilteredIndexPredicate(Expression where) {
+            if (where instanceof ColumnRef) {
+                return true;
+            }
+            return where instanceof BinaryOp;
+        }
+
+        @Override
+        public Object visitAssignment(Assignment node) {
             return super.visitAssignment(node);
         }
 
         @Override
         public Object visitFunctionCall(FunctionCall node) {
-            if ((ctx.target() == Dialect.MYSQL || ctx.target() == Dialect.TSQL)
-                    && ARRAY_AGGREGATES.contains(node.name())) {
+            if (ctx.target() == Dialect.TSQL && ARRAY_AGGREGATES.contains(node.name())) {
                 throw new UnsupportedFeatureException(
                         "aggregate " + node.name() + " (no array type in target)",
                         node.pos());
@@ -106,20 +143,7 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
 
         @Override
         public Object visitDeleteStatement(DeleteStatement node) {
-            if (ctx.target() == Dialect.TSQL && node.usingClause().isPresent()) {
-                throw new UnsupportedFeatureException(
-                        "DELETE USING is not supported by T-SQL", node.pos());
-            }
             return super.visitDeleteStatement(node);
-        }
-
-        @Override
-        public Object visitTableFunction(TableFunction node) {
-            if (ctx.target() == Dialect.MYSQL || ctx.target() == Dialect.TSQL) {
-                throw new UnsupportedFeatureException(
-                        "table function (no SRF-in-FROM in target)", node.pos());
-            }
-            return super.visitTableFunction(node);
         }
 
         @Override
@@ -135,10 +159,6 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
 
         @Override
         public Object visitJoin(Join node) {
-            if (node.kind() == JoinKind.FULL && ctx.target() == Dialect.MYSQL) {
-                throw new UnsupportedFeatureException(
-                        "FULL JOIN is not supported by MySQL", node.pos());
-            }
             if (node.lateral() && ctx.target() == Dialect.TSQL
                     && !isTsqlApplyShape(node)) {
                 throw new UnsupportedFeatureException(
@@ -148,11 +168,7 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
         }
 
         @Override
-        public Object visitRowConstructor(rs.etf.sqltranslator.ast.RowConstructor node) {
-            if (ctx.target() == Dialect.TSQL) {
-                throw new UnsupportedFeatureException(
-                        "row constructor is not supported by T-SQL", node.pos());
-            }
+        public Object visitRowConstructor(RowConstructor node) {
             return super.visitRowConstructor(node);
         }
 
@@ -166,11 +182,7 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
         }
 
         @Override
-        public Object visitAtTimeZone(rs.etf.sqltranslator.ast.AtTimeZone node) {
-            if (ctx.target() != Dialect.POSTGRESQL) {
-                throw new UnsupportedFeatureException(
-                        "AT TIME ZONE is not supported by " + ctx.target(), node.pos());
-            }
+        public Object visitAtTimeZone(AtTimeZone node) {
             return super.visitAtTimeZone(node);
         }
 
@@ -217,6 +229,41 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
         }
 
         @Override
+        public Object visitColumnRef(ColumnRef node) {
+            if (ctx.target() != Dialect.MYSQL && isUserVariable(node)) {
+                throw new UnsupportedFeatureException(
+                        "user variable is not supported by the target", node.pos());
+            }
+            return super.visitColumnRef(node);
+        }
+
+        @Override
+        public Object visitUserVarAssignment(UserVarAssignment node) {
+            if (ctx.target() != Dialect.MYSQL) {
+                throw new UnsupportedFeatureException(
+                        "user-variable assignment is not supported by the target", node.pos());
+            }
+            return super.visitUserVarAssignment(node);
+        }
+
+        @Override
+        public Object visitSetUserVariableStatement(SetUserVariableStatement node) {
+            if (ctx.target() != Dialect.MYSQL) {
+                throw new UnsupportedFeatureException(
+                        "SET user variable is not supported by the target", node.pos());
+            }
+            return super.visitSetUserVariableStatement(node);
+        }
+
+        private static boolean isUserVariable(ColumnRef ref) {
+            if (ref.name().parts().size() != 1) {
+                return false;
+            }
+            String name = ref.name().last().value();
+            return name.startsWith("@") && !name.startsWith("@@");
+        }
+
+        @Override
         public Object visitQuery(Query node) {
             node.limit().ifPresent(limit -> validateLimit(node, limit));
             return super.visitQuery(node);
@@ -224,8 +271,19 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
 
         @Override
         public Object visitQuerySpecification(QuerySpecification node) {
+            node.groupByModifier().ifPresent(mod -> refuseGroupByModifier(mod));
             warnLooseGroupBy(node);
             return super.visitQuerySpecification(node);
+        }
+
+        private void refuseGroupByModifier(GroupByModifier mod) {
+            if (ctx.target() != Dialect.MYSQL) {
+                return;
+            }
+            if (mod.kind() == GroupByKind.CUBE || mod.kind() == GroupByKind.GROUPING_SETS) {
+                throw new UnsupportedFeatureException(
+                        mod.kind() + " is not supported by MySQL", mod.pos());
+            }
         }
 
         private void warnLooseGroupBy(QuerySpecification spec) {

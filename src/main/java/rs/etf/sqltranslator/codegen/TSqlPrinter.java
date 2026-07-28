@@ -3,13 +3,24 @@ package rs.etf.sqltranslator.codegen;
 import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.BinaryOperator;
 import rs.etf.sqltranslator.ast.BooleanLiteral;
+import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.FunctionCall;
+import rs.etf.sqltranslator.ast.DeleteStatement;
+import rs.etf.sqltranslator.ast.InsertStatement;
+import rs.etf.sqltranslator.ast.Join;
+import rs.etf.sqltranslator.ast.TableSource;
 import rs.etf.sqltranslator.ast.IntervalLiteral;
 import rs.etf.sqltranslator.ast.NullsOrder;
+import rs.etf.sqltranslator.ast.OutputClause;
 import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.QuerySpecification;
+import rs.etf.sqltranslator.ast.Script;
+import rs.etf.sqltranslator.ast.Statement;
 import rs.etf.sqltranslator.ast.StringLiteral;
+
+import java.util.List;
+import java.util.Optional;
 
 /**
  * T-SQL renderer. Row limits take two shapes: {@code TOP (n)} directly after
@@ -17,8 +28,15 @@ import rs.etf.sqltranslator.ast.StringLiteral;
  * [FETCH NEXT n ROWS ONLY]} after ORDER BY otherwise — the Validate batch
  * guarantees ORDER BY is present in every non-TOP case. BooleanLiteral and TEXT
  * never reach this printer (Phase 4 rewrites/narrows them).
+ *
+ * <p>Statement-terminal {@code OPTION} clauses are collected via
+ * {@link #requireMaxRecursion()} (and later siblings) and flushed once after the
+ * outermost statement body — never inside a CTE, subquery, or derived table.
  */
 public final class TSqlPrinter extends AbstractSqlPrinter {
+
+    /** Set when any path needs unbounded recursion; flushed once per statement. */
+    private boolean maxRecursionRequired;
 
     @Override
     protected String quoteIdentifier(String value) {
@@ -36,10 +54,56 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
         return "+";
     }
 
-    /** SQL Server infers recursion; never emit the {@code RECURSIVE} keyword. */
+    /**
+     * Request {@code OPTION (MAXRECURSION 0)} on the current outermost statement.
+     * Idempotent — multiple requesters (recursive CTE, generate_series, …) still
+     * produce a single {@code OPTION} clause.
+     */
+    public void requireMaxRecursion() {
+        maxRecursionRequired = true;
+    }
+
+    /**
+     * Package-visible for unit tests: simulate {@code requires} independent
+     * {@link #requireMaxRecursion()} callers then flush once.
+     */
+    static String optionsAfterRequires(int requires) {
+        TSqlPrinter printer = new TSqlPrinter();
+        for (int i = 0; i < requires; i++) {
+            printer.requireMaxRecursion();
+        }
+        printer.flushStatementOptions();
+        return printer.out.result();
+    }
+
+    @Override
+    public Void visitScript(Script node) {
+        for (Statement statement : node.statements()) {
+            maxRecursionRequired = false;
+            statement.accept(this);
+            flushStatementOptions();
+            out.raw(";\n");
+        }
+        return null;
+    }
+
+    private void flushStatementOptions() {
+        if (maxRecursionRequired) {
+            out.token("OPTION").token("(").token("MAXRECURSION").token("0").raw(")");
+            maxRecursionRequired = false;
+        }
+    }
+
+    /**
+     * SQL Server infers recursion; never emit the {@code RECURSIVE} keyword.
+     * Recursive WITH still needs {@code OPTION (MAXRECURSION 0)} — default limit is 100.
+     */
     @Override
     protected void renderWithKeyword(boolean recursive) {
         out.token("WITH");
+        if (recursive) {
+            requireMaxRecursion();
+        }
     }
 
     @Override
@@ -99,6 +163,13 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
             throw new IllegalStateException(
                     "rule engine contract: JSON operators must be rewritten before T-SQL print");
         }
+        if (op == BinaryOperator.REGEX_MATCH
+                || op == BinaryOperator.REGEX_MATCH_I
+                || op == BinaryOperator.REGEX_NOT_MATCH
+                || op == BinaryOperator.REGEX_NOT_MATCH_I) {
+            throw new IllegalStateException(
+                    "rule engine contract: regex operators must be rewritten/refused before T-SQL print");
+        }
         return super.visitBinaryOp(node);
     }
 
@@ -152,6 +223,11 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
 
     @Override
     public Void visitFunctionCall(FunctionCall node) {
+        if (node.name().equals("NEXTVAL") && node.args().size() == 1) {
+            out.token("NEXT").token("VALUE").token("FOR");
+            node.args().get(0).accept(this);
+            return null;
+        }
         if (!node.orderBy().isEmpty()) {
             if (!node.name().equals("STRING_AGG") || node.star()) {
                 throw new IllegalStateException(
@@ -211,6 +287,7 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
             case DATE -> "DATE";
             case TIME -> "TIME";
             case TIMESTAMP -> "DATETIME2";
+            case TIMESTAMP_TZ -> "DATETIMEOFFSET";
             case BLOB, UUID -> throw new AssertionError("handled above");
             case TEXT -> throw new IllegalStateException(
                     "rule engine contract: TEXT must not reach the T-SQL printer");
@@ -245,5 +322,113 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
             throw new IllegalStateException(
                     "rule engine contract: USING must be dropped before T-SQL print");
         }
+    }
+
+    /** T-SQL computed columns use {@code AS (expr) PERSISTED} when stored. */
+    @Override
+    protected void renderGeneratedColumn(ColumnDefinition node) {
+        node.generatedAs().ifPresent(expr -> {
+            out.token("AS").raw("(");
+            expr.accept(this);
+            out.raw(")");
+            if (node.stored()) {
+                out.token("PERSISTED");
+            }
+        });
+    }
+
+    @Override
+    public Void visitInsertStatement(InsertStatement node) {
+        out.token("INSERT INTO").token(dotted(node.table()));
+        if (!node.columns().isEmpty()) {
+            out.token("(");
+            csv(node.columns());
+            out.raw(")");
+        }
+        renderInsertOutputClause(node.outputClause());
+        if (node.query().isPresent()) {
+            node.query().get().accept(this);
+        } else {
+            out.token("VALUES");
+            for (int i = 0; i < node.rows().size(); i++) {
+                if (i > 0) {
+                    out.raw(",");
+                }
+                out.token("(");
+                csv(node.rows().get(i));
+                out.raw(")");
+            }
+        }
+        node.upsert().ifPresent(u -> u.accept(this));
+        return null;
+    }
+
+    /** T-SQL {@code OUTPUT} on INSERT — before VALUES/SELECT. */
+    protected void renderInsertOutputClause(Optional<OutputClause> outputClause) {
+        outputClause.ifPresent(clause -> {
+            out.token("OUTPUT");
+            csv(clause.items());
+        });
+    }
+
+    @Override
+    protected void renderReturningClause(Optional<OutputClause> outputClause) {
+        // INSERT uses renderInsertOutputClause; other statements use OUTPUT hooks below.
+    }
+
+    @Override
+    protected void renderUpdateOutputClause(Optional<OutputClause> outputClause) {
+        outputClause.ifPresent(clause -> {
+            out.token("OUTPUT");
+            csv(clause.items());
+        });
+    }
+
+    @Override
+    protected void renderUpdateReturningSuffix(Optional<OutputClause> outputClause) {
+        // OUTPUT already emitted before FROM/WHERE.
+    }
+
+    @Override
+    protected void renderDeleteOutputClause(Optional<OutputClause> outputClause) {
+        outputClause.ifPresent(clause -> {
+            out.token("OUTPUT");
+            csv(clause.items());
+        });
+    }
+
+    @Override
+    protected void renderDeleteReturningSuffix(Optional<OutputClause> outputClause) {
+        // OUTPUT already emitted before USING/WHERE.
+    }
+
+    @Override
+    public Void visitDeleteStatement(DeleteStatement node) {
+        if (node.usingClause().isPresent()) {
+            var target = node.alias().orElse(node.table().last());
+            out.token("DELETE").token(identifier(target));
+            out.token("FROM").token(dotted(node.table()));
+            node.alias().ifPresent(alias -> out.token(identifier(alias)));
+            TableSource using = node.usingClause().get();
+            if (using.joins().isEmpty()) {
+                out.token("INNER JOIN");
+                using.first().accept(this);
+                node.where().ifPresent(where -> {
+                    out.token("ON");
+                    where.accept(this);
+                });
+            } else {
+                using.first().accept(this);
+                for (Join join : using.joins()) {
+                    join.accept(this);
+                }
+                node.where().ifPresent(where -> {
+                    out.token("WHERE");
+                    where.accept(this);
+                });
+            }
+            return null;
+        }
+        return super.visitDeleteStatement(node);
     }
 }

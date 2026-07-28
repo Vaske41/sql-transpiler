@@ -52,9 +52,18 @@ class ArrayAndAtTimeZoneTest {
     }
 
     @Test
-    void atTimeZoneRefusedTowardTsql() {
+    void atTimeZonePreservedTowardTsql() {
+        String sql = CodegenTestSupport.printTranslated(
+                "SELECT ts AT TIME ZONE 'UTC' FROM t;",
+                Dialect.POSTGRESQL, Dialect.TSQL).sql();
+        assertThat(sql).containsIgnoringCase("AT TIME ZONE");
+    }
+
+    @Test
+    void atTimeZoneRefusedTowardMysql() {
         assertThatThrownBy(() -> CodegenTestSupport.printTranslated(
-                "SELECT ts AT TIME ZONE 'UTC' FROM t;", Dialect.POSTGRESQL, Dialect.TSQL))
+                "SELECT ts AT TIME ZONE 'UTC' FROM t;",
+                Dialect.POSTGRESQL, Dialect.MYSQL))
                 .isInstanceOf(UnsupportedFeatureException.class)
                 .hasMessageContaining("AT TIME ZONE");
     }

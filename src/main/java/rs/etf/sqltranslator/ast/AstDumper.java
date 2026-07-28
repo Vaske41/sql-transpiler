@@ -56,8 +56,16 @@ public final class AstDumper implements AstVisitor<String> {
 
     @Override
     public String visitUnionArm(UnionArm node) {
-        return node("UnionArm op=" + node.operator() + " all=" + node.all())
-                .child("spec", node.spec()).done();
+        return node("UnionArm op=" + node.operator() + " all=" + node.all()
+                + " paren=" + node.parenthesized())
+                .child("operand", node.operand()).done();
+    }
+
+    @Override
+    public String visitGroupByModifier(GroupByModifier node) {
+        return node("GroupByModifier kind=" + node.kind())
+                .children("sets", node.sets().stream().flatMap(List::stream).toList())
+                .done();
     }
 
     @Override
@@ -68,6 +76,7 @@ public final class AstDumper implements AstVisitor<String> {
                 .child("from", node.from())
                 .child("where", node.where())
                 .children("groupBy", node.groupBy())
+                .child("groupByModifier", node.groupByModifier())
                 .child("having", node.having())
                 .done();
     }
@@ -136,9 +145,22 @@ public final class AstDumper implements AstVisitor<String> {
 
     @Override
     public String visitTableFunction(TableFunction node) {
-        return node("TableFunction")
+        Dump dump = node("TableFunction")
                 .child("name", node.name())
                 .children("args", node.args())
+                .child("alias", node.alias());
+        node.columnAliases().ifPresent(cols -> dump.children("columnAliases", cols));
+        if (!node.columnTypes().isEmpty()) {
+            dump.children("columnTypes", node.columnTypes());
+        }
+        return dump.done();
+    }
+
+    @Override
+    public String visitJsonTableRelation(JsonTableRelation node) {
+        return node("JsonTableRelation path=" + quote(node.path()))
+                .child("source", node.source())
+                .children("columns", node.columns())
                 .child("alias", node.alias())
                 .done();
     }
@@ -177,8 +199,13 @@ public final class AstDumper implements AstVisitor<String> {
         }
         dump.child("query", node.query())
                 .child("upsert", node.upsert());
-        node.returning().ifPresent(items -> dump.children("returning", items));
+        node.outputClause().ifPresent(clause -> dump.child("outputClause", clause));
         return dump.done();
+    }
+
+    @Override
+    public String visitOutputClause(OutputClause node) {
+        return node("OutputClause").children("items", node.items()).done();
     }
 
     @Override
@@ -198,6 +225,7 @@ public final class AstDumper implements AstVisitor<String> {
                 .child("table", node.table())
                 .child("alias", node.alias())
                 .children("assignments", node.assignments())
+                .child("outputClause", node.outputClause())
                 .child("from", node.from())
                 .child("where", node.where())
                 .done();
@@ -216,6 +244,7 @@ public final class AstDumper implements AstVisitor<String> {
         return node("DeleteStatement")
                 .child("table", node.table())
                 .child("alias", node.alias())
+                .child("outputClause", node.outputClause())
                 .child("using", node.usingClause())
                 .child("where", node.where())
                 .done();
@@ -242,16 +271,29 @@ public final class AstDumper implements AstVisitor<String> {
     }
 
     @Override
+    public String visitCreateRoutineStatement(CreateRoutineStatement node) {
+        return node("CreateRoutineStatement kind=" + node.kind())
+                .child("name", node.name())
+                .children("params", node.params())
+                .child("returns", node.returns())
+                .children("body", node.body())
+                .done();
+    }
+
+    @Override
     public String visitColumnDefinition(ColumnDefinition node) {
         String header = "ColumnDefinition autoIncrement=" + node.autoIncrement()
                 + " primaryKey=" + node.primaryKey()
                 + " unique=" + node.unique()
+                + " stored=" + node.stored()
                 + node.nullable().map(n -> " nullable=" + n).orElse("");
         return node(header)
                 .child("name", node.name())
                 .child("type", node.type())
                 .child("defaultValue", node.defaultValue())
                 .child("references", node.references())
+                .child("check", node.check())
+                .child("generatedAs", node.generatedAs())
                 .done();
     }
 
@@ -286,6 +328,14 @@ public final class AstDumper implements AstVisitor<String> {
                 .children("columns", node.columns())
                 .child("refTable", node.refTable())
                 .children("refColumns", node.refColumns())
+                .done();
+    }
+
+    @Override
+    public String visitCheckConstraint(CheckConstraint node) {
+        return node("CheckConstraint")
+                .child("name", node.name())
+                .child("predicate", node.predicate())
                 .done();
     }
 
@@ -329,6 +379,14 @@ public final class AstDumper implements AstVisitor<String> {
     }
 
     @Override
+    public String visitSetUserVariableStatement(SetUserVariableStatement node) {
+        return node("SetUserVariableStatement")
+                .child("variable", node.variable())
+                .child("value", node.value())
+                .done();
+    }
+
+    @Override
     public String visitAlterTableStatement(AlterTableStatement node) {
         return node("AlterTableStatement")
                 .child("table", node.table())
@@ -344,6 +402,14 @@ public final class AstDumper implements AstVisitor<String> {
     @Override
     public String visitAddTableConstraint(AddTableConstraint node) {
         return node("AddTableConstraint").child("constraint", node.constraint()).done();
+    }
+
+    @Override
+    public String visitAddCheckConstraint(AddCheckConstraint node) {
+        return node("AddCheckConstraint")
+                .child("name", node.name())
+                .child("predicate", node.predicate())
+                .done();
     }
 
     @Override
@@ -366,13 +432,15 @@ public final class AstDumper implements AstVisitor<String> {
                 .child("name", node.name())
                 .child("table", node.table())
                 .children("columns", node.columns())
+                .children("include", node.includeColumns())
+                .child("where", node.where())
                 .done();
     }
 
     @Override
     public String visitIndexColumn(IndexColumn node) {
         return node("IndexColumn direction=" + node.direction())
-                .child("column", node.column())
+                .child("key", node.key())
                 .done();
     }
 
@@ -526,10 +594,26 @@ public final class AstDumper implements AstVisitor<String> {
     }
 
     @Override
+    public String visitArraySubscript(ArraySubscript node) {
+        return node("ArraySubscript")
+                .child("base", node.base())
+                .child("index", node.index())
+                .done();
+    }
+
+    @Override
     public String visitAtTimeZone(AtTimeZone node) {
         return node("AtTimeZone")
                 .child("value", node.value())
                 .child("zone", node.zone())
+                .done();
+    }
+
+    @Override
+    public String visitUserVarAssignment(UserVarAssignment node) {
+        return node("UserVarAssignment")
+                .child("variable", node.variable())
+                .child("value", node.value())
                 .done();
     }
 
@@ -557,7 +641,7 @@ public final class AstDumper implements AstVisitor<String> {
 
     @Override
     public String visitIntervalLiteral(IntervalLiteral node) {
-        return "IntervalLiteral raw=" + quote(node.raw())
+        return "IntervalLiteral value=" + node.value().accept(this)
                 + " unit=" + node.unit().map(AstDumper::quote).orElse("<none>");
     }
 

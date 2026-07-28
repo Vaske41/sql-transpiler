@@ -371,6 +371,7 @@ Adding statement N+1 is this ordered touch-list — a ~30-minute checklist, not 
 
 **Wave 2 remeasure (HEAD, frozen 1426):** Wave 1 pin 655 → **966/309/151** (**67.74%** SUCCESS, Δ **+311**). Wave 2 bar ≥998 (70%) **not met (−32)**. Pre–review-fix pin was 963. Canonical CSV: evaluation/results-local/parrot-wave2-latest.csv; remainder: parrot-wave2-remainder.md. Historical wrap pin was 928 (65.1%). Caption: coverage exit 0, **not** AccEX. Run: EVAL_FAST=1 python evaluation/bin/wave2_measure.py (or jar resumable harness).
 
+**Wave 3 remeasure (feat/parrot-wave3-85pct, frozen 1426):** Wave 2 pin 966 → published **1074/243/109** (**75.32%**), then review honesty fixes → **1064/243/119** (**74.61%** SUCCESS, Δ **−10** vs published / **+98** vs Wave 2). Wave 3 bar ≥1213 (85%) **not met**. Caption: coverage exit 0, **not** AccEX. Poisoned corpus rows disclosed; refuse-over-guess preferred over invalid SQL.
 ---
 
 ## Two-Week Schedule at a Glance
