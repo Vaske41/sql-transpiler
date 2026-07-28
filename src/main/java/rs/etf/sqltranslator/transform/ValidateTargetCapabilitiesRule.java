@@ -74,8 +74,7 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
 
         @Override
         public Object visitFunctionCall(FunctionCall node) {
-            if ((ctx.target() == Dialect.MYSQL || ctx.target() == Dialect.TSQL)
-                    && ARRAY_AGGREGATES.contains(node.name())) {
+            if (ctx.target() == Dialect.TSQL && ARRAY_AGGREGATES.contains(node.name())) {
                 throw new UnsupportedFeatureException(
                         "aggregate " + node.name() + " (no array type in target)",
                         node.pos());

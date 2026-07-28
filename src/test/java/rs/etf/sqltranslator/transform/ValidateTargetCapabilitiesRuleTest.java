@@ -84,10 +84,19 @@ class ValidateTargetCapabilitiesRuleTest {
     }
 
     @Test
-    void arrayAggToMysqlIsRefused() {
+    void arrayAggToMysqlPassesValidatorAlone() {
+        // MySQL rendering is RenderArrayAggregatesRule; validator only guards T-SQL.
+        assertThatCode(() -> runRule(rule,
+                "SELECT ARRAY_AGG(x) FROM t;",
+                Dialect.POSTGRESQL, Dialect.MYSQL))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void arrayAggToTsqlIsRefused() {
         assertThatThrownBy(() -> runRule(rule,
                 "SELECT ARRAY_AGG(x ORDER BY x) FROM t;",
-                Dialect.POSTGRESQL, Dialect.MYSQL))
+                Dialect.POSTGRESQL, Dialect.TSQL))
                 .isInstanceOf(UnsupportedFeatureException.class)
                 .hasMessageContaining("ARRAY_AGG");
     }

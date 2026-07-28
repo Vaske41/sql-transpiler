@@ -30,6 +30,7 @@ public final class RuleEngine {
                 new RenderSrfForMysqlRule(),
                 new RenderSrfForTsqlRule(),
                 new ReshapeOrderedAggregatesRule(),
+                new RenderArrayAggregatesRule(),
                 new RewriteFilteredAggregatesRule(),
                 new RewriteDistinctOnRule(),
                 new RewriteUpsertRule(),
