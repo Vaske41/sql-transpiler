@@ -2,13 +2,16 @@ package rs.etf.sqltranslator.codegen;
 
 import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.BinaryOperator;
+import rs.etf.sqltranslator.ast.ColumnRef;
 import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.Expression;
+import rs.etf.sqltranslator.ast.IndexColumn;
 import rs.etf.sqltranslator.ast.IntervalLiteral;
 import rs.etf.sqltranslator.ast.NullsOrder;
 import rs.etf.sqltranslator.ast.NumericLiteral;
 import rs.etf.sqltranslator.ast.Query;
+import rs.etf.sqltranslator.ast.SortDirection;
 import rs.etf.sqltranslator.ast.StringLiteral;
 
 /**
@@ -212,6 +215,21 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
             out.token("WHERE");
             where.accept(this);
         });
+        return null;
+    }
+
+    /** MySQL 8 functional indexes require doubled parentheses around non-column keys. */
+    @Override
+    public Void visitIndexColumn(IndexColumn node) {
+        if (node.key() instanceof ColumnRef) {
+            return super.visitIndexColumn(node);
+        }
+        out.raw("((");
+        node.key().accept(this);
+        out.raw("))");
+        if (node.direction() == SortDirection.DESC) {
+            out.token("DESC");
+        }
         return null;
     }
 }

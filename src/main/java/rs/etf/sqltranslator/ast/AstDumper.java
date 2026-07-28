@@ -379,13 +379,15 @@ public final class AstDumper implements AstVisitor<String> {
                 .child("name", node.name())
                 .child("table", node.table())
                 .children("columns", node.columns())
+                .children("include", node.includeColumns())
+                .child("where", node.where())
                 .done();
     }
 
     @Override
     public String visitIndexColumn(IndexColumn node) {
         return node("IndexColumn direction=" + node.direction())
-                .child("column", node.column())
+                .child("key", node.key())
                 .done();
     }
 

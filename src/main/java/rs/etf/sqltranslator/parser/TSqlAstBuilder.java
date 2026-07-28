@@ -485,16 +485,26 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
         if (cluster != null && cluster.CLUSTERED() != null) {
             throw support.refuse("CLUSTERED index", pos(cluster));
         }
-        List<IndexColumn> columns = ctx.indexColumn().stream()
-                .map(this::indexColumn).toList();
+        List<IndexColumn> columns = ctx.indexKey().stream()
+                .map(this::indexKey).toList();
+        List<Identifier> include = includeColumns(ctx.includeClause());
+        Optional<Expression> where = ctx.whereClause() == null
+                ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
         return new CreateIndexStatement(ident(ctx.identifier()), ctx.UNIQUE() != null,
-                qname(ctx.qualifiedName()), columns, pos(ctx));
+                qname(ctx.qualifiedName()), columns, include, where, pos(ctx));
     }
 
-    private IndexColumn indexColumn(TSqlParser.IndexColumnContext ctx) {
+    private List<Identifier> includeColumns(TSqlParser.IncludeClauseContext ctx) {
+        if (ctx == null) {
+            return List.of();
+        }
+        return ctx.identifier().stream().map(this::ident).toList();
+    }
+
+    private IndexColumn indexKey(TSqlParser.IndexKeyContext ctx) {
         SortDirection direction =
                 ctx.DESC() != null ? SortDirection.DESC : SortDirection.ASC;
-        return new IndexColumn(ident(ctx.identifier()), direction, pos(ctx));
+        return new IndexColumn(expr(ctx.expression()), direction, pos(ctx));
     }
 
     @Override

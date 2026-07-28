@@ -3,11 +3,10 @@ package rs.etf.sqltranslator.ast;
 import rs.etf.sqltranslator.core.SourcePosition;
 
 /**
- * One indexed column; {@code direction} is ASC when the source wrote none.
- * Deliberately an {@link Identifier}, not a {@code ColumnRef}: expression-level
- * rewrite rules must never touch index DDL.
+ * One index key entry; {@code direction} is ASC when the source wrote none.
+ * Keys may be plain columns or expressions (functional indexes).
  */
-public record IndexColumn(Identifier column, SortDirection direction, SourcePosition pos)
+public record IndexColumn(Expression key, SortDirection direction, SourcePosition pos)
         implements AstNode {
 
     @Override

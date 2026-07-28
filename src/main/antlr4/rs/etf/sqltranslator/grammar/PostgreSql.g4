@@ -78,11 +78,15 @@ createViewStatement
 
 createIndexStatement
     : CREATE UNIQUE? INDEX identifier ON qualifiedName indexMethod?
-      '(' indexColumn (',' indexColumn)* ')' whereClause?
+      '(' indexKey (',' indexKey)* ')'
+      includeClause?
+      whereClause?
     ;
 
+includeClause : INCLUDE '(' identifier (',' identifier)* ')' ;
+
 // NULLS ordering parses, is uniformly refused by the builder.
-indexColumn : identifier (ASC | DESC)? (NULLS (FIRST | LAST))? ;
+indexKey : expression (ASC | DESC)? (NULLS (FIRST | LAST))? ;
 
 tableElement : columnDefinition | tableConstraint ;
 
@@ -440,7 +444,7 @@ DISTINCT:D I S T I N C T; DROP:D R O P; ELSE:E L S E; END:E N D;
 EXCEPT:E X C E P T; EXISTS:E X I S T S; FALSE:F A L S E; FETCH:F E T C H; FIRST:F I R S T;
 FOLLOWING:F O L L O W I N G; FOR:F O R; FOREIGN:F O R E I G N; FROM:F R O M; FULL:F U L L;
 GENERATED:G E N E R A T E D; GROUP:G R O U P; HAVING:H A V I N G;
-IDENTITY:I D E N T I T Y; IF:I F; IN:I N; INDEX:I N D E X;
+IDENTITY:I D E N T I T Y; IF:I F; IN:I N; INCLUDE:I N C L U D E; INDEX:I N D E X;
 INNER:I N N E R; INSERT:I N S E R T; INTERSECT:I N T E R S E C T; INTERVAL:I N T E R V A L; INTO:I N T O; IS:I S; JOIN:J O I N;
 KEY:K E Y; LAST:L A S T; LATERAL:L A T E R A L; LEADING:L E A D I N G; LEFT:L E F T; LIKE:L I K E; LIMIT:L I M I T;
 MAX:M A X; NEXT:N E X T; NONCLUSTERED:N O N C L U S T E R E D; NOT:N O T;

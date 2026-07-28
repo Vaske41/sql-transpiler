@@ -478,22 +478,29 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
         if (ctx.indexMethod() != null) {
             throw support.refuse("index method (USING)", pos(ctx.indexMethod()));
         }
-        if (ctx.whereClause() != null) {
-            throw support.refuse("partial index (WHERE)", pos(ctx.whereClause()));
-        }
-        List<IndexColumn> columns = ctx.indexColumn().stream()
-                .map(this::indexColumn).toList();
+        List<IndexColumn> columns = ctx.indexKey().stream()
+                .map(this::indexKey).toList();
+        List<Identifier> include = includeColumns(ctx.includeClause());
+        Optional<Expression> where = ctx.whereClause() == null
+                ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
         return new CreateIndexStatement(ident(ctx.identifier()), ctx.UNIQUE() != null,
-                qname(ctx.qualifiedName()), columns, pos(ctx));
+                qname(ctx.qualifiedName()), columns, include, where, pos(ctx));
     }
 
-    private IndexColumn indexColumn(PostgreSqlParser.IndexColumnContext ctx) {
+    private List<Identifier> includeColumns(PostgreSqlParser.IncludeClauseContext ctx) {
+        if (ctx == null) {
+            return List.of();
+        }
+        return ctx.identifier().stream().map(this::ident).toList();
+    }
+
+    private IndexColumn indexKey(PostgreSqlParser.IndexKeyContext ctx) {
         if (ctx.NULLS() != null) {
             throw support.refuse("NULLS ordering in index columns", pos(ctx));
         }
         SortDirection direction =
                 ctx.DESC() != null ? SortDirection.DESC : SortDirection.ASC;
-        return new IndexColumn(ident(ctx.identifier()), direction, pos(ctx));
+        return new IndexColumn(expr(ctx.expression()), direction, pos(ctx));
     }
 
     @Override

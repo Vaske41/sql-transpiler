@@ -450,19 +450,26 @@ final class MySqlAstBuilder extends MySqlBaseVisitor<Object> {
         if (!ctx.indexMethod().isEmpty()) {
             throw support.refuse("index method (USING)", pos(ctx.indexMethod().get(0)));
         }
-        List<IndexColumn> columns = ctx.indexColumn().stream()
-                .map(this::indexColumn).toList();
+        if (ctx.includeClause() != null) {
+            throw support.refuse("INCLUDE columns in index", pos(ctx.includeClause()));
+        }
+        List<IndexColumn> columns = ctx.indexKey().stream()
+                .map(this::indexKey).toList();
         return new CreateIndexStatement(ident(ctx.identifier()), ctx.UNIQUE() != null,
                 qname(ctx.qualifiedName()), columns, pos(ctx));
     }
 
-    private IndexColumn indexColumn(MySqlParser.IndexColumnContext ctx) {
+    private IndexColumn indexKey(MySqlParser.IndexKeyContext ctx) {
         if (ctx.INTEGER_LITERAL() != null) {
             throw support.refuse("index column prefix length", pos(ctx));
         }
         SortDirection direction =
                 ctx.DESC() != null ? SortDirection.DESC : SortDirection.ASC;
-        return new IndexColumn(ident(ctx.identifier()), direction, pos(ctx));
+        Expression key = ctx.expression() != null
+                ? expr(ctx.expression())
+                : new ColumnRef(support.qualifiedName(List.of(ident(ctx.identifier())), pos(ctx)),
+                        pos(ctx));
+        return new IndexColumn(key, direction, pos(ctx));
     }
 
     @Override

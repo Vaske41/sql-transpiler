@@ -582,6 +582,15 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         }
     }
 
+    protected final void csvIdentifiers(List<Identifier> ids) {
+        for (int i = 0; i < ids.size(); i++) {
+            if (i > 0) {
+                out.raw(",");
+            }
+            out.token(identifier(ids.get(i)));
+        }
+    }
+
     // --- types (shared argument rendering; names are dialect hooks) ---
 
     protected final void renderTypeArgs(DataType type) {
@@ -1229,12 +1238,21 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
                 .token("ON").token(dotted(node.table())).token("(");
         csv(node.columns());
         out.raw(")");
+        if (!node.includeColumns().isEmpty()) {
+            out.token("INCLUDE").token("(");
+            csvIdentifiers(node.includeColumns());
+            out.raw(")");
+        }
+        node.where().ifPresent(where -> {
+            out.token("WHERE");
+            where.accept(this);
+        });
         return null;
     }
 
     @Override
     public Void visitIndexColumn(IndexColumn node) {
-        out.token(identifier(node.column()));
+        node.key().accept(this);
         if (node.direction() == SortDirection.DESC) {
             out.token("DESC");
         }

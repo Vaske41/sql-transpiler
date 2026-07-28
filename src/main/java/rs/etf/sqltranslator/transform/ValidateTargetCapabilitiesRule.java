@@ -2,10 +2,12 @@ package rs.etf.sqltranslator.transform;
 
 import rs.etf.sqltranslator.ast.Assignment;
 import rs.etf.sqltranslator.ast.AstTransformer;
+import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.BooleanLiteral;
 import rs.etf.sqltranslator.ast.CastExpression;
 import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.ColumnRef;
+import rs.etf.sqltranslator.ast.CreateIndexStatement;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.DeleteStatement;
 import rs.etf.sqltranslator.ast.Expression;
@@ -13,6 +15,7 @@ import rs.etf.sqltranslator.ast.FrameBound;
 import rs.etf.sqltranslator.ast.FrameBoundKind;
 import rs.etf.sqltranslator.ast.FrameMode;
 import rs.etf.sqltranslator.ast.FunctionCall;
+import rs.etf.sqltranslator.ast.IndexColumn;
 import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.JoinKind;
 import rs.etf.sqltranslator.ast.Query;
@@ -59,6 +62,42 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
 
         private Validator(TranslationContext ctx) {
             this.ctx = ctx;
+        }
+
+        @Override
+        public Object visitCreateIndexStatement(CreateIndexStatement node) {
+            if (ctx.target() == Dialect.MYSQL) {
+                if (node.where().isPresent()) {
+                    throw new UnsupportedFeatureException("partial index", node.pos());
+                }
+                if (!node.includeColumns().isEmpty()) {
+                    throw new UnsupportedFeatureException(
+                            "INCLUDE columns in index", node.pos());
+                }
+            }
+            if (ctx.target() == Dialect.TSQL) {
+                for (IndexColumn key : node.columns()) {
+                    if (!(key.key() instanceof ColumnRef)) {
+                        throw new UnsupportedFeatureException(
+                                "expression index key", node.pos());
+                    }
+                }
+                node.where().ifPresent(where -> {
+                    if (!isTsqlFilteredIndexPredicate(where)) {
+                        throw new UnsupportedFeatureException(
+                                "partial index predicate", node.pos());
+                    }
+                });
+            }
+            return super.visitCreateIndexStatement(node);
+        }
+
+        /** T-SQL filtered indexes allow boolean columns or simple comparisons to literals. */
+        private static boolean isTsqlFilteredIndexPredicate(Expression where) {
+            if (where instanceof ColumnRef) {
+                return true;
+            }
+            return where instanceof BinaryOp;
         }
 
         @Override
