@@ -1,6 +1,10 @@
-# Private planning notes
+# Private planning notes / agent scratch
 /plans/
+.superpowers/
+
+# Docs: keep tracked force-adds outside evaluation notes
 docs/
+docs/evaluation/
 
 # Git worktrees
 .worktrees/
@@ -22,20 +26,10 @@ __pycache__/
 Thumbs.db
 .DS_Store
 
-# Local secrets (API keys for evaluation)
+# Local secrets (API keys)
 .env
 .env.*
 !.env.example
-evaluation/.env
-evaluation/.env.*
-!evaluation/.env.example
 
-# PARROT-Diverse bulk corpus (regenerate via evaluation/bin/fetch_parrot.py)
-evaluation/datasets/parrot/pairs.jsonl
-evaluation/datasets/parrot/cases/
-!evaluation/datasets/parrot/pairs.smoke.jsonl
-!evaluation/datasets/parrot/README.md
-!evaluation/datasets/parrot/manifest.json
-
-# LLM/agent fixtures — local only (regen with EVAL_LIVE=1; never commit)
-evaluation/results/
+# Evaluation harness, corpora, and local measure outputs
+evaluation/
