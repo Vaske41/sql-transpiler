@@ -135,6 +135,8 @@ public interface AstVisitor<R> {
 
     R visitArrayLiteral(ArrayLiteral node);
 
+    R visitArraySubscript(ArraySubscript node);
+
     R visitAtTimeZone(AtTimeZone node);
 
     // --- literals, identifiers, types ---

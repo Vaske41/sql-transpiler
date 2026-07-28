@@ -424,6 +424,11 @@ public class AstTransformer implements AstVisitor<Object> {
     }
 
     @Override
+    public Object visitArraySubscript(ArraySubscript node) {
+        return new ArraySubscript(rebuild(node.base()), rebuild(node.index()), node.pos());
+    }
+
+    @Override
     public Object visitAtTimeZone(AtTimeZone node) {
         return new AtTimeZone(rebuild(node.value()), rebuild(node.zone()), node.pos());
     }

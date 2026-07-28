@@ -539,6 +539,14 @@ public final class AstDumper implements AstVisitor<String> {
     }
 
     @Override
+    public String visitArraySubscript(ArraySubscript node) {
+        return node("ArraySubscript")
+                .child("base", node.base())
+                .child("index", node.index())
+                .done();
+    }
+
+    @Override
     public String visitAtTimeZone(AtTimeZone node) {
         return node("AtTimeZone")
                 .child("value", node.value())

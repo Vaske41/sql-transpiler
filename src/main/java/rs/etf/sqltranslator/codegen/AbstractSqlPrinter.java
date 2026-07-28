@@ -551,6 +551,15 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     }
 
     @Override
+    public Void visitArraySubscript(ArraySubscript node) {
+        node.base().accept(this);
+        out.raw("[");
+        node.index().accept(this);
+        out.raw("]");
+        return null;
+    }
+
+    @Override
     public Void visitAtTimeZone(AtTimeZone node) {
         node.value().accept(this);
         out.token("AT").token("TIME").token("ZONE");

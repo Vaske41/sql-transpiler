@@ -8,6 +8,7 @@ import rs.etf.sqltranslator.ast.AddTableConstraint;
 import rs.etf.sqltranslator.ast.AlterAction;
 import rs.etf.sqltranslator.ast.AlterTableStatement;
 import rs.etf.sqltranslator.ast.ArrayLiteral;
+import rs.etf.sqltranslator.ast.ArraySubscript;
 import rs.etf.sqltranslator.ast.Assignment;
 import rs.etf.sqltranslator.ast.AtTimeZone;
 import rs.etf.sqltranslator.ast.BetweenPredicate;
@@ -819,10 +820,14 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     // --- primary expressions ---
 
     @Override
-    public Object visitPgColonCastChain(PostgreSqlParser.PgColonCastChainContext ctx) {
+    public Object visitPgPostfixChain(PostgreSqlParser.PgPostfixChainContext ctx) {
         Expression value = (Expression) visit(ctx.primaryBase());
-        for (PostgreSqlParser.DataTypeContext typeCtx : ctx.dataType()) {
-            value = new CastExpression(value, castType(typeCtx), pos(ctx));
+        for (PostgreSqlParser.PostfixOpContext op : ctx.postfixOp()) {
+            if (op instanceof PostgreSqlParser.PgPostfixCastContext castCtx) {
+                value = new CastExpression(value, castType(castCtx.dataType()), pos(op));
+            } else if (op instanceof PostgreSqlParser.PgPostfixSubscriptContext subCtx) {
+                value = new ArraySubscript(value, expr(subCtx.expression()), pos(op));
+            }
         }
         for (PostgreSqlParser.AtTimeZoneContext atz : ctx.atTimeZone()) {
             value = buildAtTimeZone(value, atz);

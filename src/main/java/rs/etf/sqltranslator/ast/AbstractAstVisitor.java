@@ -436,6 +436,11 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitArraySubscript(ArraySubscript node) {
+        return defaultResult();
+    }
+
+    @Override
     public R visitAtTimeZone(AtTimeZone node) {
         return defaultResult();
     }

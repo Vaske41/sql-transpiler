@@ -31,6 +31,7 @@ public final class RuleEngine {
                 new RenderSrfForTsqlRule(),
                 new ReshapeOrderedAggregatesRule(),
                 new RenderArrayAggregatesRule(),
+                new RenderArraySubscriptRule(),
                 new RewriteFilteredAggregatesRule(),
                 new RewriteDistinctOnRule(),
                 new RewriteUpsertRule(),

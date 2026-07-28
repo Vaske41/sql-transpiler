@@ -278,9 +278,14 @@ multiplicativeExpression : unaryExpression (('*' | '/' | '%') unaryExpression)* 
 
 unaryExpression : ('-' | '+') unaryExpression | primaryExpression ;
 
-// Postfix :: casts then optional AT TIME ZONE (contextual AT/TIME/ZONE).
+// Postfix :: casts / [subscript] then optional AT TIME ZONE (contextual AT/TIME/ZONE).
 primaryExpression
-    : primaryBase (COLON_CAST dataType)* atTimeZone*   # pgColonCastChain
+    : primaryBase postfixOp* atTimeZone*   # pgPostfixChain
+    ;
+
+postfixOp
+    : COLON_CAST dataType   # pgPostfixCast
+    | '[' expression ']'    # pgPostfixSubscript
     ;
 
 atTimeZone
