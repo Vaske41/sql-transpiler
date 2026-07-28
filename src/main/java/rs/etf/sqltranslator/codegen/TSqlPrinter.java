@@ -207,6 +207,11 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
 
     @Override
     public Void visitFunctionCall(FunctionCall node) {
+        if (node.name().equals("NEXTVAL") && node.args().size() == 1) {
+            out.token("NEXT").token("VALUE").token("FOR");
+            node.args().get(0).accept(this);
+            return null;
+        }
         if (!node.orderBy().isEmpty()) {
             if (!node.name().equals("STRING_AGG") || node.star()) {
                 throw new IllegalStateException(

@@ -89,13 +89,14 @@ tableElement : columnDefinition | tableConstraint ;
 columnDefinition : columnName dataType columnConstraint* ;
 
 columnConstraint
-    : NOT NULL
-    | NULL
-    | DEFAULT expression
-    | PRIMARY KEY
-    | UNIQUE
-    | REFERENCES qualifiedName ('(' identifier ')')?
-    | autoIncrement
+    : NOT NULL                                              # notNullConstraint
+    | NULL                                                  # nullConstraint
+    | DEFAULT expression                                    # defaultConstraint
+    | PRIMARY KEY                                           # primaryKeyColumnConstraint
+    | UNIQUE                                                # uniqueColumnConstraint
+    | REFERENCES qualifiedName ('(' identifier ')')?        # referencesColumnConstraint
+    | GENERATED (ALWAYS | BY DEFAULT) AS IDENTITY ('(' ~')'* ')')?   # identityConstraint
+    | IDENTITY ('(' INTEGER_LITERAL ',' INTEGER_LITERAL ')')?        # tsqlIdentityConstraint
     ;
 
 tableConstraint
@@ -422,8 +423,6 @@ rowLimitClause
     | FETCH (FIRST | NEXT) expression (ROW | ROWS) fetchRestriction
     | FETCH (FIRST | NEXT) (ROW | ROWS) fetchRestriction
     ;
-
-autoIncrement : GENERATED (ALWAYS | BY DEFAULT) AS IDENTITY ;
 
 indexMethod : USING identifier ;
 

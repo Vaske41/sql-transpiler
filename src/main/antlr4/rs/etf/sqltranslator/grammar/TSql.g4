@@ -89,13 +89,14 @@ tableElement : columnDefinition | tableConstraint ;
 columnDefinition : columnName dataType columnConstraint* ;
 
 columnConstraint
-    : NOT NULL
-    | NULL
-    | DEFAULT expression
-    | PRIMARY KEY
-    | UNIQUE
-    | REFERENCES qualifiedName ('(' identifier ')')?
-    | autoIncrement
+    : NOT NULL                                              # notNullConstraint
+    | NULL                                                  # nullConstraint
+    | DEFAULT expression                                    # defaultConstraint
+    | PRIMARY KEY                                           # primaryKeyColumnConstraint
+    | UNIQUE                                                # uniqueColumnConstraint
+    | REFERENCES qualifiedName ('(' identifier ')')?        # referencesColumnConstraint
+    | GENERATED (ALWAYS | BY DEFAULT) AS IDENTITY ('(' ~')'* ')')?   # identityConstraint
+    | IDENTITY ('(' INTEGER_LITERAL ',' INTEGER_LITERAL ')')?        # tsqlIdentityConstraint
     ;
 
 tableConstraint
@@ -303,6 +304,7 @@ primaryExpression
     | SUBSTRING '(' expression FROM expression (FOR expression)? ')'   # substringStandard
     | POSITION '(' expression IN expression ')'                        # positionStandard
     | TRIM '(' (LEADING | TRAILING | BOTH)? expression (FROM expression)? ')' # trimStandard
+    | NEXT_VALUE_FOR identifier                                  # nextValueForExpr
     | functionCall windowOverlay?           # functionExpr
     | columnReference                       # columnRefExpr
     | subquery                              # scalarSubqueryExpr
@@ -412,8 +414,6 @@ convertExpression : CONVERT '(' dataType ',' expression ')' ;
 
 topClause : TOP ( INTEGER_LITERAL | '(' expression ')' ) (WITH identifier)? ;
 
-autoIncrement : IDENTITY '(' INTEGER_LITERAL ',' INTEGER_LITERAL ')' ;
-
 // T-SQL allows NVARCHAR(MAX).
 dataTypeArg : INTEGER_LITERAL | MAX ;
 
@@ -450,6 +450,9 @@ USING:U S I N G; VALUES:V A L U E S; WHEN:W H E N; WHERE:W H E R E; WITH:W I T H
 // =====================================================================
 
 PIPES : '||' ;
+
+// T-SQL sequence advance — compound token avoids making VALUE a keyword (breaks t.value).
+NEXT_VALUE_FOR : N E X T [ \t\r\n]+ V A L U E [ \t\r\n]+ F O R ;
 
 // Longer arrow forms first so ->> / #>> win over -> / #>.
 ARROW2 : '->>' ;

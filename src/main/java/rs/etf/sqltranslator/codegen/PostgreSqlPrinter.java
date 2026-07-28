@@ -1,5 +1,6 @@
 package rs.etf.sqltranslator.codegen;
 
+import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.Query;
@@ -14,6 +15,12 @@ public final class PostgreSqlPrinter extends AbstractSqlPrinter {
 
     @Override
     public Void visitFunctionCall(FunctionCall node) {
+        if (node.name().equals("NEXTVAL") && node.args().size() == 1) {
+            out.token("nextval").raw("(");
+            node.args().get(0).accept(this);
+            out.raw(")");
+            return null;
+        }
         if (node.name().equals("POSITION") && !node.star() && node.args().size() == 2) {
             out.token("POSITION").raw("(");
             node.args().get(0).accept(this);
@@ -90,6 +97,45 @@ public final class PostgreSqlPrinter extends AbstractSqlPrinter {
         for (int i = 0; i < type.arrayDims(); i++) {
             out.raw("[]");
         }
+    }
+
+    @Override
+    public Void visitColumnDefinition(ColumnDefinition node) {
+        out.token(identifier(node.name()));
+        if (node.autoIncrement()) {
+            String serial = serialTypeName(node.type());
+            if (serial != null) {
+                out.token(serial);
+            } else {
+                renderDataType(node.type());
+                renderAutoIncrement();
+            }
+        } else {
+            renderDataType(node.type());
+        }
+        node.nullable().ifPresent(nullable -> out.token(nullable ? "NULL" : "NOT NULL"));
+        node.defaultValue().ifPresent(value -> {
+            out.token("DEFAULT");
+            value.accept(this);
+        });
+        if (node.primaryKey()) {
+            out.token("PRIMARY KEY");
+        }
+        if (node.unique()) {
+            out.token("UNIQUE");
+        }
+        node.references().ifPresent(ref -> ref.accept(this));
+        return null;
+    }
+
+    /** SERIAL family for integer types with auto-increment; null → use GENERATED … AS IDENTITY. */
+    private static String serialTypeName(DataType type) {
+        return switch (type.type()) {
+            case SMALLINT -> "SMALLSERIAL";
+            case INTEGER -> "SERIAL";
+            case BIGINT -> "BIGSERIAL";
+            default -> null;
+        };
     }
 
     @Override

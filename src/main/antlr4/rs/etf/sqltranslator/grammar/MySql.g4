@@ -91,13 +91,15 @@ tableElement : columnDefinition | tableConstraint ;
 columnDefinition : columnName dataType columnConstraint* ;
 
 columnConstraint
-    : NOT NULL
-    | NULL
-    | DEFAULT expression
-    | PRIMARY KEY
-    | UNIQUE
-    | REFERENCES qualifiedName ('(' identifier ')')?
-    | autoIncrement
+    : NOT NULL                                              # notNullConstraint
+    | NULL                                                  # nullConstraint
+    | DEFAULT expression                                    # defaultConstraint
+    | PRIMARY KEY                                           # primaryKeyColumnConstraint
+    | UNIQUE                                                # uniqueColumnConstraint
+    | REFERENCES qualifiedName ('(' identifier ')')?        # referencesColumnConstraint
+    | AUTO_INCREMENT                                        # autoIncrementColumnConstraint
+    | GENERATED (ALWAYS | BY DEFAULT) AS IDENTITY ('(' ~')'* ')')?   # identityConstraint
+    | IDENTITY ('(' INTEGER_LITERAL ',' INTEGER_LITERAL ')')?        # tsqlIdentityConstraint
     ;
 
 tableConstraint
@@ -405,8 +407,6 @@ rowLimitClause
     : LIMIT expression (OFFSET expression)? (WITH identifier)?
     | LIMIT expression ',' expression
     ;
-
-autoIncrement : AUTO_INCREMENT ;
 
 indexMethod : USING identifier ;
 

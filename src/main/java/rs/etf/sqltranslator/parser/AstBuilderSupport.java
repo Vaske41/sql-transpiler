@@ -838,6 +838,40 @@ final class AstBuilderSupport {
                 "IDENTITY(" + seed + "," + increment + ")", position);
     }
 
+    /** {@code GENERATED … AS IDENTITY} with optional {@code (START WITH … INCREMENT BY …)}. */
+    void applyGeneratedIdentityConstraint(ColumnAttributes attributes, String rawText,
+                                          SourcePosition position) {
+        attributes.autoIncrement();
+        int open = rawText.indexOf('(');
+        if (open < 0) {
+            return;
+        }
+        int close = rawText.lastIndexOf(')');
+        if (close <= open) {
+            return;
+        }
+        String inner = rawText.substring(open + 1, close).trim();
+        if (inner.isEmpty()) {
+            return;
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
+                "START\\s+WITH\\s+(\\d+)\\s+INCREMENT\\s+BY\\s+(\\d+)",
+                java.util.regex.Pattern.CASE_INSENSITIVE).matcher(inner);
+        if (!matcher.find()) {
+            throw refuse("GENERATED ... AS IDENTITY (" + inner + ")", position);
+        }
+        checkIdentitySeed(matcher.group(1), matcher.group(2), position);
+    }
+
+    /** T-SQL {@code IDENTITY} or {@code IDENTITY(seed, increment)} column constraint. */
+    void applyTsqlIdentityConstraint(ColumnAttributes attributes, String seed, String increment,
+                                     SourcePosition position) {
+        if (seed != null && increment != null) {
+            checkIdentitySeed(seed, increment, position);
+        }
+        attributes.autoIncrement();
+    }
+
     /**
      * Assembles a {@link ColumnDefinition}, merging the auto-increment contributed
      * by the type fold (PG SERIAL family) with column-constraint syntax

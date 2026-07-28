@@ -524,32 +524,38 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
         AstBuilderSupport.FoldedType type = columnType(ctx.dataType());
         AstBuilderSupport.ColumnAttributes attributes = new AstBuilderSupport.ColumnAttributes();
         for (PostgreSqlParser.ColumnConstraintContext constraint : ctx.columnConstraint()) {
-            if (constraint.NOT() != null) {
+            if (constraint instanceof PostgreSqlParser.NotNullConstraintContext) {
                 support.applyColumnConstraint(attributes,
                         AstBuilderSupport.ColumnConstraintKind.NOT_NULL, null, null);
-            } else if (constraint.DEFAULT() != null) {
-                support.applyColumnConstraint(attributes,
-                        AstBuilderSupport.ColumnConstraintKind.DEFAULT,
-                        expr(constraint.expression()), null);
-            } else if (constraint.NULL() != null) {
+            } else if (constraint instanceof PostgreSqlParser.NullConstraintContext) {
                 support.applyColumnConstraint(attributes,
                         AstBuilderSupport.ColumnConstraintKind.NULL_ALLOWED, null, null);
-            } else if (constraint.PRIMARY() != null) {
+            } else if (constraint instanceof PostgreSqlParser.DefaultConstraintContext dc) {
+                support.applyColumnConstraint(attributes,
+                        AstBuilderSupport.ColumnConstraintKind.DEFAULT,
+                        expr(dc.expression()), null);
+            } else if (constraint instanceof PostgreSqlParser.PrimaryKeyColumnConstraintContext) {
                 support.applyColumnConstraint(attributes,
                         AstBuilderSupport.ColumnConstraintKind.PRIMARY_KEY, null, null);
-            } else if (constraint.UNIQUE() != null) {
+            } else if (constraint instanceof PostgreSqlParser.UniqueColumnConstraintContext) {
                 support.applyColumnConstraint(attributes,
                         AstBuilderSupport.ColumnConstraintKind.UNIQUE, null, null);
-            } else if (constraint.REFERENCES() != null) {
-                Optional<Identifier> column = constraint.identifier() == null
-                        ? Optional.empty() : Optional.of(ident(constraint.identifier()));
+            } else if (constraint instanceof PostgreSqlParser.ReferencesColumnConstraintContext ref) {
+                Optional<Identifier> column = ref.identifier() == null
+                        ? Optional.empty() : Optional.of(ident(ref.identifier()));
                 support.applyColumnConstraint(attributes,
                         AstBuilderSupport.ColumnConstraintKind.REFERENCES, null,
-                        new ForeignKeyRef(qname(constraint.qualifiedName()), column,
-                                pos(constraint)));
-            } else if (constraint.autoIncrement() != null) {
-                support.applyColumnConstraint(attributes,
-                        AstBuilderSupport.ColumnConstraintKind.AUTO_INCREMENT, null, null);
+                        new ForeignKeyRef(qname(ref.qualifiedName()), column, pos(ref)));
+            } else if (constraint instanceof PostgreSqlParser.IdentityConstraintContext ic) {
+                support.applyGeneratedIdentityConstraint(attributes, ic.getText(), pos(ic));
+            } else if (constraint instanceof PostgreSqlParser.TsqlIdentityConstraintContext id) {
+                String seed = id.INTEGER_LITERAL().size() > 0
+                        ? id.INTEGER_LITERAL(0).getText() : null;
+                String increment = id.INTEGER_LITERAL().size() > 1
+                        ? id.INTEGER_LITERAL(1).getText() : null;
+                support.applyTsqlIdentityConstraint(attributes, seed, increment, pos(id));
+            } else {
+                throw new IllegalStateException("unknown column constraint");
             }
         }
         return support.columnDefinition(columnName(ctx.columnName()), type, attributes, pos(ctx));
