@@ -2,7 +2,7 @@
 
 Coverage SUCCESS = parse -> rules -> print exit 0. **Not** AccEX.
 
-- sqltranslate: SUCCESS=1037, PARSE=298, REFUSED=91 (n=1426)
+- sqltranslate: SUCCESS=1043, PARSE=282, REFUSED=101 (n=1426)
 - Wave-2 pinned baseline: SUCCESS=966
-- Delta: +71
-- 85% bar: >=1213; need 176 more
+- Delta: +77
+- 85% bar: >=1213; need 170 more
