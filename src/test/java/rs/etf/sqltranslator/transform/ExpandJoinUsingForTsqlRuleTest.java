@@ -6,6 +6,7 @@ import rs.etf.sqltranslator.core.Dialect;
 import rs.etf.sqltranslator.parser.AstBuilderFacade;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ExpandJoinUsingForTsqlRuleTest {
 
@@ -50,16 +51,11 @@ class ExpandJoinUsingForTsqlRuleTest {
     }
 
     @Test
-    void chainedUsingNestsLeftTowardTsql() {
-        String sql = CodegenTestSupport.printTranslated(
+    void chainedUsingRefusedTowardTsql() {
+        assertThatThrownBy(() -> CodegenTestSupport.printTranslated(
                 "SELECT * FROM c JOIN g USING (gid) JOIN u USING (uid);",
-                Dialect.POSTGRESQL, Dialect.TSQL).sql();
-        assertThat(sql).doesNotContainIgnoringCase("USING (");
-        // Second USING must resolve uid against the accumulated join, not only g.
-        assertThat(sql).doesNotContainIgnoringCase("g.uid");
-        assertThat(sql).containsIgnoringCase("_using0.uid");
-        assertThat(sql).containsIgnoringCase("u.uid");
-        assertThat(sql).containsIgnoringCase("c.gid");
-        assertThat(sql).containsIgnoringCase("g.gid");
+                Dialect.POSTGRESQL, Dialect.TSQL))
+                .isInstanceOf(rs.etf.sqltranslator.core.UnsupportedFeatureException.class)
+                .hasMessageContaining("chained JOIN USING");
     }
 }

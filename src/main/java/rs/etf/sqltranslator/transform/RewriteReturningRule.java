@@ -24,7 +24,9 @@ import java.util.Optional;
 /**
  * Maps PostgreSQL {@code RETURNING} and T-SQL {@code OUTPUT} across dialects.
  * MySQL has neither — refuse. Refuse T-SQL {@code OUTPUT *} on UPDATE toward
- * PostgreSQL (semantic mismatch: T-SQL spans INSERTED and DELETED).
+ * PostgreSQL (semantic mismatch: T-SQL spans INSERTED and DELETED). Refuse
+ * {@code OUTPUT DELETED.col} on UPDATE toward PostgreSQL (RETURNING is new-row).
+ * Refuse non-column RETURNING expressions toward T-SQL (need {@code INSERTED.}/{@code DELETED.}).
  */
 public final class RewriteReturningRule implements Rule {
 
@@ -97,7 +99,7 @@ public final class RewriteReturningRule implements Rule {
                             output.get().pos());
                 }
                 return Optional.of(new OutputClause(
-                        stripQualifiers(output.get().items(), output.get().pos()),
+                        stripQualifiers(output.get().items(), kind, output.get().pos()),
                         output.get().pos()));
             }
             return output;
@@ -134,17 +136,18 @@ public final class RewriteReturningRule implements Rule {
                 }
                 return ref;
             }
-            return expr;
+            throw new UnsupportedFeatureException(
+                    "RETURNING expression requires a column reference for T-SQL OUTPUT", pos);
         }
 
-        private static List<SelectItem> stripQualifiers(List<SelectItem> items,
+        private static List<SelectItem> stripQualifiers(List<SelectItem> items, DmlKind kind,
                                                         SourcePosition pos) {
             List<SelectItem> result = new ArrayList<>(items.size());
             for (SelectItem item : items) {
                 if (item instanceof SelectStar star) {
                     result.add(new SelectStar(Optional.empty(), star.pos()));
                 } else if (item instanceof SelectExpr expr) {
-                    result.add(new SelectExpr(stripExpr(expr.expr(), expr.pos()),
+                    result.add(new SelectExpr(stripExpr(expr.expr(), kind, expr.pos()),
                             expr.alias(), expr.pos()));
                 } else {
                     result.add(item);
@@ -153,9 +156,14 @@ public final class RewriteReturningRule implements Rule {
             return result;
         }
 
-        private static Expression stripExpr(Expression expr, SourcePosition pos) {
+        private static Expression stripExpr(Expression expr, DmlKind kind, SourcePosition pos) {
             if (expr instanceof ColumnRef ref && ref.name().parts().size() == 2) {
                 String qualifier = ref.name().parts().get(0).value();
+                if (qualifier.equalsIgnoreCase("DELETED") && kind == DmlKind.UPDATE) {
+                    throw new UnsupportedFeatureException(
+                            "OUTPUT DELETED on UPDATE has no faithful PostgreSQL RETURNING form",
+                            pos);
+                }
                 if (qualifier.equalsIgnoreCase("INSERTED")
                         || qualifier.equalsIgnoreCase("DELETED")) {
                     Identifier col = ref.name().parts().get(1);

@@ -60,10 +60,11 @@ class ArrayAndAtTimeZoneTest {
     }
 
     @Test
-    void atTimeZoneBecomesConvertTzTowardMysql() {
-        String sql = CodegenTestSupport.printTranslated(
+    void atTimeZoneRefusedTowardMysql() {
+        assertThatThrownBy(() -> CodegenTestSupport.printTranslated(
                 "SELECT ts AT TIME ZONE 'UTC' FROM t;",
-                Dialect.POSTGRESQL, Dialect.MYSQL).sql();
-        assertThat(sql).containsIgnoringCase("CONVERT_TZ");
+                Dialect.POSTGRESQL, Dialect.MYSQL))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("AT TIME ZONE");
     }
 }

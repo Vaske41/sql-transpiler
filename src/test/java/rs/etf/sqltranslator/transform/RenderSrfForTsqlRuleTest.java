@@ -15,9 +15,10 @@ class RenderSrfForTsqlRuleTest {
     }
 
     @Test
-    void jsonArrayElementsBecomesOpenJson() {
-        assertThat(toTsql("SELECT t.value FROM json_array_elements(e.events) AS t"))
-                .containsIgnoringCase("OPENJSON");
+    void jsonArrayElementsRefusedTowardTsql() {
+        assertThatThrownBy(() -> toTsql("SELECT t.value FROM json_array_elements(e.events) AS t"))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("OPENJSON value shape mismatch");
     }
 
     @Test
@@ -41,7 +42,7 @@ class RenderSrfForTsqlRuleTest {
     @Test
     void correlatedCommaJoinBecomesCrossApply() {
         String sql = toTsql(
-                "SELECT t.value FROM events e, json_array_elements(e.payload) AS t");
+                "SELECT t.value FROM events e, json_array_elements_text(e.payload) AS t");
         assertThat(sql).containsIgnoringCase("CROSS APPLY");
         assertThat(sql).containsIgnoringCase("OPENJSON");
         assertThat(sql.toUpperCase()).doesNotContain(", OPENJSON");
@@ -51,7 +52,7 @@ class RenderSrfForTsqlRuleTest {
     void correlatedInnerJoinSrfBecomesCrossApply() {
         String sql = toTsql(
                 "SELECT t.value FROM events e "
-                        + "JOIN json_array_elements(e.payload) AS t ON true");
+                        + "JOIN json_array_elements_text(e.payload) AS t ON true");
         assertThat(sql).containsIgnoringCase("CROSS APPLY");
         assertThat(sql).containsIgnoringCase("OPENJSON");
         assertThat(sql.toUpperCase()).doesNotContain("INNER JOIN OPENJSON");

@@ -10,12 +10,8 @@ import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.JsonTableRelation;
 import rs.etf.sqltranslator.ast.QualifiedName;
-import rs.etf.sqltranslator.ast.Query;
-import rs.etf.sqltranslator.ast.QuerySpecification;
 import rs.etf.sqltranslator.ast.Relation;
 import rs.etf.sqltranslator.ast.Script;
-import rs.etf.sqltranslator.ast.SelectItem;
-import rs.etf.sqltranslator.ast.SelectStar;
 import rs.etf.sqltranslator.ast.TableFunction;
 import rs.etf.sqltranslator.ast.TableRef;
 import rs.etf.sqltranslator.ast.TableSource;
@@ -29,13 +25,10 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * T-SQL has no {@code JOIN … USING (…)}. Expand each USING join to an equivalent
- * {@code ON left.col = right.col AND …}.
- *
- * <p>For a <em>chain</em> of USING joins, the left side of each subsequent ON is the
- * accumulated join result (nested as a derived table), not merely the previous right
- * relation — otherwise {@code c JOIN g USING (gid) JOIN u USING (uid)} wrongly emits
- * {@code g.uid = u.uid} when {@code uid} lives on {@code c}.
+ * T-SQL has no {@code JOIN … USING (…)}. Expand a single USING join to
+ * {@code ON left.col = right.col AND …}. Chained USING (or USING after prior joins)
+ * is refused — nesting {@code SELECT *} loses outer bindings and can duplicate
+ * USING columns in T-SQL.
  */
 public final class ExpandJoinUsingForTsqlRule implements Rule {
 
@@ -58,7 +51,6 @@ public final class ExpandJoinUsingForTsqlRule implements Rule {
         public Object visitTableSource(TableSource node) {
             Relation leftRel = rebuild(node.first());
             List<Join> resultJoins = new ArrayList<>();
-            int nestId = 0;
             for (Join join : node.joins()) {
                 Join rebuilt = (Join) rebuild(join);
                 if (rebuilt.usingColumns().isEmpty()) {
@@ -66,11 +58,9 @@ public final class ExpandJoinUsingForTsqlRule implements Rule {
                     continue;
                 }
                 if (!resultJoins.isEmpty()) {
-                    // Nest accumulated left so USING columns resolve against the join result.
-                    DerivedTable nest = wrapAccumulated(
-                            leftRel, resultJoins, "_using" + nestId++, rebuilt.pos());
-                    leftRel = nest;
-                    resultJoins = new ArrayList<>();
+                    throw new UnsupportedFeatureException(
+                            "chained JOIN USING has no faithful T-SQL expansion",
+                            rebuilt.pos());
                 }
                 String leftName = relationName(leftRel, rebuilt.pos());
                 String rightName = relationName(rebuilt.table(), rebuilt.pos());
@@ -80,26 +70,6 @@ public final class ExpandJoinUsingForTsqlRule implements Rule {
                         List.of(), rebuilt.lateral(), rebuilt.pos()));
             }
             return new TableSource(leftRel, resultJoins, node.pos());
-        }
-
-        private static DerivedTable wrapAccumulated(
-                Relation first, List<Join> joins, String alias, SourcePosition pos) {
-            TableSource from = new TableSource(first, joins, pos);
-            QuerySpecification spec = new QuerySpecification(
-                    Optional.empty(),
-                    List.<SelectItem>of(new SelectStar(Optional.empty(), pos)),
-                    Optional.of(from),
-                    Optional.empty(),
-                    List.of(),
-                    Optional.empty(),
-                    pos);
-            Query query = new Query(
-                    List.of(), false, spec, List.of(), List.of(), Optional.empty(), pos);
-            return new DerivedTable(
-                    query,
-                    new Identifier(alias, false, pos),
-                    Optional.empty(),
-                    pos);
         }
 
         private static Expression usingEquals(

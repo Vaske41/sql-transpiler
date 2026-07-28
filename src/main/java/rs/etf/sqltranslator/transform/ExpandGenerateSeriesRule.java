@@ -7,6 +7,7 @@ import rs.etf.sqltranslator.ast.BooleanLiteral;
 import rs.etf.sqltranslator.ast.ColumnRef;
 import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.Expression;
+import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.IntervalLiteral;
 import rs.etf.sqltranslator.ast.Join;
@@ -59,11 +60,16 @@ public final class ExpandGenerateSeriesRule implements Rule {
         if (ctx.target() != Dialect.MYSQL && ctx.target() != Dialect.TSQL) {
             return script;
         }
-        return new Expander().transform(script);
+        return new Expander(ctx.target()).transform(script);
     }
 
     private static final class Expander extends AstTransformer {
 
+        private final Dialect target;
+
+        private Expander(Dialect target) {
+            this.target = target;
+        }
         @Override
         public Object visitQuery(Query node) {
             Set<String> bound = new HashSet<>();
@@ -181,6 +187,10 @@ public final class ExpandGenerateSeriesRule implements Rule {
             Expression stop = args.get(1);
             refuseIfNonIntegerBound(start, tf.pos());
             refuseIfNonIntegerBound(stop, tf.pos());
+            if (containsColumnRef(start) || containsColumnRef(stop)) {
+                throw new UnsupportedFeatureException(
+                        "table function GENERATE_SERIES (correlated bounds)", tf.pos());
+            }
 
             long stepValue = 1L;
             Expression stepExpr;
@@ -229,7 +239,7 @@ public final class ExpandGenerateSeriesRule implements Rule {
             QuerySpecification anchor = new QuerySpecification(
                     Optional.empty(),
                     List.of(new SelectExpr(start, Optional.empty(), pos)),
-                    Optional.empty(),
+                    anchorFrom(pos),
                     Optional.of(new BinaryOp(anchorCmp, start, stop, pos)),
                     List.of(),
                     Optional.empty(),
@@ -261,6 +271,35 @@ public final class ExpandGenerateSeriesRule implements Rule {
                     new QualifiedName(List.of(cteName), pos),
                     tf.alias(),
                     pos);
+        }
+
+        private Optional<TableSource> anchorFrom(SourcePosition pos) {
+            // MySQL rejects SELECT … WHERE without FROM; DUAL is the standard stand-in.
+            if (target != Dialect.MYSQL) {
+                return Optional.empty();
+            }
+            TableRef dual = new TableRef(
+                    new QualifiedName(List.of(new Identifier("DUAL", false, pos)), pos),
+                    Optional.empty(),
+                    pos);
+            return Optional.of(new TableSource(dual, List.of(), pos));
+        }
+
+        private static boolean containsColumnRef(Expression expr) {
+            if (expr instanceof ColumnRef) {
+                return true;
+            }
+            if (expr instanceof BinaryOp op) {
+                return containsColumnRef(op.left()) || containsColumnRef(op.right());
+            }
+            if (expr instanceof FunctionCall call) {
+                for (Expression arg : call.args()) {
+                    if (containsColumnRef(arg)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
 
         private static Identifier seriesColumnName(TableFunction tf, SourcePosition pos) {

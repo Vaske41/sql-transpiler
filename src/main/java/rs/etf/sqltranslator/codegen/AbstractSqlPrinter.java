@@ -1064,11 +1064,21 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             out.token("WHERE");
             where.accept(this);
         });
+        renderUpdateReturningSuffix(node.outputClause());
         return null;
     }
 
-    /** {@code RETURNING} on UPDATE — after SET, before FROM/WHERE. */
+    /**
+     * Dialect hook for early UPDATE output (T-SQL {@code OUTPUT} before FROM/WHERE).
+     * Default: no-op; PostgreSQL/MySQL emit {@code RETURNING} via
+     * {@link #renderUpdateReturningSuffix}.
+     */
     protected void renderUpdateOutputClause(Optional<OutputClause> outputClause) {
+        // T-SQL overrides; PG/MySQL print RETURNING after WHERE.
+    }
+
+    /** PostgreSQL/MySQL {@code RETURNING} on UPDATE — after WHERE. */
+    protected void renderUpdateReturningSuffix(Optional<OutputClause> outputClause) {
         renderReturningClause(outputClause);
     }
 
@@ -1098,11 +1108,21 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             out.token("WHERE");
             where.accept(this);
         });
+        renderDeleteReturningSuffix(node.outputClause());
         return null;
     }
 
-    /** {@code RETURNING} on DELETE — after table, before USING/WHERE. */
+    /**
+     * Dialect hook for early DELETE output (T-SQL {@code OUTPUT}).
+     * Default: no-op; PostgreSQL/MySQL emit {@code RETURNING} via
+     * {@link #renderDeleteReturningSuffix}.
+     */
     protected void renderDeleteOutputClause(Optional<OutputClause> outputClause) {
+        // T-SQL overrides; PG/MySQL print RETURNING after WHERE.
+    }
+
+    /** PostgreSQL/MySQL {@code RETURNING} on DELETE — after WHERE. */
+    protected void renderDeleteReturningSuffix(Optional<OutputClause> outputClause) {
         renderReturningClause(outputClause);
     }
 

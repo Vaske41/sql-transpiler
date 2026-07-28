@@ -102,8 +102,13 @@ public final class RenderSrfForTsqlRule implements Rule {
             }
 
             if (JSON_ARRAY_SRF.contains(fn) && node.args().size() == 1) {
-                // OPENJSON's default value column is unquoted text — matches *_TEXT
-                // faithfully; non-_TEXT still maps (brief) with that known semantic gap.
+                // OPENJSON's default value column is unquoted text — matches *_TEXT only.
+                if (!fn.endsWith("_TEXT")) {
+                    throw new UnsupportedFeatureException(
+                            "table function " + fn
+                                    + " (OPENJSON value shape mismatch; use *_TEXT)",
+                            node.pos());
+                }
                 return rename(node, "OPENJSON", rebuildList(node.args()));
             }
 

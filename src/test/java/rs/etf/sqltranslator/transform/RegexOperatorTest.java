@@ -9,16 +9,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RegexOperatorTest {
 
     @Test
-    void pgRegexOperatorBecomesMysqlRegexp() {
-        assertThat(CodegenTestSupport.printTranslated(
-                "SELECT * FROM t WHERE name ~ '^a'", Dialect.POSTGRESQL, Dialect.MYSQL).sql())
-                .containsIgnoringCase("REGEXP");
+    void pgRegexOperatorBecomesMysqlRegexpLikeCaseSensitive() {
+        String sql = CodegenTestSupport.printTranslated(
+                "SELECT * FROM t WHERE name ~ '^a'", Dialect.POSTGRESQL, Dialect.MYSQL).sql();
+        assertThat(sql).containsIgnoringCase("REGEXP_LIKE");
+        assertThat(sql).contains("'c'");
     }
 
     @Test
     void caseInsensitiveRegexKeepsItsFlag() {
-        assertThat(CodegenTestSupport.printTranslated(
-                "SELECT * FROM t WHERE name ~* '^a'", Dialect.POSTGRESQL, Dialect.MYSQL).sql())
-                .containsIgnoringCase("REGEXP_LIKE");
+        String sql = CodegenTestSupport.printTranslated(
+                "SELECT * FROM t WHERE name ~* '^a'", Dialect.POSTGRESQL, Dialect.MYSQL).sql();
+        assertThat(sql).containsIgnoringCase("REGEXP_LIKE");
+        assertThat(sql).contains("'i'");
     }
 }

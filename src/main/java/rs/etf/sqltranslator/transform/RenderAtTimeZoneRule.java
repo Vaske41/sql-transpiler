@@ -2,23 +2,14 @@ package rs.etf.sqltranslator.transform;
 
 import rs.etf.sqltranslator.ast.AtTimeZone;
 import rs.etf.sqltranslator.ast.AstTransformer;
-import rs.etf.sqltranslator.ast.ColumnRef;
-import rs.etf.sqltranslator.ast.Expression;
-import rs.etf.sqltranslator.ast.FunctionCall;
-import rs.etf.sqltranslator.ast.Identifier;
-import rs.etf.sqltranslator.ast.QualifiedName;
 import rs.etf.sqltranslator.ast.Script;
-import rs.etf.sqltranslator.ast.StringLiteral;
 import rs.etf.sqltranslator.core.Dialect;
 import rs.etf.sqltranslator.core.UnsupportedFeatureException;
 
-import java.util.List;
-import java.util.Optional;
-
 /**
  * Renders PostgreSQL {@code AT TIME ZONE} for non-PostgreSQL targets.
- * T-SQL prints natively; MySQL maps to {@code CONVERT_TZ} when the zone is an
- * explicit string literal.
+ * T-SQL prints natively. MySQL has no faithful form ({@code CONVERT_TZ} with
+ * {@code @@session.time_zone} is not equivalent) — refuse.
  */
 public final class RenderAtTimeZoneRule implements Rule {
 
@@ -49,24 +40,11 @@ public final class RenderAtTimeZoneRule implements Rule {
             if (ctx.target() == Dialect.TSQL) {
                 return rebuilt;
             }
-            if (ctx.target() != Dialect.MYSQL) {
-                return rebuilt;
-            }
-            if (!(rebuilt.zone() instanceof StringLiteral zoneLit)) {
+            if (ctx.target() == Dialect.MYSQL) {
                 throw new UnsupportedFeatureException(
-                        "AT TIME ZONE to MySQL requires a literal zone", rebuilt.pos());
+                        "AT TIME ZONE is not supported by MySQL", rebuilt.pos());
             }
-            Expression sessionTz = new ColumnRef(
-                    new QualifiedName(List.of(new Identifier("@@session.time_zone", false,
-                            rebuilt.pos())), rebuilt.pos()),
-                    rebuilt.pos());
-            return new FunctionCall(
-                    "CONVERT_TZ",
-                    List.of(rebuilt.value(), sessionTz, zoneLit),
-                    false,
-                    Optional.empty(),
-                    Optional.empty(),
-                    rebuilt.pos());
+            return rebuilt;
         }
     }
 }

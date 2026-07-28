@@ -58,12 +58,10 @@ public final class RewriteRegexOperatorsRule implements Rule {
 
         private Expression towardMysql(BinaryOp op) {
             return switch (op.op()) {
-                case REGEX_MATCH -> new BinaryOp(BinaryOperator.REGEX_MATCH,
-                        op.left(), op.right(), op.pos());
+                case REGEX_MATCH -> regexpLike(op, "c", op.pos());
                 case REGEX_MATCH_I -> regexpLike(op, "i", op.pos());
                 case REGEX_NOT_MATCH -> new UnaryOp(UnaryOperator.NOT,
-                        new BinaryOp(BinaryOperator.REGEX_MATCH, op.left(), op.right(), op.pos()),
-                        op.pos());
+                        regexpLike(op, "c", op.pos()), op.pos());
                 case REGEX_NOT_MATCH_I -> new UnaryOp(UnaryOperator.NOT,
                         regexpLike(op, "i", op.pos()), op.pos());
                 default -> op;

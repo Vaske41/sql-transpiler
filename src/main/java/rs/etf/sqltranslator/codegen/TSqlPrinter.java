@@ -385,11 +385,21 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
     }
 
     @Override
+    protected void renderUpdateReturningSuffix(Optional<OutputClause> outputClause) {
+        // OUTPUT already emitted before FROM/WHERE.
+    }
+
+    @Override
     protected void renderDeleteOutputClause(Optional<OutputClause> outputClause) {
         outputClause.ifPresent(clause -> {
             out.token("OUTPUT");
             csv(clause.items());
         });
+    }
+
+    @Override
+    protected void renderDeleteReturningSuffix(Optional<OutputClause> outputClause) {
+        // OUTPUT already emitted before USING/WHERE.
     }
 
     @Override

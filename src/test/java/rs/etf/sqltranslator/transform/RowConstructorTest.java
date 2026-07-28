@@ -31,11 +31,12 @@ class RowConstructorTest {
     }
 
     @Test
-    void rowInSubqueryBecomesExistsTowardTsql() {
+    void rowInSubqueryBecomesExistsTowardTsqlPreservingWhere() {
         String sql = CodegenTestSupport.printTranslated(
-                "SELECT * FROM t WHERE (a, b) IN (SELECT x, y FROM u);",
+                "SELECT * FROM t WHERE (a, b) IN (SELECT x, y FROM u WHERE u.z > 5);",
                 Dialect.POSTGRESQL, Dialect.TSQL).sql();
         assertThat(sql).containsIgnoringCase("EXISTS");
+        assertThat(sql).containsIgnoringCase("u.z > 5");
         assertThat(sql).doesNotContain("(a, b)");
     }
 

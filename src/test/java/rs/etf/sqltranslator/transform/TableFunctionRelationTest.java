@@ -61,8 +61,18 @@ class TableFunctionRelationTest {
                 "SELECT * FROM generate_series(1, 3) g;",
                 Dialect.POSTGRESQL, Dialect.MYSQL).sql();
         assertThat(sql).containsIgnoringCase("WITH RECURSIVE")
-                .containsIgnoringCase("UNION ALL");
+                .containsIgnoringCase("UNION ALL")
+                .containsIgnoringCase("FROM DUAL");
         assertThat(sql).doesNotContainIgnoringCase("generate_series");
+    }
+
+    @Test
+    void generateSeriesCorrelatedBoundsRefusedTowardMysql() {
+        assertThatThrownBy(() -> CodegenTestSupport.printTranslated(
+                "SELECT t.id, s.i FROM t, generate_series(1, t.n) AS s(i);",
+                Dialect.POSTGRESQL, Dialect.MYSQL))
+                .isInstanceOf(UnsupportedFeatureException.class)
+                .hasMessageContaining("correlated bounds");
     }
 
     @Test

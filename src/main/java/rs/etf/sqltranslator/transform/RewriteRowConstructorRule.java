@@ -13,7 +13,6 @@ import rs.etf.sqltranslator.ast.QuerySpecification;
 import rs.etf.sqltranslator.ast.QualifiedName;
 import rs.etf.sqltranslator.ast.RowConstructor;
 import rs.etf.sqltranslator.ast.RowLimit;
-import rs.etf.sqltranslator.ast.RowConstructor;
 import rs.etf.sqltranslator.ast.Script;
 import rs.etf.sqltranslator.ast.SelectExpr;
 import rs.etf.sqltranslator.ast.SelectItem;
@@ -162,6 +161,14 @@ public final class RewriteRowConstructorRule implements Rule {
         private static ExistsPredicate toExists(RowConstructor row, Query subquery,
                                                 SourcePosition pos) {
             Query inner = subquery;
+            if (!inner.orderBy().isEmpty() || inner.limit().isPresent()) {
+                throw new UnsupportedFeatureException(
+                        "row constructor IN subquery with ORDER BY or LIMIT", pos);
+            }
+            if (!inner.unionArms().isEmpty()) {
+                throw new UnsupportedFeatureException(
+                        "row constructor IN subquery with set operations", pos);
+            }
             QuerySpecification spec = inner.first();
             if (spec.items().size() != row.elements().size()) {
                 throw new UnsupportedFeatureException(
@@ -178,6 +185,9 @@ public final class RewriteRowConstructorRule implements Rule {
                         row.elements().get(i), pos);
                 where = where == null ? eq : new BinaryOp(BinaryOperator.AND, where, eq, pos);
             }
+            if (spec.where().isPresent()) {
+                where = new BinaryOp(BinaryOperator.AND, spec.where().get(), where, pos);
+            }
             List<SelectItem> existsItems = List.of(new SelectExpr(
                     new NumericLiteral("1", false, pos), Optional.empty(), pos));
             QuerySpecification existsSpec = new QuerySpecification(
@@ -192,7 +202,7 @@ public final class RewriteRowConstructorRule implements Rule {
                     pos);
             Query existsQuery = new Query(
                     inner.ctes(), inner.recursive(), existsSpec,
-                    inner.unionArms(), List.of(), Optional.empty(), pos);
+                    List.of(), List.of(), Optional.empty(), pos);
             return new ExistsPredicate(existsQuery, pos);
         }
     }
