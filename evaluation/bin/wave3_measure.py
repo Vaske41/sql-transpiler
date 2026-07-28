@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-BASELINE = {"SUCCESS": 966, "PARSE": 309, "REFUSED": 151}
+BASELINE = {"SUCCESS": 1074, "PARSE": 243, "REFUSED": 109}
 COHORT = 1426
 TARGET = math.ceil(0.85 * COHORT)          # 1213
 JAR = ROOT / "target" / "sqltranslate.jar"

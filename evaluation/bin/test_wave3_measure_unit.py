@@ -2,7 +2,7 @@ from wave3_measure import BASELINE, TARGET, COHORT, classify
 
 def test_pins_are_the_measured_baseline():
     assert COHORT == 1426
-    assert BASELINE == {"SUCCESS": 966, "PARSE": 309, "REFUSED": 151}
+    assert BASELINE == {"SUCCESS": 1074, "PARSE": 243, "REFUSED": 109}
     assert TARGET == 1213  # ceil(0.85 * 1426)
 
 def test_classify_maps_exit_codes():
