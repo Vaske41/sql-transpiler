@@ -22,12 +22,12 @@ import java.util.Optional;
 /**
  * INTERVAL handling for targets that lack native interval literals.
  * <ul>
- *   <li>Toward T-SQL: {@code date ± INTERVAL n unit} → {@code DATEADD(unit, ±n, date)}.
- *       Residuals (standalone / compound / non-additive) are refused here — not in
- *       {@link ValidateTargetCapabilitiesRule} (§2.4).</li>
+ *   <li>Toward T-SQL: {@code date ± INTERVAL n unit} and {@code DATE_ADD}/{@code DATE_SUB}
+ *       → {@code DATEADD(unit, ±n, date)}. Residuals (standalone / compound / non-additive)
+ *       are refused here — not in {@link ValidateTargetCapabilitiesRule} (§2.4).</li>
+ *   <li>Toward PostgreSQL: {@code DATE_ADD}/{@code DATE_SUB} → {@code date ± interval}.</li>
  *   <li>Toward MySQL: compound intervals (no extractable unit) are refused; simple
  *       forms render natively via the MySQL printer.</li>
- *   <li>Toward PostgreSQL: no-op (native).</li>
  * </ul>
  */
 public final class RewriteIntervalArithmeticRule implements Rule {
@@ -62,20 +62,64 @@ public final class RewriteIntervalArithmeticRule implements Rule {
         }
 
         @Override
+        public Object visitFunctionCall(FunctionCall node) {
+            Expression rewritten = tryDateAddFunction(node);
+            if (rewritten != null) {
+                return rewritten;
+            }
+            return super.visitFunctionCall(node);
+        }
+
+        @Override
         public Object visitIntervalLiteral(IntervalLiteral node) {
             if (ctx.target() == Dialect.POSTGRESQL) {
-                return node;
+                return super.visitIntervalLiteral(node);
             }
-            if (node.unit().isEmpty()) {
+            IntervalLiteral rebuilt = (IntervalLiteral) super.visitIntervalLiteral(node);
+            if (rebuilt.unit().isEmpty()) {
                 throw new UnsupportedFeatureException(
-                        "compound INTERVAL literal", node.pos());
+                        "compound INTERVAL literal", rebuilt.pos());
             }
             if (ctx.target() == Dialect.TSQL) {
                 // Residual: not consumed by date ± INTERVAL → DATEADD above.
                 throw new UnsupportedFeatureException(
-                        "INTERVAL literal (not in additive date context)", node.pos());
+                        "INTERVAL literal (not in additive date context)", rebuilt.pos());
             }
-            return node; // MySQL: native render
+            return rebuilt; // MySQL: native render
+        }
+
+        /**
+         * {@code DATE_ADD}/{@code DATE_SUB}/{@code ADDDATE}/{@code SUBDATE}(date, INTERVAL).
+         * Intercepted before children so T-SQL does not refuse the nested interval.
+         */
+        private Expression tryDateAddFunction(FunctionCall node) {
+            if (node.star() || node.args().size() != 2) {
+                return null;
+            }
+            if (!(node.args().get(1) instanceof IntervalLiteral interval)
+                    || interval.unit().isEmpty()) {
+                return null;
+            }
+            String name = node.name().toUpperCase(Locale.ROOT);
+            int sign = switch (name) {
+                case "DATE_ADD", "ADDDATE" -> 1;
+                case "DATE_SUB", "SUBDATE" -> -1;
+                default -> 0;
+            };
+            if (sign == 0) {
+                return null;
+            }
+            Expression date = rebuild(node.args().get(0));
+            IntervalLiteral rebuiltInterval = new IntervalLiteral(
+                    rebuild(interval.value()), interval.unit(), interval.pos());
+            if (ctx.target() == Dialect.TSQL) {
+                return dateAdd(rebuiltInterval, sign, date, node.pos());
+            }
+            if (ctx.target() == Dialect.POSTGRESQL) {
+                BinaryOperator op = sign < 0 ? BinaryOperator.SUB : BinaryOperator.ADD;
+                return new BinaryOp(op, date, rebuiltInterval, node.pos());
+            }
+            return null; // MySQL keeps DATE_ADD / DATE_SUB
         }
 
         /**
@@ -90,14 +134,18 @@ public final class RewriteIntervalArithmeticRule implements Rule {
             }
             if (node.right() instanceof IntervalLiteral interval && interval.unit().isPresent()) {
                 Expression date = rebuild(node.left());
+                IntervalLiteral rebuilt = new IntervalLiteral(
+                        rebuild(interval.value()), interval.unit(), interval.pos());
                 int sign = op == BinaryOperator.SUB ? -1 : 1;
-                return dateAdd(interval, sign, date, node.pos());
+                return dateAdd(rebuilt, sign, date, node.pos());
             }
             if (op == BinaryOperator.ADD
                     && node.left() instanceof IntervalLiteral interval
                     && interval.unit().isPresent()) {
                 Expression date = rebuild(node.right());
-                return dateAdd(interval, 1, date, node.pos());
+                IntervalLiteral rebuilt = new IntervalLiteral(
+                        rebuild(interval.value()), interval.unit(), interval.pos());
+                return dateAdd(rebuilt, 1, date, node.pos());
             }
             return null;
         }
@@ -105,13 +153,21 @@ public final class RewriteIntervalArithmeticRule implements Rule {
         private static FunctionCall dateAdd(IntervalLiteral interval, int sign,
                                             Expression date, SourcePosition pos) {
             String unit = interval.unit().orElseThrow();
-            String magnitude = interval.raw().trim();
-            String signed = sign < 0
-                    ? (magnitude.startsWith("-") ? magnitude.substring(1) : "-" + magnitude)
-                    : magnitude;
+            Expression amount = interval.value();
+            if (sign < 0) {
+                if (amount instanceof NumericLiteral num) {
+                    String magnitude = num.text().trim();
+                    String signed = magnitude.startsWith("-")
+                            ? magnitude.substring(1)
+                            : "-" + magnitude;
+                    amount = new NumericLiteral(signed, signed.contains("."), pos);
+                } else {
+                    amount = new BinaryOp(BinaryOperator.MUL, amount,
+                            new NumericLiteral("-1", false, pos), pos);
+                }
+            }
             Identifier unitId = new Identifier(unit.toLowerCase(Locale.ROOT), false, pos);
             ColumnRef unitRef = new ColumnRef(new QualifiedName(List.of(unitId), pos), pos);
-            NumericLiteral amount = new NumericLiteral(signed, signed.contains("."), pos);
             return new FunctionCall("DATEADD", List.of(unitRef, amount, date),
                     false, Optional.empty(), Optional.empty(), pos);
         }

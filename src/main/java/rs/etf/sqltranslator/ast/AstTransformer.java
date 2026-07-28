@@ -452,7 +452,11 @@ public class AstTransformer implements AstVisitor<Object> {
 
     @Override
     public Object visitIntervalLiteral(IntervalLiteral node) {
-        return node;
+        Expression value = rebuild(node.value());
+        if (value == node.value()) {
+            return node;
+        }
+        return new IntervalLiteral(value, node.unit(), node.pos());
     }
 
     @Override

@@ -518,32 +518,29 @@ final class AstBuilderSupport {
     IntervalLiteral intervalFromString(String content, Optional<String> explicitUnit,
                                        SourcePosition position) {
         if (explicitUnit.isPresent()) {
-            return new IntervalLiteral(content.trim(),
+            return new IntervalLiteral(new StringLiteral(content.trim(), false, position),
                     Optional.of(normalizeIntervalUnit(explicitUnit.get())), position);
         }
         java.util.regex.Matcher m = SIMPLE_INTERVAL.matcher(content.trim());
         if (m.matches()) {
-            return new IntervalLiteral(m.group(1),
+            String magnitude = m.group(1);
+            Expression value = magnitude.contains(".")
+                    ? new NumericLiteral(magnitude, true, position)
+                    : new NumericLiteral(magnitude, false, position);
+            return new IntervalLiteral(value,
                     Optional.of(normalizeIntervalUnit(m.group(2))), position);
         }
-        return new IntervalLiteral(content, Optional.empty(), position);
+        return new IntervalLiteral(new StringLiteral(content, false, position),
+                Optional.empty(), position);
     }
 
     /**
      * Builds an {@link IntervalLiteral} from MySQL-style {@code INTERVAL expr unit}.
-     * Non-literal values are refused — the AST carries only a string value.
+     * Value may be any expression (computed intervals).
      */
     IntervalLiteral intervalFromExpression(Expression value, String unit,
                                            SourcePosition position) {
-        if (value instanceof NumericLiteral num) {
-            return new IntervalLiteral(num.text(),
-                    Optional.of(normalizeIntervalUnit(unit)), position);
-        }
-        if (value instanceof StringLiteral str) {
-            return new IntervalLiteral(str.value(),
-                    Optional.of(normalizeIntervalUnit(unit)), position);
-        }
-        throw refuse("INTERVAL with non-literal value", position);
+        return new IntervalLiteral(value, Optional.of(normalizeIntervalUnit(unit)), position);
     }
 
     private static final java.util.regex.Pattern SIMPLE_INTERVAL =

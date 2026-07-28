@@ -132,14 +132,41 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     /**
      * Dialect-native INTERVAL rendering. T-SQL overrides with a contract guard —
      * additive intervals must become {@code DATEADD} before print.
+     * PostgreSQL: literal → {@code INTERVAL 'n unit'}; computed →
+     * {@code (value || ' unit')::interval}.
      */
     protected void renderIntervalLiteral(IntervalLiteral node) {
-        out.token("INTERVAL");
-        if (node.unit().isPresent()) {
-            out.token("'" + node.raw() + " " + node.unit().get() + "'");
-        } else {
-            out.token("'" + node.raw().replace("'", "''") + "'");
+        if (node.unit().isEmpty()) {
+            out.token("INTERVAL");
+            Expression value = node.value();
+            if (value instanceof StringLiteral str) {
+                out.token("'" + str.value().replace("'", "''") + "'");
+            } else if (value instanceof NumericLiteral num) {
+                out.token("'" + num.text() + "'");
+            } else {
+                out.raw("(");
+                value.accept(this);
+                out.raw(")::interval");
+            }
+            return;
         }
+        String unit = node.unit().get();
+        Expression value = node.value();
+        if (value instanceof NumericLiteral num) {
+            out.token("INTERVAL");
+            out.token("'" + num.text() + " " + unit + "'");
+            return;
+        }
+        if (value instanceof StringLiteral str) {
+            out.token("INTERVAL");
+            out.token("'" + str.value().replace("'", "''") + " " + unit + "'");
+            return;
+        }
+        out.raw("(");
+        value.accept(this);
+        out.token("||");
+        out.token("' " + unit + "'");
+        out.raw(")::interval");
     }
 
     // --- operators, precedence-driven minimal parentheses ---

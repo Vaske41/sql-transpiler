@@ -4,8 +4,10 @@ import rs.etf.sqltranslator.ast.BinaryOp;
 import rs.etf.sqltranslator.ast.BinaryOperator;
 import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.DataType;
+import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.IntervalLiteral;
 import rs.etf.sqltranslator.ast.NullsOrder;
+import rs.etf.sqltranslator.ast.NumericLiteral;
 import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.StringLiteral;
 
@@ -72,11 +74,20 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
                     "rule engine contract: compound INTERVAL must be refused before MySQL print");
         }
         out.token("INTERVAL");
-        String raw = node.raw();
-        if (raw.matches("-?\\d+(\\.\\d+)?")) {
-            out.token(raw);
+        Expression value = node.value();
+        if (value instanceof NumericLiteral num) {
+            out.token(num.text());
+        } else if (value instanceof StringLiteral str) {
+            String raw = str.value();
+            if (raw.matches("-?\\d+(\\.\\d+)?")) {
+                out.token(raw);
+            } else {
+                out.token("'" + raw.replace("\\", "\\\\").replace("'", "''") + "'");
+            }
         } else {
-            out.token("'" + raw.replace("\\", "\\\\").replace("'", "''") + "'");
+            out.raw("(");
+            value.accept(this);
+            out.raw(")");
         }
         out.token(node.unit().get().toUpperCase(java.util.Locale.ROOT));
     }
