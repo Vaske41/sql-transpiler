@@ -53,12 +53,12 @@ class RewriteDistinctOnRuleTest {
     }
 
     @Test
-    void distinctOnWithoutOrderByRefusedTowardMysql() {
-        assertThatThrownBy(() -> CodegenTestSupport.printTranslated(
+    void distinctOnWithoutOrderByRewritesTowardMysql() {
+        String sql = CodegenTestSupport.printTranslated(
                 "SELECT DISTINCT ON (account_id) trans_id, account_id FROM trans;",
-                Dialect.POSTGRESQL, Dialect.MYSQL))
-                .isInstanceOf(UnsupportedFeatureException.class)
-                .hasMessageContaining("DISTINCT ON without ORDER BY");
+                Dialect.POSTGRESQL, Dialect.MYSQL).sql();
+        assertThat(sql).containsIgnoringCase("ROW_NUMBER()");
+        assertThat(sql).doesNotContainIgnoringCase("DISTINCT ON");
     }
 
     @Test

@@ -98,7 +98,7 @@ class CliRunnerTest {
         StringWriter err = new StringWriter();
         int code = CliRunner.run(
                 inline(Dialect.POSTGRESQL, Dialect.MYSQL,
-                        "SELECT u.id FROM users u FULL OUTER JOIN archived a ON a.id = u.id;"),
+                        "SELECT n FROM t GROUP BY GROUPING SETS ((a), (b));"),
                 new StringReader(""), out, err);
         assertThat(code).isEqualTo(CliExitCode.UNSUPPORTED);
         assertThat(out.toString()).isEmpty();

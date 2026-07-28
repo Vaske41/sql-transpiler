@@ -1,5 +1,7 @@
 package rs.etf.sqltranslator.ast;
 
+import java.util.List;
+
 /**
  * Walk-only visitor base with {@code null}/no-op defaults for every node type.
  * Analysis scanners (e.g. {@code CatalogBuilder}) subclass this and override only
@@ -75,7 +77,18 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
         for (Expression group : node.groupBy()) {
             group.accept(this);
         }
+        node.groupByModifier().ifPresent(mod -> mod.accept(this));
         node.having().ifPresent(having -> having.accept(this));
+        return defaultResult();
+    }
+
+    @Override
+    public R visitGroupByModifier(GroupByModifier node) {
+        for (List<Expression> set : node.sets()) {
+            for (Expression expr : set) {
+                expr.accept(this);
+            }
+        }
         return defaultResult();
     }
 

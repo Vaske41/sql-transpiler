@@ -14,12 +14,11 @@ class ValidateTargetCapabilitiesRuleTest {
     private final Rule rule = new ValidateTargetCapabilitiesRule();
 
     @Test
-    void fullJoinToMySqlIsRefused() {
-        assertThatThrownBy(() -> runRule(rule,
+    void fullJoinToMySqlPassesValidatorAlone() {
+        assertThatCode(() -> runRule(rule,
                 "SELECT * FROM a FULL OUTER JOIN b ON a.x = b.x;",
                 Dialect.POSTGRESQL, Dialect.MYSQL))
-                .isInstanceOf(UnsupportedFeatureException.class)
-                .hasMessageContaining("FULL JOIN");
+                .doesNotThrowAnyException();
     }
 
     @Test

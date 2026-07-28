@@ -62,6 +62,13 @@ public final class AstDumper implements AstVisitor<String> {
     }
 
     @Override
+    public String visitGroupByModifier(GroupByModifier node) {
+        return node("GroupByModifier kind=" + node.kind())
+                .children("sets", node.sets().stream().flatMap(List::stream).toList())
+                .done();
+    }
+
+    @Override
     public String visitQuerySpecification(QuerySpecification node) {
         return node("QuerySpecification" + optional("quantifier", node.quantifier()))
                 .children("distinctOn", node.distinctOn())
@@ -69,6 +76,7 @@ public final class AstDumper implements AstVisitor<String> {
                 .child("from", node.from())
                 .child("where", node.where())
                 .children("groupBy", node.groupBy())
+                .child("groupByModifier", node.groupByModifier())
                 .child("having", node.having())
                 .done();
     }

@@ -15,11 +15,15 @@ import rs.etf.sqltranslator.ast.FrameBound;
 import rs.etf.sqltranslator.ast.FrameBoundKind;
 import rs.etf.sqltranslator.ast.FrameMode;
 import rs.etf.sqltranslator.ast.FunctionCall;
+import rs.etf.sqltranslator.ast.GroupByKind;
+import rs.etf.sqltranslator.ast.GroupByModifier;
 import rs.etf.sqltranslator.ast.IndexColumn;
 import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.JoinKind;
 import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.QuerySpecification;
+import rs.etf.sqltranslator.ast.AtTimeZone;
+import rs.etf.sqltranslator.ast.RowConstructor;
 import rs.etf.sqltranslator.ast.RowLimit;
 import rs.etf.sqltranslator.ast.Script;
 import rs.etf.sqltranslator.ast.SelectExpr;
@@ -102,12 +106,6 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
 
         @Override
         public Object visitAssignment(Assignment node) {
-            if (node.columns().size() > 1
-                    && (ctx.target() == Dialect.MYSQL || ctx.target() == Dialect.TSQL)) {
-                throw new UnsupportedFeatureException(
-                        "multi-column SET assignment is not supported by " + ctx.target(),
-                        node.pos());
-            }
             return super.visitAssignment(node);
         }
 
@@ -143,10 +141,6 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
 
         @Override
         public Object visitDeleteStatement(DeleteStatement node) {
-            if (ctx.target() == Dialect.TSQL && node.usingClause().isPresent()) {
-                throw new UnsupportedFeatureException(
-                        "DELETE USING is not supported by T-SQL", node.pos());
-            }
             return super.visitDeleteStatement(node);
         }
 
@@ -163,10 +157,6 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
 
         @Override
         public Object visitJoin(Join node) {
-            if (node.kind() == JoinKind.FULL && ctx.target() == Dialect.MYSQL) {
-                throw new UnsupportedFeatureException(
-                        "FULL JOIN is not supported by MySQL", node.pos());
-            }
             if (node.lateral() && ctx.target() == Dialect.TSQL
                     && !isTsqlApplyShape(node)) {
                 throw new UnsupportedFeatureException(
@@ -176,11 +166,7 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
         }
 
         @Override
-        public Object visitRowConstructor(rs.etf.sqltranslator.ast.RowConstructor node) {
-            if (ctx.target() == Dialect.TSQL) {
-                throw new UnsupportedFeatureException(
-                        "row constructor is not supported by T-SQL", node.pos());
-            }
+        public Object visitRowConstructor(RowConstructor node) {
             return super.visitRowConstructor(node);
         }
 
@@ -194,11 +180,7 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
         }
 
         @Override
-        public Object visitAtTimeZone(rs.etf.sqltranslator.ast.AtTimeZone node) {
-            if (ctx.target() != Dialect.POSTGRESQL) {
-                throw new UnsupportedFeatureException(
-                        "AT TIME ZONE is not supported by " + ctx.target(), node.pos());
-            }
+        public Object visitAtTimeZone(AtTimeZone node) {
             return super.visitAtTimeZone(node);
         }
 
@@ -252,8 +234,19 @@ public final class ValidateTargetCapabilitiesRule implements Rule {
 
         @Override
         public Object visitQuerySpecification(QuerySpecification node) {
+            node.groupByModifier().ifPresent(mod -> refuseGroupByModifier(mod));
             warnLooseGroupBy(node);
             return super.visitQuerySpecification(node);
+        }
+
+        private void refuseGroupByModifier(GroupByModifier mod) {
+            if (ctx.target() != Dialect.MYSQL) {
+                return;
+            }
+            if (mod.kind() == GroupByKind.CUBE || mod.kind() == GroupByKind.GROUPING_SETS) {
+                throw new UnsupportedFeatureException(
+                        mod.kind() + " is not supported by MySQL", mod.pos());
+            }
         }
 
         private void warnLooseGroupBy(QuerySpecification spec) {

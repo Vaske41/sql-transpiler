@@ -79,7 +79,7 @@ public final class RewriteBooleanSemanticsRule implements Rule {
                             j.on().map(this::bool), j.usingColumns(), j.lateral(), j.pos())).toList(),
                     f.pos()));
             return new QuerySpecification(spec.quantifier(), spec.distinctOn(), spec.items(), from,
-                    spec.where().map(this::bool), spec.groupBy(),
+                    spec.where().map(this::bool), spec.groupBy(), spec.groupByModifier(),
                     spec.having().map(this::bool), spec.pos());
         }
 
@@ -265,7 +265,7 @@ public final class RewriteBooleanSemanticsRule implements Rule {
             }
             return new QuerySpecification(spec.quantifier(), spec.distinctOn(), items,
                     spec.from(), spec.where(),
-                    spec.groupBy(), spec.having(), spec.pos());
+                    spec.groupBy(), spec.groupByModifier(), spec.having(), spec.pos());
         }
 
         private List<Expression> harmonizeRow(List<Expression> row,

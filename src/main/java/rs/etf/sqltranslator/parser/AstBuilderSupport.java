@@ -21,6 +21,8 @@ import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.ExtractExpression;
 import rs.etf.sqltranslator.ast.FixedLength;
 import rs.etf.sqltranslator.ast.ForeignKeyRef;
+import rs.etf.sqltranslator.ast.GroupByKind;
+import rs.etf.sqltranslator.ast.GroupByModifier;
 import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.GenericType;
 import rs.etf.sqltranslator.ast.Identifier;
@@ -1327,5 +1329,24 @@ final class AstBuilderSupport {
                     Map.entry("SIGNED", Fold.of(GenericType.BIGINT)),
                     Map.entry("UNSIGNED", Fold.of(GenericType.DECIMAL)));
         };
+    }
+
+    record GroupByParts(List<Expression> columns, Optional<GroupByModifier> modifier) {
+    }
+
+    GroupByParts plainGroupBy(List<Expression> columns) {
+        return new GroupByParts(columns, Optional.empty());
+    }
+
+    GroupByParts rollupGroupBy(List<Expression> columns, SourcePosition pos) {
+        return new GroupByParts(columns, Optional.of(GroupByModifier.rollup(pos)));
+    }
+
+    GroupByParts cubeGroupBy(List<Expression> columns, SourcePosition pos) {
+        return new GroupByParts(columns, Optional.of(GroupByModifier.cube(pos)));
+    }
+
+    GroupByParts groupingSetsGroupBy(List<List<Expression>> sets, SourcePosition pos) {
+        return new GroupByParts(List.of(), Optional.of(GroupByModifier.groupingSets(sets, pos)));
     }
 }

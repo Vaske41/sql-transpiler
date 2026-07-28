@@ -729,9 +729,8 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             out.token("WHERE");
             where.accept(this);
         });
-        if (!spec.groupBy().isEmpty()) {
-            out.token("GROUP BY");
-            csv(spec.groupBy());
+        if (!spec.groupBy().isEmpty() || spec.groupByModifier().isPresent()) {
+            renderGroupBy(spec);
         }
         spec.having().ifPresent(having -> {
             out.token("HAVING");
@@ -741,6 +740,42 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
 
     /** Hook between SELECT [DISTINCT] and the item list. T-SQL emits TOP here. */
     protected void selectModifiers(QuerySpecification spec, Query owner) {
+    }
+
+    protected void renderGroupBy(QuerySpecification spec) {
+        out.token("GROUP BY");
+        spec.groupByModifier().ifPresentOrElse(mod -> {
+            switch (mod.kind()) {
+                case PLAIN -> csv(spec.groupBy());
+                case ROLLUP -> {
+                    out.token("ROLLUP").raw("(");
+                    csv(spec.groupBy());
+                    out.raw(")");
+                }
+                case CUBE -> {
+                    out.token("CUBE").raw("(");
+                    csv(spec.groupBy());
+                    out.raw(")");
+                }
+                case GROUPING_SETS -> {
+                    out.token("GROUPING").token("SETS").raw("(");
+                    for (int i = 0; i < mod.sets().size(); i++) {
+                        if (i > 0) {
+                            out.raw(",");
+                        }
+                        List<Expression> set = mod.sets().get(i);
+                        if (set.size() > 1) {
+                            out.raw("(");
+                            csv(set);
+                            out.raw(")");
+                        } else {
+                            set.get(0).accept(this);
+                        }
+                    }
+                    out.raw(")");
+                }
+            }
+        }, () -> csv(spec.groupBy()));
     }
 
     /** Trailing row limit. Base shape: LIMIT n [OFFSET m] / bare OFFSET (PG). */
@@ -879,6 +914,12 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         csv(node.values());
         out.raw(")");
         return null;
+    }
+
+    @Override
+    public Void visitGroupByModifier(GroupByModifier node) {
+        throw new IllegalStateException(
+                "rule engine contract: GROUP BY modifier renders via renderGroupBy");
     }
 
     @Override

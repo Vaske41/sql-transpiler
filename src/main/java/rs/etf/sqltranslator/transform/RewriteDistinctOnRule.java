@@ -9,6 +9,7 @@ import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.FunctionCall;
 import rs.etf.sqltranslator.ast.Identifier;
 import rs.etf.sqltranslator.ast.NumericLiteral;
+import rs.etf.sqltranslator.ast.NullLiteral;
 import rs.etf.sqltranslator.ast.OrderItem;
 import rs.etf.sqltranslator.ast.QualifiedName;
 import rs.etf.sqltranslator.ast.Query;
@@ -17,6 +18,8 @@ import rs.etf.sqltranslator.ast.Script;
 import rs.etf.sqltranslator.ast.SelectExpr;
 import rs.etf.sqltranslator.ast.SelectItem;
 import rs.etf.sqltranslator.ast.SelectStar;
+import rs.etf.sqltranslator.ast.SortDirection;
+import rs.etf.sqltranslator.ast.SubqueryExpression;
 import rs.etf.sqltranslator.ast.TableSource;
 import rs.etf.sqltranslator.ast.WindowSpec;
 import rs.etf.sqltranslator.core.Dialect;
@@ -30,8 +33,9 @@ import java.util.Optional;
 /**
  * Rewrite PostgreSQL {@code SELECT DISTINCT ON (k) … ORDER BY k, s} for MySQL / T-SQL as
  * {@code SELECT cols FROM (SELECT cols, ROW_NUMBER() OVER (PARTITION BY k ORDER BY s) AS _rn
- * FROM …) _t WHERE _rn = 1}. Refuse {@code DISTINCT ON} without {@code ORDER BY} (no faithful
- * single-row pick) and {@code DISTINCT ON} with {@code SELECT *} (outer star would leak
+ * FROM …) _t WHERE _rn = 1}. Without {@code ORDER BY}, uses an arbitrary
+ * {@code ORDER BY (SELECT NULL)} — equally non-deterministic as PostgreSQL. Refuse
+ * {@code DISTINCT ON} with {@code SELECT *} (outer star would leak
  * {@code _rn}; expansion needs a catalog). Leave native {@code DISTINCT ON} when the target
  * is PostgreSQL.
  */
@@ -68,8 +72,7 @@ public final class RewriteDistinctOnRule implements Rule {
                 return rebuilt;
             }
             if (rebuilt.orderBy().isEmpty()) {
-                throw new UnsupportedFeatureException(
-                        "DISTINCT ON without ORDER BY", rebuilt.first().pos());
+                return rewriteWithoutOrder(rebuilt);
             }
             if (containsSelectStar(rebuilt.first().items())) {
                 // Outer SELECT * over the wrap would project _rn. Expansion needs a
@@ -78,6 +81,26 @@ public final class RewriteDistinctOnRule implements Rule {
                         "DISTINCT ON with SELECT *", rebuilt.first().pos());
             }
             return rewrite(rebuilt);
+        }
+
+        private Query rewriteWithoutOrder(Query query) {
+            QuerySpecification spec = query.first();
+            SourcePosition pos = spec.pos();
+            SubqueryExpression arbitraryOrder = new SubqueryExpression(
+                    new Query(List.of(), false,
+                            new QuerySpecification(
+                                    Optional.empty(), List.of(),
+                                    List.of(new SelectExpr(new NullLiteral(pos), Optional.empty(), pos)),
+                                    Optional.empty(), Optional.empty(), List.of(), Optional.empty(),
+                                    Optional.empty(), pos),
+                            List.of(), List.of(), Optional.empty(), pos),
+                    pos);
+            List<OrderItem> syntheticOrder = List.of(new OrderItem(
+                    arbitraryOrder, SortDirection.ASC, Optional.empty(), pos));
+            Query withOrder = new Query(
+                    query.ctes(), query.recursive(), spec, query.unionArms(),
+                    syntheticOrder, query.limit(), query.pos());
+            return rewrite(withOrder);
         }
 
         private static boolean containsSelectStar(List<SelectItem> items) {
@@ -109,6 +132,7 @@ public final class RewriteDistinctOnRule implements Rule {
                     spec.from(),
                     spec.where(),
                     spec.groupBy(),
+                    Optional.empty(),
                     spec.having(),
                     pos);
             Query innerQuery = new Query(
@@ -136,6 +160,7 @@ public final class RewriteDistinctOnRule implements Rule {
                     Optional.of(new TableSource(derived, List.of(), pos)),
                     Optional.of(rnEqOne),
                     List.of(),
+                    Optional.empty(),
                     Optional.empty(),
                     pos);
 

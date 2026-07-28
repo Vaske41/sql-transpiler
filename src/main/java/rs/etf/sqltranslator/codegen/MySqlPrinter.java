@@ -7,7 +7,9 @@ import rs.etf.sqltranslator.ast.ColumnRef;
 import rs.etf.sqltranslator.ast.Cte;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.Expression;
+import rs.etf.sqltranslator.ast.GroupByKind;
 import rs.etf.sqltranslator.ast.IndexColumn;
+import rs.etf.sqltranslator.ast.QuerySpecification;
 import rs.etf.sqltranslator.ast.IntervalLiteral;
 import rs.etf.sqltranslator.ast.NullsOrder;
 import rs.etf.sqltranslator.ast.NumericLiteral;
@@ -245,5 +247,26 @@ public final class MySqlPrinter extends AbstractSqlPrinter {
                 out.token("STORED");
             }
         });
+    }
+
+    @Override
+    public Void visitColumnRef(ColumnRef node) {
+        if (node.name().parts().size() == 1
+                && node.name().last().value().startsWith("@@")) {
+            out.token(node.name().last().value());
+            return null;
+        }
+        return super.visitColumnRef(node);
+    }
+
+    @Override
+    protected void renderGroupBy(QuerySpecification spec) {
+        if (spec.groupByModifier().map(m -> m.kind() == GroupByKind.ROLLUP).orElse(false)) {
+            out.token("GROUP BY");
+            csv(spec.groupBy());
+            out.token("WITH ROLLUP");
+            return;
+        }
+        super.renderGroupBy(spec);
     }
 }

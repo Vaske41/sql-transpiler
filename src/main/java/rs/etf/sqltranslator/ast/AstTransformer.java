@@ -79,7 +79,16 @@ public class AstTransformer implements AstVisitor<Object> {
         return new QuerySpecification(node.quantifier(), rebuildList(node.distinctOn()),
                 rebuildList(node.items()),
                 rebuildOptional(node.from()), rebuildOptional(node.where()),
-                rebuildList(node.groupBy()), rebuildOptional(node.having()), node.pos());
+                rebuildList(node.groupBy()), rebuildOptional(node.groupByModifier()),
+                rebuildOptional(node.having()), node.pos());
+    }
+
+    @Override
+    public Object visitGroupByModifier(GroupByModifier node) {
+        List<List<Expression>> sets = node.sets().stream()
+                .map(this::rebuildList)
+                .toList();
+        return new GroupByModifier(node.kind(), sets, node.pos());
     }
 
     @Override

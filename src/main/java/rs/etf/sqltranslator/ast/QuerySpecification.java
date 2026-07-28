@@ -14,21 +14,30 @@ public record QuerySpecification(Optional<SetQuantifier> quantifier,
                                  List<Expression> distinctOn,
                                  List<SelectItem> items,
                                  Optional<TableSource> from, Optional<Expression> where,
-                                 List<Expression> groupBy, Optional<Expression> having,
-                                 SourcePosition pos) implements AstNode {
+                                 List<Expression> groupBy, Optional<GroupByModifier> groupByModifier,
+                                 Optional<Expression> having, SourcePosition pos) implements AstNode {
 
     public QuerySpecification {
         distinctOn = List.copyOf(distinctOn);
         items = List.copyOf(items);
         groupBy = List.copyOf(groupBy);
+        groupByModifier = groupByModifier != null ? groupByModifier : Optional.empty();
+    }
+
+    /** Convenience constructor — no {@code DISTINCT ON}, no extended GROUP BY. */
+    public QuerySpecification(Optional<SetQuantifier> quantifier, List<SelectItem> items,
+                              Optional<TableSource> from, Optional<Expression> where,
+                              List<Expression> groupBy, Optional<Expression> having,
+                              SourcePosition pos) {
+        this(quantifier, List.of(), items, from, where, groupBy, Optional.empty(), having, pos);
     }
 
     /** Convenience constructor — no {@code DISTINCT ON}. */
     public QuerySpecification(Optional<SetQuantifier> quantifier, List<SelectItem> items,
                               Optional<TableSource> from, Optional<Expression> where,
-                              List<Expression> groupBy, Optional<Expression> having,
-                              SourcePosition pos) {
-        this(quantifier, List.of(), items, from, where, groupBy, having, pos);
+                              List<Expression> groupBy, Optional<GroupByModifier> groupByModifier,
+                              Optional<Expression> having, SourcePosition pos) {
+        this(quantifier, List.of(), items, from, where, groupBy, groupByModifier, having, pos);
     }
 
     @Override

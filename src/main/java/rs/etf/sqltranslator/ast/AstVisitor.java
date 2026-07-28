@@ -20,6 +20,8 @@ public interface AstVisitor<R> {
 
     R visitQuerySpecification(QuerySpecification node);
 
+    R visitGroupByModifier(GroupByModifier node);
+
     R visitRowLimit(RowLimit node);
 
     R visitOrderItem(OrderItem node);

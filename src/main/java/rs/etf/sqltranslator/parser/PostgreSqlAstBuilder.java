@@ -32,6 +32,7 @@ import rs.etf.sqltranslator.ast.ExistsPredicate;
 import rs.etf.sqltranslator.ast.Expression;
 import rs.etf.sqltranslator.ast.ForeignKeyConstraint;
 import rs.etf.sqltranslator.ast.ForeignKeyRef;
+import rs.etf.sqltranslator.ast.GroupByModifier;
 import rs.etf.sqltranslator.ast.FrameBound;
 import rs.etf.sqltranslator.ast.FrameBoundKind;
 import rs.etf.sqltranslator.ast.FrameMode;
@@ -217,15 +218,46 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
                 ? Optional.empty() : Optional.of((TableSource) visit(ctx.tableSource()));
         Optional<Expression> where = ctx.whereClause() == null
                 ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
-        List<Expression> groupBy = ctx.groupByClause() == null
-                ? List.of()
-                : ctx.groupByClause().expression().stream().map(this::expr).toList();
+        List<Expression> groupBy = List.of();
+        Optional<GroupByModifier> groupByModifier = Optional.empty();
+        if (ctx.groupByClause() != null) {
+            AstBuilderSupport.GroupByParts parts =
+                    (AstBuilderSupport.GroupByParts) visit(ctx.groupByClause());
+            groupBy = parts.columns();
+            groupByModifier = parts.modifier();
+        }
         Optional<Expression> having = ctx.havingClause() == null
                 ? Optional.empty() : Optional.of(expr(ctx.havingClause().expression()));
         Optional<SetQuantifier> quantifier = quantifier(ctx.setQuantifier());
         List<Expression> distinctOn = distinctOn(ctx.setQuantifier());
         return new QuerySpecification(quantifier, distinctOn, items, from, where,
-                groupBy, having, pos(ctx));
+                groupBy, groupByModifier, having, pos(ctx));
+    }
+
+    @Override
+    public Object visitGroupByPlainClause(PostgreSqlParser.GroupByPlainClauseContext ctx) {
+        List<Expression> cols = ctx.groupByPlain().expression().stream().map(this::expr).toList();
+        return support.plainGroupBy(cols);
+    }
+
+    @Override
+    public Object visitGroupByRollupClause(PostgreSqlParser.GroupByRollupClauseContext ctx) {
+        List<Expression> cols = ctx.expression().stream().map(this::expr).toList();
+        return support.rollupGroupBy(cols, pos(ctx));
+    }
+
+    @Override
+    public Object visitGroupByCubeClause(PostgreSqlParser.GroupByCubeClauseContext ctx) {
+        List<Expression> cols = ctx.expression().stream().map(this::expr).toList();
+        return support.cubeGroupBy(cols, pos(ctx));
+    }
+
+    @Override
+    public Object visitGroupBySetsClause(PostgreSqlParser.GroupBySetsClauseContext ctx) {
+        List<List<Expression>> sets = ctx.groupingSet().stream()
+                .map(set -> set.expression().stream().map(this::expr).toList())
+                .toList();
+        return support.groupingSetsGroupBy(sets, pos(ctx));
     }
 
     private Optional<SetQuantifier> quantifier(PostgreSqlParser.SetQuantifierContext ctx) {

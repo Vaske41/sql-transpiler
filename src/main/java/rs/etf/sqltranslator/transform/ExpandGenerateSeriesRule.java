@@ -124,6 +124,7 @@ public final class ExpandGenerateSeriesRule implements Rule {
                     Optional.of(from),
                     spec.where(),
                     spec.groupBy(),
+                    spec.groupByModifier(),
                     spec.having(),
                     spec.pos());
         }

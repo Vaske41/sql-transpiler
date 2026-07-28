@@ -49,11 +49,12 @@ class DeleteUsingTest {
     }
 
     @Test
-    void postgresqlDeleteUsingTowardTsqlIsRefused() {
-        assertThatThrownBy(() -> CodegenTestSupport.printTranslated(
-                DELETE_USING, Dialect.POSTGRESQL, Dialect.TSQL))
-                .isInstanceOf(UnsupportedFeatureException.class)
-                .hasMessageContaining("DELETE USING");
+    void postgresqlDeleteUsingPrintsTowardTsql() {
+        String sql = CodegenTestSupport.printTranslated(
+                DELETE_USING, Dialect.POSTGRESQL, Dialect.TSQL).sql();
+        assertThat(sql).containsIgnoringCase("DELETE");
+        assertThat(sql).containsIgnoringCase("FROM");
+        assertThat(sql).containsIgnoringCase("JOIN");
     }
 
     @Test

@@ -3,12 +3,10 @@ package rs.etf.sqltranslator.transform;
 import org.junit.jupiter.api.Test;
 import rs.etf.sqltranslator.codegen.CodegenTestSupport;
 import rs.etf.sqltranslator.core.Dialect;
-import rs.etf.sqltranslator.core.UnsupportedFeatureException;
 import rs.etf.sqltranslator.parser.AstBuilderFacade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MysqlDeleteJoinTest {
 
@@ -31,9 +29,11 @@ class MysqlDeleteJoinTest {
     }
 
     @Test
-    void mysqlDeleteJoinTowardTsqlIsRefused() {
-        assertThatThrownBy(() -> CodegenTestSupport.printTranslated(
-                MYSQL_DELETE_JOIN, Dialect.MYSQL, Dialect.TSQL))
-                .isInstanceOf(UnsupportedFeatureException.class);
+    void mysqlDeleteJoinTowardTsqlPrintsDeleteFromJoin() {
+        String sql = CodegenTestSupport.printTranslated(
+                MYSQL_DELETE_JOIN, Dialect.MYSQL, Dialect.TSQL).sql();
+        assertThat(sql).containsIgnoringCase("DELETE");
+        assertThat(sql).containsIgnoringCase("FROM");
+        assertThat(sql).containsIgnoringCase("JOIN");
     }
 }

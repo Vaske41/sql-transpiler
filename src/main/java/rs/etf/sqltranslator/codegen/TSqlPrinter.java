@@ -6,7 +6,10 @@ import rs.etf.sqltranslator.ast.BooleanLiteral;
 import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.FunctionCall;
+import rs.etf.sqltranslator.ast.DeleteStatement;
 import rs.etf.sqltranslator.ast.InsertStatement;
+import rs.etf.sqltranslator.ast.Join;
+import rs.etf.sqltranslator.ast.TableSource;
 import rs.etf.sqltranslator.ast.IntervalLiteral;
 import rs.etf.sqltranslator.ast.NullsOrder;
 import rs.etf.sqltranslator.ast.OutputClause;
@@ -380,5 +383,35 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
             out.token("OUTPUT");
             csv(clause.items());
         });
+    }
+
+    @Override
+    public Void visitDeleteStatement(DeleteStatement node) {
+        if (node.usingClause().isPresent()) {
+            var target = node.alias().orElse(node.table().last());
+            out.token("DELETE").token(identifier(target));
+            out.token("FROM").token(dotted(node.table()));
+            node.alias().ifPresent(alias -> out.token(identifier(alias)));
+            TableSource using = node.usingClause().get();
+            if (using.joins().isEmpty()) {
+                out.token("INNER JOIN");
+                using.first().accept(this);
+                node.where().ifPresent(where -> {
+                    out.token("ON");
+                    where.accept(this);
+                });
+            } else {
+                using.first().accept(this);
+                for (Join join : using.joins()) {
+                    join.accept(this);
+                }
+                node.where().ifPresent(where -> {
+                    out.token("WHERE");
+                    where.accept(this);
+                });
+            }
+            return null;
+        }
+        return super.visitDeleteStatement(node);
     }
 }

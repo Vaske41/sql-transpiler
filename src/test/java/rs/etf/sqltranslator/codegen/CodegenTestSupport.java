@@ -22,8 +22,6 @@ public final class CodegenTestSupport {
      * rule-engine suite filters.
      */
     public static final Set<String> EXPECTED_REFUSALS = Set.of(
-            "joins/full-join/input.tsql.sql|MYSQL",
-            "joins/full-join/input.postgresql.sql|MYSQL",
             "limits/limit-offset/input.mysql.sql|TSQL",
             "limits/union-limit-no-order/input.postgresql.sql|TSQL",
             "limits/union-limit-no-order/input.mysql.sql|TSQL",

@@ -31,11 +31,20 @@ class RowConstructorTest {
     }
 
     @Test
-    void rowConstructorRefusedTowardTsql() {
-        assertThatThrownBy(() -> CodegenTestSupport.printTranslated(
+    void rowInSubqueryBecomesExistsTowardTsql() {
+        String sql = CodegenTestSupport.printTranslated(
                 "SELECT * FROM t WHERE (a, b) IN (SELECT x, y FROM u);",
+                Dialect.POSTGRESQL, Dialect.TSQL).sql();
+        assertThat(sql).containsIgnoringCase("EXISTS");
+        assertThat(sql).doesNotContain("(a, b)");
+    }
+
+    @Test
+    void rowConstructorNotInRefusedTowardTsql() {
+        assertThatThrownBy(() -> CodegenTestSupport.printTranslated(
+                "SELECT * FROM t WHERE (a, b) NOT IN (SELECT x, y FROM u);",
                 Dialect.POSTGRESQL, Dialect.TSQL))
                 .isInstanceOf(UnsupportedFeatureException.class)
-                .hasMessageContaining("row constructor");
+                .hasMessageContaining("row constructor NOT IN");
     }
 }

@@ -42,12 +42,30 @@ class MultiColumnSetAssignmentTest {
     }
 
     @Test
-    void multiColumnSetTowardMysqlIsRefused() {
-        assertThatThrownBy(() -> runRule(rule,
-                "UPDATE t SET (a, b) = (1, 2) WHERE id = 3;",
+    void multiColumnSetWithLimitTowardMysqlExpands() {
+        String sql = CodegenTestSupport.printTranslated(
+                "UPDATE t SET (a, b) = (SELECT x, y FROM s WHERE s.id = t.id LIMIT 1) WHERE t.id = 1;",
+                Dialect.POSTGRESQL, Dialect.MYSQL).sql();
+        assertThat(sql).contains("a =");
+        assertThat(sql).contains("b =");
+        assertThat(sql).doesNotContain("(a, b)");
+    }
+
+    @Test
+    void multiColumnSetWithoutLimitTowardMysqlIsRefused() {
+        assertThatThrownBy(() -> CodegenTestSupport.printTranslated(
+                "UPDATE t SET (a, b) = (SELECT x, y FROM s WHERE s.id = t.id) WHERE t.id = 1;",
                 Dialect.POSTGRESQL, Dialect.MYSQL))
                 .isInstanceOf(UnsupportedFeatureException.class)
-                .hasMessageContaining("multi-column SET assignment");
+                .hasMessageContaining("uncorrelated subquery");
+    }
+
+    @Test
+    void multiColumnSetTowardMysqlLiteralTupleExpands() {
+        assertThatCode(() -> CodegenTestSupport.printTranslated(
+                "UPDATE t SET (a, b) = (1, 2) WHERE id = 3;",
+                Dialect.POSTGRESQL, Dialect.MYSQL))
+                .doesNotThrowAnyException();
     }
 
     @Test
