@@ -41,6 +41,7 @@ import rs.etf.sqltranslator.ast.InListPredicate;
 import rs.etf.sqltranslator.ast.InSubqueryPredicate;
 import rs.etf.sqltranslator.ast.IndexColumn;
 import rs.etf.sqltranslator.ast.InsertStatement;
+import rs.etf.sqltranslator.ast.OutputClause;
 import rs.etf.sqltranslator.ast.IsNullPredicate;
 import rs.etf.sqltranslator.ast.IsBoolPredicate;
 import rs.etf.sqltranslator.ast.BoolTest;
@@ -363,13 +364,13 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
         QualifiedName table = qname(ctx.qualifiedName());
         Optional<Upsert> upsert = ctx.upsertClause() == null
                 ? Optional.empty() : Optional.of((Upsert) visit(ctx.upsertClause()));
-        Optional<List<SelectItem>> returning = ctx.returningClause() == null
+        Optional<OutputClause> outputClause = ctx.returningClause() == null
                 ? Optional.empty()
-                : Optional.of((List<SelectItem>) visit(ctx.returningClause()));
+                : Optional.of(returningItems(ctx.returningClause()));
         if (ctx.insertSource() instanceof PostgreSqlParser.InsertQueryContext queryCtx) {
             return new InsertStatement(table, columns, List.of(),
                     Optional.of((Query) visit(queryCtx.queryExpression())),
-                    upsert, returning, pos(ctx));
+                    upsert, outputClause, pos(ctx));
         }
         PostgreSqlParser.InsertValuesContext values =
                 (PostgreSqlParser.InsertValuesContext) ctx.insertSource();
@@ -377,7 +378,7 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
                 .map(row -> row.expression().stream().map(this::expr).toList())
                 .toList();
         return new InsertStatement(table, columns, rows, Optional.empty(),
-                upsert, returning, pos(ctx));
+                upsert, outputClause, pos(ctx));
     }
 
     @Override
@@ -407,8 +408,11 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public Object visitReturningClause(PostgreSqlParser.ReturningClauseContext ctx) {
+        return returningItems(ctx);
+    }
+
+    private OutputClause returningItems(PostgreSqlParser.ReturningClauseContext ctx) {
         List<SelectItem> items = ctx.selectItem().stream()
                 .map(s -> (SelectItem) visit(s))
                 .toList();
@@ -440,8 +444,11 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
         Optional<TableSource> from = updateFrom(ctx.tableSource(), ctx.FROM() != null);
         Optional<Expression> where = ctx.whereClause() == null
                 ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
+        Optional<OutputClause> outputClause = ctx.returningClause() == null
+                ? Optional.empty()
+                : Optional.of(returningItems(ctx.returningClause()));
         return support.updateWithInlineJoins(ctes, recursive, qname(ctx.qualifiedName()), alias,
-                inlineJoins, from, assignments, where, pos(ctx));
+                inlineJoins, from, assignments, outputClause, where, pos(ctx));
     }
 
     private Optional<TableSource> updateFrom(
@@ -462,7 +469,11 @@ final class PostgreSqlAstBuilder extends PostgreSqlBaseVisitor<Object> {
                 ? Optional.empty() : Optional.of((TableSource) visit(ctx.tableSource()));
         Optional<Expression> where = ctx.whereClause() == null
                 ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
-        return new DeleteStatement(qname(ctx.qualifiedName()), alias, using, where, pos(ctx));
+        Optional<OutputClause> outputClause = ctx.returningClause() == null
+                ? Optional.empty()
+                : Optional.of(returningItems(ctx.returningClause()));
+        return new DeleteStatement(qname(ctx.qualifiedName()), alias, outputClause, using, where,
+                pos(ctx));
     }
 
     @Override

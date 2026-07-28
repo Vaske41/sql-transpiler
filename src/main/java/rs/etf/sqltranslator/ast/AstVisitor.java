@@ -49,6 +49,8 @@ public interface AstVisitor<R> {
 
     R visitUpsert(Upsert node);
 
+    R visitOutputClause(OutputClause node);
+
     R visitUpdateStatement(UpdateStatement node);
 
     R visitAssignment(Assignment node);

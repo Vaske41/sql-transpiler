@@ -56,7 +56,8 @@ public final class RewriteUpdateFromForMysqlRule implements Rule {
             }
             return new UpdateStatement(updated.ctes(), updated.recursive(),
                     updated.table(), updated.alias(),
-                    List.copyOf(qualified), updated.from(), updated.where(), updated.pos());
+                    List.copyOf(qualified), updated.outputClause(), updated.from(),
+                    updated.where(), updated.pos());
         }
 
         private static Assignment qualify(Assignment a, Identifier qualifier) {

@@ -30,6 +30,7 @@ import rs.etf.sqltranslator.ast.Join;
 import rs.etf.sqltranslator.ast.JoinKind;
 import rs.etf.sqltranslator.ast.MaxLength;
 import rs.etf.sqltranslator.ast.NumericLiteral;
+import rs.etf.sqltranslator.ast.OutputClause;
 import rs.etf.sqltranslator.ast.QualifiedName;
 import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.QuerySpecification;
@@ -157,10 +158,16 @@ final class AstBuilderSupport {
     }
 
     /** {@code RETURNING} list — contextual keyword checked here. */
-    List<SelectItem> returningItems(Token returningToken, List<SelectItem> items,
-                                    SourcePosition pos) {
+    OutputClause returningItems(Token returningToken, List<SelectItem> items,
+                                SourcePosition pos) {
         requireWord(returningToken, "RETURNING", pos);
-        return List.copyOf(items);
+        return new OutputClause(List.copyOf(items), pos);
+    }
+
+    /** T-SQL {@code OUTPUT} list — keyword checked here. */
+    OutputClause outputItems(Token outputToken, List<SelectItem> items, SourcePosition pos) {
+        requireWord(outputToken, "OUTPUT", pos);
+        return new OutputClause(List.copyOf(items), pos);
     }
 
     private void requireWord(Token token, String expected, SourcePosition pos) {
@@ -355,11 +362,13 @@ final class AstBuilderSupport {
     UpdateStatement updateWithInlineJoins(List<Cte> ctes, boolean recursive,
                                           QualifiedName table, Optional<Identifier> alias,
                                           List<Join> inlineJoins, Optional<TableSource> from,
-                                          List<Assignment> assignments, Optional<Expression> where,
+                                          List<Assignment> assignments,
+                                          Optional<OutputClause> outputClause,
+                                          Optional<Expression> where,
                                           SourcePosition position) {
         if (inlineJoins.isEmpty()) {
-            return new UpdateStatement(ctes, recursive, table, alias, assignments, from, where,
-                    position);
+            return new UpdateStatement(ctes, recursive, table, alias, assignments, outputClause,
+                    from, where, position);
         }
         refuseIf(from.isPresent(),
                 "UPDATE cannot combine target JOIN with a separate FROM clause", position);
@@ -378,16 +387,18 @@ final class AstBuilderSupport {
         if (first.on().isPresent()) {
             normalizedWhere = andPredicates(first.on().get(), normalizedWhere, first.pos());
         }
-        return new UpdateStatement(ctes, recursive, table, alias, assignments, normalizedFrom,
-                normalizedWhere, position);
+        return new UpdateStatement(ctes, recursive, table, alias, assignments, outputClause,
+                normalizedFrom, normalizedWhere, position);
     }
 
     UpdateStatement updateWithInlineJoins(QualifiedName table, Optional<Identifier> alias,
                                           List<Join> inlineJoins, Optional<TableSource> from,
-                                          List<Assignment> assignments, Optional<Expression> where,
+                                          List<Assignment> assignments,
+                                          Optional<OutputClause> outputClause,
+                                          Optional<Expression> where,
                                           SourcePosition position) {
         return updateWithInlineJoins(List.of(), false, table, alias, inlineJoins, from,
-                assignments, where, position);
+                assignments, outputClause, where, position);
     }
 
     /**
@@ -425,8 +436,8 @@ final class AstBuilderSupport {
         if (first.on().isPresent()) {
             normalizedWhere = andPredicates(first.on().get(), normalizedWhere, first.pos());
         }
-        return new DeleteStatement(targetRef.table(), Optional.of(targetAlias), using,
-                normalizedWhere, position);
+        return new DeleteStatement(targetRef.table(), Optional.of(targetAlias), Optional.empty(),
+                using, normalizedWhere, position);
     }
 
     /** {@code WITH name[(cols)] AS (VALUES …)} → {@code AS (SELECT * FROM (VALUES …) AS name[(cols)])}. */

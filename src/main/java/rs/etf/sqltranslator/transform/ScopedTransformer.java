@@ -129,6 +129,7 @@ public abstract class ScopedTransformer extends rs.etf.sqltranslator.ast.AstTran
                         rebuild(node.table()),
                         rebuildOptional(node.alias()),
                         rebuildList(node.assignments()),
+                        rebuildOptional(node.outputClause()),
                         rebuildOptional(node.from()),
                         rebuildOptional(node.where()),
                         node.pos());

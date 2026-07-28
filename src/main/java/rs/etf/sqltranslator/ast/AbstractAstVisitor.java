@@ -199,6 +199,14 @@ public abstract class AbstractAstVisitor<R> implements AstVisitor<R> {
     }
 
     @Override
+    public R visitOutputClause(OutputClause node) {
+        for (SelectItem item : node.items()) {
+            item.accept(this);
+        }
+        return defaultResult();
+    }
+
+    @Override
     public R visitUpdateStatement(UpdateStatement node) {
         return defaultResult();
     }

@@ -40,6 +40,7 @@ import rs.etf.sqltranslator.ast.InListPredicate;
 import rs.etf.sqltranslator.ast.InSubqueryPredicate;
 import rs.etf.sqltranslator.ast.IndexColumn;
 import rs.etf.sqltranslator.ast.InsertStatement;
+import rs.etf.sqltranslator.ast.OutputClause;
 import rs.etf.sqltranslator.ast.IsNullPredicate;
 import rs.etf.sqltranslator.ast.IsBoolPredicate;
 import rs.etf.sqltranslator.ast.BoolTest;
@@ -367,13 +368,13 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
         QualifiedName table = qname(ctx.qualifiedName());
         Optional<Upsert> upsert = ctx.upsertClause() == null
                 ? Optional.empty() : Optional.of((Upsert) visit(ctx.upsertClause()));
-        Optional<List<SelectItem>> returning = ctx.returningClause() == null
+        Optional<OutputClause> outputClause = ctx.outputClause() == null
                 ? Optional.empty()
-                : Optional.of(returningItems(ctx.returningClause()));
+                : Optional.of(outputItems(ctx.outputClause()));
         if (ctx.insertSource() instanceof TSqlParser.InsertQueryContext queryCtx) {
             return new InsertStatement(table, columns, List.of(),
                     Optional.of((Query) visit(queryCtx.queryExpression())),
-                    upsert, returning, pos(ctx));
+                    upsert, outputClause, pos(ctx));
         }
         TSqlParser.InsertValuesContext values =
                 (TSqlParser.InsertValuesContext) ctx.insertSource();
@@ -381,7 +382,7 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
                 .map(row -> row.expression().stream().map(this::expr).toList())
                 .toList();
         return new InsertStatement(table, columns, rows, Optional.empty(),
-                upsert, returning, pos(ctx));
+                upsert, outputClause, pos(ctx));
     }
 
     @Override
@@ -411,15 +412,15 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     }
 
     @Override
-    public Object visitReturningClause(TSqlParser.ReturningClauseContext ctx) {
-        return returningItems(ctx);
+    public Object visitOutputClause(TSqlParser.OutputClauseContext ctx) {
+        return outputItems(ctx);
     }
 
-    private List<SelectItem> returningItems(TSqlParser.ReturningClauseContext ctx) {
+    private OutputClause outputItems(TSqlParser.OutputClauseContext ctx) {
         List<SelectItem> items = ctx.selectItem().stream()
                 .map(s -> (SelectItem) visit(s))
                 .toList();
-        return support.returningItems(ctx.identifier().getStart(), items, pos(ctx));
+        return support.outputItems(ctx.OUTPUT().getSymbol(), items, pos(ctx));
     }
 
     @Override
@@ -447,8 +448,11 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
         Optional<TableSource> from = updateFrom(ctx.tableSource(), ctx.FROM() != null);
         Optional<Expression> where = ctx.whereClause() == null
                 ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
+        Optional<OutputClause> outputClause = ctx.outputClause() == null
+                ? Optional.empty()
+                : Optional.of(outputItems(ctx.outputClause()));
         return support.updateWithInlineJoins(ctes, recursive, qname(ctx.qualifiedName()), alias,
-                inlineJoins, from, assignments, where, pos(ctx));
+                inlineJoins, from, assignments, outputClause, where, pos(ctx));
     }
 
     private Optional<TableSource> updateFrom(
@@ -464,11 +468,15 @@ final class TSqlAstBuilder extends TSqlBaseVisitor<Object> {
     public Object visitDeleteFromUsing(TSqlParser.DeleteFromUsingContext ctx) {
         Optional<Identifier> alias = ctx.identifier() == null
                 ? Optional.empty() : Optional.of(ident(ctx.identifier()));
+        Optional<OutputClause> outputClause = ctx.outputClause() == null
+                ? Optional.empty()
+                : Optional.of(outputItems(ctx.outputClause()));
         Optional<TableSource> using = ctx.tableSource() == null
                 ? Optional.empty() : Optional.of((TableSource) visit(ctx.tableSource()));
         Optional<Expression> where = ctx.whereClause() == null
                 ? Optional.empty() : Optional.of(expr(ctx.whereClause().expression()));
-        return new DeleteStatement(qname(ctx.qualifiedName()), alias, using, where, pos(ctx));
+        return new DeleteStatement(qname(ctx.qualifiedName()), alias, outputClause, using, where,
+                pos(ctx));
     }
 
     @Override

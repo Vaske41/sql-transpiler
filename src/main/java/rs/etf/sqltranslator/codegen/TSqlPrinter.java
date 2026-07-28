@@ -6,13 +6,18 @@ import rs.etf.sqltranslator.ast.BooleanLiteral;
 import rs.etf.sqltranslator.ast.ColumnDefinition;
 import rs.etf.sqltranslator.ast.DataType;
 import rs.etf.sqltranslator.ast.FunctionCall;
+import rs.etf.sqltranslator.ast.InsertStatement;
 import rs.etf.sqltranslator.ast.IntervalLiteral;
 import rs.etf.sqltranslator.ast.NullsOrder;
+import rs.etf.sqltranslator.ast.OutputClause;
 import rs.etf.sqltranslator.ast.Query;
 import rs.etf.sqltranslator.ast.QuerySpecification;
 import rs.etf.sqltranslator.ast.Script;
 import rs.etf.sqltranslator.ast.Statement;
 import rs.etf.sqltranslator.ast.StringLiteral;
+
+import java.util.List;
+import java.util.Optional;
 
 /**
  * T-SQL renderer. Row limits take two shapes: {@code TOP (n)} directly after
@@ -319,6 +324,61 @@ public final class TSqlPrinter extends AbstractSqlPrinter {
             if (node.stored()) {
                 out.token("PERSISTED");
             }
+        });
+    }
+
+    @Override
+    public Void visitInsertStatement(InsertStatement node) {
+        out.token("INSERT INTO").token(dotted(node.table()));
+        if (!node.columns().isEmpty()) {
+            out.token("(");
+            csv(node.columns());
+            out.raw(")");
+        }
+        renderInsertOutputClause(node.outputClause());
+        if (node.query().isPresent()) {
+            node.query().get().accept(this);
+        } else {
+            out.token("VALUES");
+            for (int i = 0; i < node.rows().size(); i++) {
+                if (i > 0) {
+                    out.raw(",");
+                }
+                out.token("(");
+                csv(node.rows().get(i));
+                out.raw(")");
+            }
+        }
+        node.upsert().ifPresent(u -> u.accept(this));
+        return null;
+    }
+
+    /** T-SQL {@code OUTPUT} on INSERT — before VALUES/SELECT. */
+    protected void renderInsertOutputClause(Optional<OutputClause> outputClause) {
+        outputClause.ifPresent(clause -> {
+            out.token("OUTPUT");
+            csv(clause.items());
+        });
+    }
+
+    @Override
+    protected void renderReturningClause(Optional<OutputClause> outputClause) {
+        // INSERT uses renderInsertOutputClause; other statements use OUTPUT hooks below.
+    }
+
+    @Override
+    protected void renderUpdateOutputClause(Optional<OutputClause> outputClause) {
+        outputClause.ifPresent(clause -> {
+            out.token("OUTPUT");
+            csv(clause.items());
+        });
+    }
+
+    @Override
+    protected void renderDeleteOutputClause(Optional<OutputClause> outputClause) {
+        outputClause.ifPresent(clause -> {
+            out.token("OUTPUT");
+            csv(clause.items());
         });
     }
 }

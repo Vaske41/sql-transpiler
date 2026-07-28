@@ -190,8 +190,13 @@ public final class AstDumper implements AstVisitor<String> {
         }
         dump.child("query", node.query())
                 .child("upsert", node.upsert());
-        node.returning().ifPresent(items -> dump.children("returning", items));
+        node.outputClause().ifPresent(clause -> dump.child("outputClause", clause));
         return dump.done();
+    }
+
+    @Override
+    public String visitOutputClause(OutputClause node) {
+        return node("OutputClause").children("items", node.items()).done();
     }
 
     @Override
@@ -211,6 +216,7 @@ public final class AstDumper implements AstVisitor<String> {
                 .child("table", node.table())
                 .child("alias", node.alias())
                 .children("assignments", node.assignments())
+                .child("outputClause", node.outputClause())
                 .child("from", node.from())
                 .child("where", node.where())
                 .done();
@@ -229,6 +235,7 @@ public final class AstDumper implements AstVisitor<String> {
         return node("DeleteStatement")
                 .child("table", node.table())
                 .child("alias", node.alias())
+                .child("outputClause", node.outputClause())
                 .child("using", node.usingClause())
                 .child("where", node.where())
                 .done();

@@ -52,6 +52,7 @@ updateStatement
     : withClause? UPDATE qualifiedName (AS? identifier)? joinedTable* (',' tableSource)?
       SET assignment (',' assignment)*
       (FROM tableSource)? whereClause?
+      returningClause?
     ;
 
 assignment
@@ -60,7 +61,7 @@ assignment
     ;
 
 deleteStatement
-    : DELETE FROM qualifiedName (AS? identifier)? (USING tableSource)? whereClause?  # deleteFromUsing
+    : DELETE FROM qualifiedName (AS? identifier)? (USING tableSource)? whereClause? returningClause?  # deleteFromUsing
     | DELETE identifier (',' identifier)* FROM tableSource whereClause?             # deleteTargetsFrom
     ;
 
@@ -452,7 +453,7 @@ INNER:I N N E R; INSERT:I N S E R T; INTERSECT:I N T E R S E C T; INTERVAL:I N T
 KEY:K E Y; LAST:L A S T; LATERAL:L A T E R A L; LEADING:L E A D I N G; LEFT:L E F T; LIKE:L I K E; LIMIT:L I M I T;
 MAX:M A X; NEXT:N E X T; NONCLUSTERED:N O N C L U S T E R E D; NOT:N O T;
 NULL:N U L L; NULLS:N U L L S; OFFSET:O F F S E T; ON:O N; ONLY:O N L Y;
-OR:O R; ORDER:O R D E R; OUTER:O U T E R; OVER:O V E R;
+OR:O R; ORDER:O R D E R; OUTER:O U T E R; OUTPUT:O U T P U T; OVER:O V E R;
 PARTITION:P A R T I T I O N; PERSISTED:P E R S I S T E D; POSITION:P O S I T I O N; PRECEDING:P R E C E D I N G; PRIMARY:P R I M A R Y;
 RANGE:R A N G E; RECURSIVE:R E C U R S I V E; REFERENCES:R E F E R E N C E S; RIGHT:R I G H T; ROW:R O W; ROWS:R O W S;
 SELECT:S E L E C T; SEPARATOR:S E P A R A T O R; SET:S E T; STORED:S T O R E D; SUBSTRING:S U B S T R I N G; TABLE:T A B L E; THEN:T H E N; TOP:T O P;

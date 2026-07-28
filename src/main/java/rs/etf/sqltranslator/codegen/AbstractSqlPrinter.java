@@ -3,6 +3,7 @@ package rs.etf.sqltranslator.codegen;
 import rs.etf.sqltranslator.ast.*;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -920,10 +921,21 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             }
         }
         node.upsert().ifPresent(u -> u.accept(this));
-        node.returning().ifPresent(items -> {
+        renderReturningClause(node.outputClause());
+        return null;
+    }
+
+    /** PostgreSQL/MySQL {@code RETURNING} — after upsert on INSERT, after WHERE on UPDATE/DELETE. */
+    protected void renderReturningClause(Optional<OutputClause> outputClause) {
+        outputClause.ifPresent(clause -> {
             out.token("RETURNING");
-            csv(items);
+            csv(clause.items());
         });
+    }
+
+    @Override
+    public Void visitOutputClause(OutputClause node) {
+        csv(node.items());
         return null;
     }
 
@@ -979,6 +991,7 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
         node.alias().ifPresent(alias -> out.token("AS").token(identifier(alias)));
         out.token("SET");
         csv(node.assignments());
+        renderUpdateOutputClause(node.outputClause());
         node.from().ifPresent(from -> {
             out.token("FROM");
             from.accept(this);
@@ -988,6 +1001,11 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             where.accept(this);
         });
         return null;
+    }
+
+    /** {@code RETURNING} on UPDATE — after SET, before FROM/WHERE. */
+    protected void renderUpdateOutputClause(Optional<OutputClause> outputClause) {
+        renderReturningClause(outputClause);
     }
 
     @Override
@@ -1007,6 +1025,7 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
     public Void visitDeleteStatement(DeleteStatement node) {
         out.token("DELETE FROM").token(dotted(node.table()));
         node.alias().ifPresent(alias -> out.token("AS").token(identifier(alias)));
+        renderDeleteOutputClause(node.outputClause());
         node.usingClause().ifPresent(using -> {
             out.token("USING");
             using.accept(this);
@@ -1016,6 +1035,11 @@ public abstract class AbstractSqlPrinter implements AstVisitor<Void> {
             where.accept(this);
         });
         return null;
+    }
+
+    /** {@code RETURNING} on DELETE — after table, before USING/WHERE. */
+    protected void renderDeleteOutputClause(Optional<OutputClause> outputClause) {
+        renderReturningClause(outputClause);
     }
 
     // --- DDL ---

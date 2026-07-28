@@ -35,6 +35,7 @@ public final class RuleEngine {
                 new RewriteFilteredAggregatesRule(),
                 new RewriteDistinctOnRule(),
                 new RewriteUpsertRule(),
+                new RewriteReturningRule(),
                 new ExpandJoinUsingForTsqlRule(),
                 new ReshapeDropDdlRule(),
                 new DropAlterUsingRule(),

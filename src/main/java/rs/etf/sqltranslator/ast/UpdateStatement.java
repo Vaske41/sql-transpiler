@@ -5,9 +5,10 @@ import rs.etf.sqltranslator.core.SourcePosition;
 import java.util.List;
 import java.util.Optional;
 
-/** [WITH …] UPDATE ... SET ... [FROM ...] [WHERE ...]. */
+/** [WITH …] UPDATE ... SET ... [OUTPUT/RETURNING ...] [FROM ...] [WHERE ...]. */
 public record UpdateStatement(List<Cte> ctes, boolean recursive, QualifiedName table,
                               Optional<Identifier> alias, List<Assignment> assignments,
+                              Optional<OutputClause> outputClause,
                               Optional<TableSource> from, Optional<Expression> where,
                               SourcePosition pos)
         implements Statement {
@@ -26,13 +27,14 @@ public record UpdateStatement(List<Cte> ctes, boolean recursive, QualifiedName t
     public UpdateStatement(QualifiedName table, Optional<Identifier> alias,
                            List<Assignment> assignments, Optional<TableSource> from,
                            Optional<Expression> where, SourcePosition pos) {
-        this(List.of(), false, table, alias, assignments, from, where, pos);
+        this(List.of(), false, table, alias, assignments, Optional.empty(), from, where, pos);
     }
 
     /** Compact form — no alias, no FROM, no WITH. */
     public UpdateStatement(QualifiedName table, List<Assignment> assignments,
                            Optional<Expression> where, SourcePosition pos) {
-        this(List.of(), false, table, Optional.empty(), assignments, Optional.empty(), where, pos);
+        this(List.of(), false, table, Optional.empty(), assignments, Optional.empty(),
+                Optional.empty(), where, pos);
     }
 
     @Override

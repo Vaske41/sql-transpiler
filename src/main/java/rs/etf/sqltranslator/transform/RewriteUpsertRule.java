@@ -57,18 +57,13 @@ public final class RewriteUpsertRule implements Rule {
         @Override
         public Object visitInsertStatement(InsertStatement node) {
             InsertStatement rebuilt = (InsertStatement) super.visitInsertStatement(node);
-            if (rebuilt.returning().isPresent()
-                    && (ctx.target() == Dialect.MYSQL || ctx.target() == Dialect.TSQL)) {
-                throw new UnsupportedFeatureException(
-                        "RETURNING is not supported by " + ctx.target(), rebuilt.pos());
-            }
             if (rebuilt.upsert().isEmpty()) {
                 return rebuilt;
             }
             Upsert upsert = rebuilt.upsert().get();
             Optional<Upsert> reshaped = reshape(upsert);
             return new InsertStatement(rebuilt.table(), rebuilt.columns(), rebuilt.rows(),
-                    rebuilt.query(), reshaped, rebuilt.returning(), rebuilt.pos());
+                    rebuilt.query(), reshaped, rebuilt.outputClause(), rebuilt.pos());
         }
 
         private Optional<Upsert> reshape(Upsert upsert) {
