@@ -54,7 +54,9 @@ public final class RenderTargetFunctionsRule implements Rule {
             Map.entry("JSONB_BUILD_ARRAY", "JSON_ARRAY"),
             Map.entry("JSON_TYPEOF", "JSON_TYPE"),
             Map.entry("JSONB_TYPEOF", "JSON_TYPE"),
-            Map.entry("JSONB_SET", "JSON_SET"));
+            Map.entry("JSONB_SET", "JSON_SET"),
+            Map.entry("JSON_OBJECT_AGG", "JSON_OBJECTAGG"),
+            Map.entry("JSONB_OBJECT_AGG", "JSON_OBJECTAGG"));
 
     private static final Map<String, String> TSQL_JSON_RENAMES = Map.of(
             "JSONB_SET", "JSON_MODIFY");
@@ -63,11 +65,12 @@ public final class RenderTargetFunctionsRule implements Rule {
     private static final Set<String> JSON_REFUSE_TSQL = Set.of(
             "JSON_BUILD_OBJECT", "JSONB_BUILD_OBJECT",
             "JSON_BUILD_ARRAY", "JSONB_BUILD_ARRAY",
-            "JSON_TYPEOF", "JSONB_TYPEOF");
+            "JSON_TYPEOF", "JSONB_TYPEOF",
+            "JSON_OBJECT_AGG", "JSONB_OBJECT_AGG", "JSONB_PRETTY");
 
     /** No faithful MySQL/T-SQL equivalent — refused by name. */
     private static final Set<String> JSON_REFUSE_NON_PG = Set.of(
-            "JSON_OBJECT_AGG", "JSONB_OBJECT_AGG", "JSONB_PRETTY");
+            "JSONB_PRETTY");
 
     private static final Map<String, String> TSQL_RENAMES = Map.of(
             "NOW", "GETDATE",

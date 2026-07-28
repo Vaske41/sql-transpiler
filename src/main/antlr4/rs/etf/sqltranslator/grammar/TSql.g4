@@ -461,7 +461,7 @@ literal
     | NULL
     ;
 
-identifier : ID | QUOTED_IDENTIFIER | USER_VAR ;
+identifier : ID | QUOTED_IDENTIFIER | USER_VAR | SETS ;
 
 // =====================================================================
 // 2. Dialect-specific parser rules

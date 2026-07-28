@@ -459,7 +459,7 @@ literal
     | FALSE
     ;
 
-identifier : ID | QUOTED_IDENTIFIER | USER_VAR | SESSION_VAR ;
+identifier : ID | QUOTED_IDENTIFIER | USER_VAR | SESSION_VAR | SETS ;
 
 // =====================================================================
 // 2. Dialect-specific parser rules
