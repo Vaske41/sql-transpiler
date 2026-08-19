@@ -16,9 +16,15 @@ final class PromptTemplate {
     static final String VERSION = "v1";
 
     private final String template;
+    private final boolean placeholder;
 
     PromptTemplate(String template) {
+        this(template, false);
+    }
+
+    private PromptTemplate(String template, boolean placeholder) {
         this.template = Objects.requireNonNull(template, "template");
+        this.placeholder = placeholder;
     }
 
     static PromptTemplate load() throws IOException {
@@ -29,7 +35,22 @@ final class PromptTemplate {
         return new PromptTemplate(Files.readString(path, StandardCharsets.UTF_8));
     }
 
+    /**
+     * For fixture-only adapters ({@code forceOffline=true}), which never render a prompt.
+     * {@code evaluation/} is gitignored, so CI has no template; returning a placeholder lets
+     * the offline driver run there instead of failing at construction. The placeholder throws
+     * if anything ever tries to render it, and live paths must keep calling {@link #load()}
+     * so a genuinely missing template still fails loudly.
+     */
+    static PromptTemplate loadOrPlaceholder() throws IOException {
+        return Files.exists(DEFAULT) ? load() : new PromptTemplate("", true);
+    }
+
     String render(Dialect source, Dialect target, String sql) {
+        if (placeholder) {
+            throw new IllegalStateException(
+                    "cannot render: " + DEFAULT + " is absent and this is the offline placeholder");
+        }
         Objects.requireNonNull(source, "source");
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(sql, "sql");
