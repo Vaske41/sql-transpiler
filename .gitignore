@@ -2,9 +2,8 @@
 /plans/
 .superpowers/
 
-# Docs: keep tracked force-adds outside evaluation notes
+# Local design docs, plans, reviews, and thesis sources
 docs/
-docs/evaluation/
 
 # Git worktrees
 .worktrees/
