@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class GeminiAdapterTest {
 
@@ -51,7 +52,7 @@ class GeminiAdapterTest {
                 1L);
 
         GeminiAdapter adapter = new GeminiAdapter(
-                store, PromptTemplate.load(), HttpClient.newHttpClient(), true);
+                store, PromptTemplate.loadOrPlaceholder(), HttpClient.newHttpClient(), true);
 
         Path casePath = Path.of("src", "test", "resources", "cases", "select-basic", "select-literal");
         Path input = casePath.resolve("input.mysql.sql");
@@ -83,7 +84,7 @@ class GeminiAdapterTest {
         Files.writeString(input, "SELECT 2;\n", StandardCharsets.UTF_8);
 
         GeminiAdapter adapter = new GeminiAdapter(
-                store, PromptTemplate.load(), HttpClient.newHttpClient(), true);
+                store, PromptTemplate.loadOrPlaceholder(), HttpClient.newHttpClient(), true);
         TranslateOutcome out = adapter.translate(new TranslateRequest(
                 Dialect.MYSQL, Dialect.POSTGRESQL, casePath, input));
 
@@ -93,6 +94,8 @@ class GeminiAdapterTest {
 
     @Test
     void promptTemplateRendersPlaceholders() throws Exception {
+        assumeTrue(Files.exists(PromptTemplate.DEFAULT),
+                "local-only evaluation harness asset: " + PromptTemplate.DEFAULT);
         PromptTemplate prompt = PromptTemplate.load();
         String rendered = prompt.render(Dialect.MYSQL, Dialect.POSTGRESQL, "SELECT 1;");
         assertThat(rendered).contains("mysql");

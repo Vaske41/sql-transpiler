@@ -194,7 +194,7 @@ final class BenchmarkDriver {
         return List.of(
                 new GeminiAdapter(
                         new FixtureStore(),
-                        PromptTemplate.load(),
+                        PromptTemplate.loadOrPlaceholder(),
                         java.net.http.HttpClient.newHttpClient(),
                         true),
                 new ComposerAdapter(new FixtureStore(), true));
